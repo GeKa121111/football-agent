@@ -269,7 +269,7 @@ function renderScouting(context) {
     const role = position.value;
     const filtered = DEMO_PLAYERS.filter((player) => {
       const matchesText = [player.name, player.club, player.position].some((value) => value.toLocaleLowerCase("ar").includes(q));
-      const matchesRole = role === "all" || player.position.includes(role);
+      const matchesRole = role === "all" || player.role === role;
       return matchesText && matchesRole;
     });
     grid.replaceChildren(...filtered.map((player) => {
