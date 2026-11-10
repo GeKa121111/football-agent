@@ -1,0 +1,20 @@
+{
+  "name": "football-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Arabic-first football agent career simulation game",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test",
+    "check": "node --check src/main.js && node --check src/app.js && node --check src/core/storage.js"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
