@@ -649,10 +649,12 @@ test.describe("Mobile experience", () => {
     expect(offerSave.agency.representation.offers[0].playerId).toBe(completed.world.scouting.reports[0].findings[0].playerId);
     expect(offerSave.agency.representation.offers[0].status).toBe("pending");
     expect(offerSave.agency.clients).toHaveLength(0);
+    expect(offerSave.agency.talentPipeline.entries).toHaveLength(1);
 
     await navigateTo(page, "الوكالة");
     await expect(page.locator(".agency-screen")).toBeVisible();
     await expect(page.locator(".talent-pipeline-panel")).toBeVisible();
+    await expect(page.locator(".talent-pipeline-panel .representation-count")).toHaveText("1 ملف موحّد");
     await expect(page.locator(".talent-pipeline-card")).toHaveCount(1);
     await expect(page.locator(".talent-pipeline-stage")).toHaveText("قيد التفاوض");
     await expect(page.locator(".talent-pipeline-followup")).toContainText("يوليو");
