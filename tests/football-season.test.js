@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { WORLD_DATABASE } from "../src/data/world-database.js";
+import { WORLD_DATABASE, getWorldSummary, validateWorldDatabase } from "../src/data/world-database.js";
 import {
   buildSimulationTeam,
   generateSeasonFixtures,
@@ -40,6 +40,17 @@ test("preserves 18-player squad composition, identity and portrait coverage for 
     assert.equal(new Set(roster.map((player) => player.portraitAssetId)).size, 18);
     for (const [role, count] of targets) assert.equal(roster.filter((player) => player.role === role).length, count);
   }
+});
+
+
+test("validates the expanded fictional world database and reports squad coverage separately from prospects", () => {
+  const validation = validateWorldDatabase(WORLD_DATABASE);
+  assert.equal(validation.valid, true, validation.errors.join(" | "));
+  const summary = getWorldSummary(WORLD_DATABASE);
+  assert.equal(summary.players, 48);
+  assert.equal(summary.squadPlayers, 384);
+  assert.equal(summary.rosterPlayers, 432);
+  assert.equal(summary.clubs, 24);
 });
 
 test("generates deterministic home-and-away fixtures for all seeded competitions", () => {
@@ -140,6 +151,21 @@ test("upcoming fixtures and recent results are stable and bounded", () => {
   assert.deepEqual(getRecentFootballResults(initial), []);
 });
 
+
+
+test("uses clearly marked emergency fillers only when every real player in a role is unavailable", () => {
+  const club = WORLD_DATABASE.clubs[0];
+  const withoutKeepers = {
+    ...WORLD_DATABASE,
+    players: WORLD_DATABASE.players.filter((player) => player.clubId !== club.id || player.role !== "حراسة"),
+    squadPlayers: WORLD_DATABASE.squadPlayers.filter((player) => player.clubId !== club.id || player.role !== "حراسة")
+  };
+  const team = buildSimulationTeam(club.id, withoutKeepers);
+  const keeper = team.lineup.find((player) => player.role === "حراسة");
+  assert.equal(keeper.simulationOnly, true);
+  assert.match(keeper.name, /لاعب محاكاة/);
+  assert.equal(team.lineup.length, 11);
+});
 
 test("excludes injured world players from a matchday starting XI", () => {
   const club = WORLD_DATABASE.clubs[0];
