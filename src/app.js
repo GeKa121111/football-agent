@@ -1211,6 +1211,10 @@ function renderTalentPipeline(context) {
         actions.append(actionButton(lastContact ? "تسجيل تواصل" : "تواصل أولي",
           "button-outline talent-pipeline-contact-button",
           () => context.manageTalentContact(player, [...item.sourceIds])));
+        if (lastContact?.outcome === "positive") {
+          actions.append(actionButton("بدء تفاوض التمثيل", "button-primary talent-pipeline-offer-button",
+            () => context.openRepresentationOffer(player)));
+        }
       }
       if (item.activity.length > 0) {
         actions.append(actionButton("سجل النشاط", "button-outline talent-pipeline-history-button",
