@@ -271,67 +271,7 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 }
 .player-card:hover { transform: translateY(-4px); border-color: rgba(181,146,255,.42); box-shadow: 0 16px 32px rgba(0,0,0,.24); }
 .player-card-visual { height: 172px; position: relative; overflow: hidden; background: linear-gradient(155deg,#49376d,#1b2344 64%,#131a32); }
-.player-art {
-  --skin: #c98f70;
-  --hair: #24202a;
-  --kit: #713db3;
-  --kit-light: #be9af0;
-  --art-glow: rgba(170,126,255,.5);
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  border: 1px solid rgba(222,204,255,.13);
-  border-radius: 15px;
-  background:
-    radial-gradient(ellipse at 50% 36%, var(--art-glow), transparent 51%),
-    linear-gradient(150deg, #5a467f 0%, #252d50 58%, #17203a 100%);
-}
-.art-stadium-lines {
-  position: absolute;
-  inset: 12% -12% -25%;
-  opacity: .38;
-  background: repeating-radial-gradient(ellipse at 50% 100%, transparent 0 20px, rgba(229,218,255,.16) 21px 22px, transparent 23px 42px);
-  transform: perspective(200px) rotateX(32deg);
-}
-.player-figure { position: absolute; left: 50%; bottom: -13px; width: 146px; height: 190px; transform: translateX(-50%); filter: drop-shadow(0 8px 9px rgba(0,0,0,.3)); }
-.figure-head {
-  position: absolute; z-index: 3; left: 50%; top: 17px; width: 57px; height: 69px;
-  transform: translateX(-50%);
-  border: 2px solid rgba(43,29,31,.2);
-  border-radius: 43% 43% 46% 46%;
-  background: linear-gradient(100deg, color-mix(in srgb, var(--skin), #593c35 18%), var(--skin) 42%, color-mix(in srgb, var(--skin), #fff 12%));
-  box-shadow: inset -5px -4px rgba(75,39,34,.12);
-}
-.figure-head::before {
-  content: "";
-  position: absolute; left: 13px; top: 31px; width: 5px; height: 3px; border-radius: 50%;
-  background: #30212a; box-shadow: 20px 0 #30212a;
-}
-.figure-head::after {
-  content: "";
-  position: absolute; left: 22px; top: 46px; width: 13px; height: 4px;
-  border-bottom: 1.5px solid rgba(86,38,42,.75); border-radius: 50%;
-}
-.figure-hair { position: absolute; z-index: 4; left: 50%; top: 11px; width: 61px; height: 28px; transform: translateX(-50%); border-radius: 48% 50% 24% 20%; background: var(--hair); }
-.hair-curly .figure-hair { border-radius: 50%; box-shadow: -7px 6px 0 -2px var(--hair), 7px 4px 0 -2px var(--hair), -2px -4px 0 -2px var(--hair), 8px -3px 0 -3px var(--hair); }
-.hair-fade .figure-hair { height: 17px; top: 14px; border-radius: 48% 48% 20% 20%; }
-.hair-wavy .figure-hair { height: 33px; top: 8px; border-radius: 55% 45% 22% 14%; transform: translateX(-50%) rotate(-5deg); }
-.figure-neck { position: absolute; z-index: 2; top: 75px; left: 50%; width: 25px; height: 25px; transform: translateX(-50%); background: var(--skin); }
-.figure-torso {
-  position: absolute; left: 50%; bottom: 0; width: 125px; height: 111px; transform: translateX(-50%);
-  border: 2px solid rgba(255,255,255,.12);
-  border-radius: 30% 30% 5% 5% / 23% 23% 4% 4%;
-  background: linear-gradient(110deg, color-mix(in srgb, var(--kit), #111 15%), var(--kit) 45%, var(--kit-light));
-  clip-path: polygon(24% 0, 76% 0, 100% 100%, 0 100%);
-}
-.figure-torso::before, .figure-torso::after {
-  content: ""; position: absolute; top: 4px; width: 31px; height: 92px; border-radius: 20px;
-  background: linear-gradient(90deg, var(--kit), var(--kit-light)); z-index: -1;
-}
-.figure-torso::before { left: -10px; transform: rotate(12deg); }
-.figure-torso::after { right: -10px; transform: rotate(-12deg); }
-.figure-number { position: absolute; z-index: 2; top: 39px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,.85); font-size: 15px; font-weight: 900; }
+
 .player-rating {
   position: absolute; z-index: 5; top: 10px; right: 10px; width: 43px; height: 48px;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -698,4 +638,63 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 .modal-dialog:focus { outline: none; }
 @media (max-width: 760px) {
   .empty-results { min-height: 190px; padding: 18px 12px; }
+}
+
+
+/* Phase 3: original SVG player portraits */
+.player-card-visual { isolation: isolate; }
+.player-card-visual > .player-portrait {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+}
+.player-portrait {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(222,204,255,.13);
+  border-radius: inherit;
+  background: linear-gradient(150deg,#31435f,#172239);
+  isolation: isolate;
+}
+.player-portrait::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg,rgba(10,15,28,.02) 34%,rgba(7,12,24,.36) 100%),
+    linear-gradient(110deg,rgba(255,255,255,.08),transparent 28%,transparent 74%,rgba(255,255,255,.035));
+}
+.portrait-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.portrait-athlete {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: portrait-idle 4.8s ease-in-out infinite;
+}
+.player-card:hover .portrait-athlete { animation-duration: 2.8s; }
+.player-portrait.is-featured .portrait-athlete { animation-duration: 4.1s; }
+.player-portrait.is-featured {
+  border-color: rgba(224,201,255,.24);
+  box-shadow: inset 0 0 35px rgba(182,148,244,.12);
+}
+@keyframes portrait-idle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2.2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .portrait-athlete,
+  .player-card:hover .portrait-athlete,
+  .player-portrait.is-featured .portrait-athlete {
+    animation: none !important;
+    transform: none !important;
+  }
 }
