@@ -172,6 +172,7 @@ function createPlayerPerformance(player, random) {
     shotsOnTarget: player.shotsOnTarget,
     yellowCards: player.yellowCards,
     injuryDays: player.injuryDays,
+    simulationOnly: player.simulationOnly === true,
     rating: roundTo(score, 1)
   };
 }
