@@ -74,7 +74,7 @@ test("players resolve nationality and current club and keep simulation attribute
     assert.ok(player.rating >= 1 && player.rating <= 99, player.id);
     assert.ok(player.potential >= player.rating && player.potential <= 99, player.id);
     assert.ok(Number.isFinite(player.marketValueEur) && player.marketValueEur >= 0, player.id);
-    assert.match(player.contractUntil, /^\\d{4}-\\d{2}-\\d{2}$/);
+    assert.match(player.contractUntil, /^\d{4}-\d{2}-\d{2}$/);
     assert.ok(["هجوم", "وسط", "دفاع", "حراسة"].includes(player.role), player.id);
   }
 });
