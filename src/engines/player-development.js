@@ -33,7 +33,7 @@ const INTENSITY_FACTORS = Object.freeze({
   intense: 1.3
 });
 
-const MAX_TRAINING_HISTORY = 240;
+const MAX_TRAINING_HISTORY = 6000;
 
 export const TRAINING_BALANCE = Object.freeze({
   dailyFatigueRecovery: 3,
