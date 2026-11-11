@@ -16,6 +16,8 @@ import {
   terminateRepresentationContract,
   advanceRepresentationState,
   calculateRepresentationCommission,
+  recordRepresentationInteraction,
+  getRepresentationRelationshipLabel,
   isValidRepresentationState
 } from "../src/engines/representation.js";
 
@@ -368,4 +370,41 @@ test("calculates the agreed commission without pretending it is already collecte
   assert.equal(calculateRepresentationCommission(125000, 8), 10000);
   assert.throws(() => calculateRepresentationCommission(-1, 10), TypeError);
   assert.throws(() => calculateRepresentationCommission(1000, 20), TypeError);
+});
+
+
+test("records meaningful player-agent interactions, applies personality bonuses and enforces cooldown", () => {
+  const profile = player({ id: "loyal-relationship-player", age: 22, rating: 68, potential: 80 });
+  const preferences = getPlayerRepresentationProfile(profile);
+  const sent = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays
+  });
+  const signed = evaluateRepresentationOffer(sent.save, sent.offer.id);
+  const first = recordRepresentationInteraction(signed.save, signed.contract.id, "check-in");
+  assert.equal(first.changed, true);
+  assert.equal(first.delta, preferences.personality === "loyal" ? 3 : 2);
+  assert.equal(first.save.agency.representation.contracts[0].relationshipEvents.length, 1);
+  assert.equal(first.save.agency.representation.history[0].type, "relationship-event");
+  assert.equal(isValidSave(first.save), true);
+  const tooSoon = recordRepresentationInteraction(first.save, signed.contract.id, "career-guidance");
+  assert.equal(tooSoon.changed, false);
+  assert.match(tooSoon.error, /14 يومًا/);
+  const laterDate = new Date(Date.parse(first.save.world.currentDate + "T00:00:00.000Z") + 14 * 86400000).toISOString().slice(0, 10);
+  const advanced = advanceToDate(first.save, laterDate);
+  const second = recordRepresentationInteraction(advanced, signed.contract.id, "career-guidance", laterDate);
+  assert.equal(second.changed, true);
+  assert.ok(second.relationshipScore > first.relationshipScore);
+  assert.equal(getRepresentationRelationshipLabel(second.relationshipScore), "علاقة جيدة");
+  assert.equal(isValidSave(second.save), true);
+});
+
+test("rejects invalid relationship actions and corrupted relationship history", () => {
+  const sent = sendOffer(createInitialSave());
+  const signed = evaluateRepresentationOffer(sent.save, sent.offer.id);
+  assert.equal(recordRepresentationInteraction(signed.save, signed.contract.id, "give-money").changed, false);
+  const valid = recordRepresentationInteraction(signed.save, signed.contract.id, "public-support");
+  const corrupted = structuredClone(valid.save);
+  corrupted.agency.representation.contracts[0].relationshipEvents[0].delta = 99;
+  assert.equal(isValidSave(corrupted), false);
 });
