@@ -63,7 +63,7 @@ function isValidActivityEvent(event, entry, currentDate) {
   }
   if (event.type === "follow-up-reviewed") {
     return typeof event.taskId === "string" &&
-      /^talent-follow-up-task-\\d+$/.test(event.taskId);
+      /^talent-follow-up-task-\d+$/.test(event.taskId);
   }
   return false;
 }
@@ -267,6 +267,7 @@ export function upsertTalentProspect(save, player, options = {}) {
     ? [entry, ...pipeline.entries]
     : pipeline.entries.map((item) => item.playerId === player.id ? entry : item);
   const nextPipeline = {
+    ...pipeline,
     nextSequence: pipeline.nextSequence + (isNew ? 1 : 0),
     entries
   };
