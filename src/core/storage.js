@@ -441,7 +441,7 @@ export function readSave(storage) {
       return { status: "unsupported", save: null, error: null };
     }
 
-    const migrated = parsed?.meta?.version === 1 || parsed?.meta?.version === 2;
+    const migrated = [1, 2, 3].includes(parsed?.meta?.version);
     if (migrated) parsed = migrateSave(parsed);
 
     if (!isValidSave(parsed)) {
