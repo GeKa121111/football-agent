@@ -1375,8 +1375,10 @@ function renderMarket(context) {
     optionInput.min = "0";
     optionInput.step = "1000";
     optionInput.value = "0";
-    const amountLabel = node("span", "", "قيمة الانتقال باليورو");
-    const periodLabel = node("span", "", "مدة العقد");
+    const amountField = field("قيمة الصفقة / رسوم الإعارة", amountInput);
+    const periodField = field("مدة العقد / الإعارة", periodSelect);
+    const amountLabel = amountField.querySelector("span");
+    const periodLabel = periodField.querySelector("span");
     const optionField = field("بند أحقية الشراء باليورو", optionInput);
 
     const refreshDestinationClubs = () => {
@@ -1419,10 +1421,10 @@ function renderMarket(context) {
       field("اللاعب العميل", playerSelect),
       field("النادي المستهدف", clubSelect),
       field("نوع الصفقة", typeSelect),
-      field("قيمة الصفقة / رسوم الإعارة", amountInput),
+      amountField,
       field("الراتب الأسبوعي باليورو", wageInput),
       field("مكافأة التوقيع باليورو", bonusInput),
-      field("مدة العقد / الإعارة", periodSelect),
+      periodField,
       optionField
     );
     const submit = actionButton("إرسال العرض للنادي", "button-primary transfer-submit-button", () => {});
