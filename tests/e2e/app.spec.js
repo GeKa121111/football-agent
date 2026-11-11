@@ -279,7 +279,7 @@ test.describe("Desktop experience", () => {
     await expect(dossier.locator(".representation-dossier-hero h3")).toHaveText(contract.playerName);
     await expect(dossier.getByRole("heading", { name: "العلاقة والثقة" })).toBeVisible();
     await expect(dossier.getByRole("heading", { name: "العقد الحالي" })).toBeVisible();
-    await expect(dossier.locator(".representation-dossier-stat")).toHaveCount(6);
+    await expect(dossier.locator(".representation-dossier-stat")).toHaveCount(7);
     await expect(dossier.getByText(/تمثيل حصري|تمثيل غير حصري/).first()).toBeVisible();
     await expect(dossier.getByRole("heading", { name: "الرسائل والاجتماعات" })).toBeVisible();
     await expect(dossier.getByText("بانتظار الرد").first()).toBeVisible();
