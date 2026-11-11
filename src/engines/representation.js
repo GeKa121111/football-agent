@@ -714,6 +714,7 @@ export function createRepresentationOffer(save, player, terms, currentDate = sav
   }
   if (!isCalendarDate(currentDate)) return { changed: false, save, error: "تاريخ المسيرة غير صالح." };
   if (!validTerms(terms?.commissionRate, terms?.termDays) ||
+      (terms?.signingBonus !== undefined && !validSigningBonus(terms.signingBonus)) ||
       (terms?.representationType !== undefined && !isValidRepresentationType(terms.representationType))) {
     return { changed: false, save, error: "اختر عمولة من 5% إلى 15% ومدة سنة أو سنتين أو ثلاث سنوات ونوع تمثيل صالح." };
   }
@@ -853,6 +854,7 @@ export function submitRepresentationCounterOffer(save, offerId, terms, currentDa
   let updated = replaceOffer(representation, offer.id, {
     commissionRate: terms.commissionRate,
     termDays: terms.termDays,
+    signingBonus: agencyOffer.signingBonus,
     representationType: normalizeRepresentationType(terms.representationType ?? offer.counterOffer?.representationType ?? offer.representationType)
   });
   updated = nextHistory(updated, "agency-countered", offer, currentDate,
