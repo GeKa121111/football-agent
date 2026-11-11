@@ -116,6 +116,7 @@ test.describe("Desktop experience", () => {
     await navigateTo(page, "المباريات");
     await expect(page.locator(".football-screen")).toBeVisible();
     await expect(page.locator(".football-fixture-card")).toHaveCount(12);
+    await page.getByLabel("اختيار المسابقة للترتيب").selectOption("competition-eg-premier");
     await expect(page.locator(".football-standings-table .football-standings-row")).toHaveCount(3);
     await expect(page.getByLabel("اختيار المسابقة للترتيب")).toBeVisible();
     await expect(page.getByLabel("لاعب خطة التدريب")).toBeVisible();
