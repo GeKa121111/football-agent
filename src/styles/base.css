@@ -1034,3 +1034,50 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   width: 100%;
   margin-top: 10px;
 }
+
+
+/* Phase 7 — player representation, offers and mandates */
+.representation-panel { margin-top: 15px; }
+.representation-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.representation-heading h2 { margin: 0; color: #e9e3f8; font-size: 13px; }
+.representation-count { color: #9b8bc0; font-size: 9px; white-space: nowrap; }
+.representation-intro, .representation-empty, .representation-form-note { color: #929db7; font-size: 9px; line-height: 1.8; }
+.representation-empty { margin: 0; padding: 12px 5px; }
+.representation-list, .representation-history-list { display: flex; flex-direction: column; gap: 8px; }
+.representation-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px; border: 1px solid rgba(166,145,216,.13); border-radius: 11px; background: rgba(9,15,30,.48); }
+.representation-row.is-countered { border-color: rgba(245,197,107,.28); background: rgba(94,68,29,.12); }
+.representation-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4px; }
+.representation-copy strong { color: #e6def5; font-size: 10px; }
+.representation-copy span { color: #a2acc3; font-size: 9px; line-height: 1.6; }
+.representation-copy small { color: #8290aa; font-size: 8px; line-height: 1.7; }
+.representation-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.representation-actions button, .representation-contract-row button, .representation-prospect-card button { font-size: 9px; }
+.representation-prospect-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 9px; margin-top: 12px; }
+.representation-prospect-card { display: flex; min-width: 0; flex-direction: column; justify-content: space-between; gap: 10px; padding: 11px; border: 1px solid rgba(166,145,216,.13); border-radius: 11px; background: rgba(9,15,30,.48); }
+.representation-prospect-card button { width: 100%; }
+.representation-history-row { display: grid; grid-template-columns: minmax(90px,.7fr) minmax(0,1fr); gap: 4px 10px; padding: 9px 0; border-top: 1px solid rgba(255,255,255,.055); }
+.representation-history-row strong { color: #d9c9f5; font-size: 9px; }
+.representation-history-row span { color: #a0aac1; font-size: 8px; }
+.representation-history-row small { grid-column: 1 / -1; color: #7f8ba6; font-size: 8px; line-height: 1.7; }
+.representation-offer-form { display: flex; flex-direction: column; gap: 10px; }
+.representation-form-field .filter-select { width: 100%; }
+.representation-form-note { margin: 0; padding: 10px; border: 1px solid rgba(119,192,210,.16); border-radius: 10px; background: rgba(44,105,133,.09); }
+.representation-send-button { width: 100%; }
+.representation-contract-row { align-items: center; }
+
+@media (max-width: 960px) {
+  .representation-prospect-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 760px) {
+  .representation-row { align-items: stretch; flex-direction: column; }
+  .representation-actions { justify-content: stretch; }
+  .representation-actions button { flex: 1 1 auto; }
+  .representation-contract-row button { width: 100%; }
+}
+@media (max-width: 390px) {
+  .representation-prospect-grid { grid-template-columns: minmax(0,1fr); }
+  .representation-prospect-card { flex-direction: row; align-items: center; }
+  .representation-prospect-card button { width: auto; flex: 0 0 auto; }
+  .representation-history-row { grid-template-columns: minmax(0,1fr); }
+  .representation-history-row small { grid-column: auto; }
+}
