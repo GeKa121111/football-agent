@@ -169,7 +169,7 @@ test.describe("Desktop experience", () => {
     await modal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
 
     let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(saved.meta.version).toBe(6);
+    expect(saved.meta.version).toBe(7);
     expect(saved.agency.representation.offers).toHaveLength(1);
     expect(saved.agency.representation.offers[0].status).toBe("pending");
     expect(saved.agency.clients).toHaveLength(0);
@@ -645,7 +645,7 @@ test.describe("Mobile experience", () => {
     await page.getByRole("button", { name: "تأكيد إطلاق البعثة" }).click();
 
     const started = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(started.meta.version).toBe(6);
+    expect(started.meta.version).toBe(7);
     expect(started.agency.balance).toBe(95000);
     expect(started.world.scouting.activeMissions).toHaveLength(1);
     expect(started.world.scouting.activeMissions[0].sourceId).toBe("academy");
@@ -898,7 +898,7 @@ test.describe("Mobile experience", () => {
 
     await page.locator(".day-advance-button").click();
     let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(saved.meta.version).toBe(6);
+    expect(saved.meta.version).toBe(7);
     expect(saved.career.day).toBe(6);
     expect(saved.career.week).toBe(1);
     expect(saved.career.season).toBe(1);
