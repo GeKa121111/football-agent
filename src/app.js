@@ -1013,7 +1013,7 @@ function renderFootball(context) {
     context.updatePlayerTrainingPlan(playerSelect.value, focusSelect.value, intensitySelect.value);
   });
   trainingPanel.append(form, savePlanButton, playerDetails);
-  page.append(summary, schedulePanel, resultsPanel, trainingPanel);
+  page.append(summary, schedulePanel, standingsPanel, resultsPanel, trainingPanel);
   return page;
 }
 
