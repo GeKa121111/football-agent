@@ -1,7 +1,8 @@
 import { createInitialCareerCalendar } from "../engines/career-calendar.js";
+import { createInitialScoutingState } from "../engines/scouting.js";
 
 export const STORAGE_KEY = "football-agent.save";
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 export const WATCHLIST_KEY = "football-agent.watchlist";
 
 export function createInitialSave(now = new Date().toISOString()) {
@@ -30,7 +31,8 @@ export function createInitialSave(now = new Date().toISOString()) {
       clubs: [],
       competitions: [],
       activeOffers: [],
-      ...initialCalendar
+      ...initialCalendar,
+      scouting: createInitialScoutingState()
     }
   };
 }
@@ -132,6 +134,95 @@ function isValidActivityCollections(world) {
   });
 }
 
+
+function isValidScoutingState(scouting, currentDate) {
+  if (!isRecord(scouting) ||
+      !Number.isSafeInteger(scouting.nextMissionSequence) ||
+      scouting.nextMissionSequence < 1 ||
+      !Array.isArray(scouting.activeMissions) ||
+      !Array.isArray(scouting.reports) ||
+      scouting.activeMissions.length > 3 ||
+      scouting.reports.length > 50 ||
+      !hasUniqueIds(scouting.activeMissions) ||
+      !hasUniqueIds(scouting.reports)) return false;
+
+  const missionTypes = ["local", "regional", "elite"];
+  const roles = ["all", "هجوم", "وسط", "دفاع", "حراسة"];
+  const recommendations = ["أولوية", "متابعة", "مراقبة فقط"];
+  const sequenceOf = (id, prefix) => {
+    const match = new RegExp("^" + prefix + "-(\\d+)$").exec(id);
+    return match ? Number(match[1]) : 0;
+  };
+  const dateAfter = (date, days) => {
+    const value = new Date(date + "T00:00:00.000Z");
+    value.setUTCDate(value.getUTCDate() + days);
+    return value.toISOString().slice(0, 10);
+  };
+
+  let highestSequence = 0;
+  for (const mission of scouting.activeMissions) {
+    if (!isRecord(mission) ||
+        !missionTypes.includes(mission.type) ||
+        typeof mission.name !== "string" || !mission.name.trim() ||
+        typeof mission.countryId !== "string" || !mission.countryId.trim() ||
+        !roles.includes(mission.role) ||
+        !isValidCalendarDate(mission.startDate) ||
+        !isValidCalendarDate(mission.dueDate) ||
+        !Number.isSafeInteger(mission.durationDays) || mission.durationDays < 1 || mission.durationDays > 60 ||
+        mission.dueDate !== dateAfter(mission.startDate, mission.durationDays) ||
+        typeof mission.cost !== "number" || !Number.isFinite(mission.cost) || mission.cost < 0 ||
+        typeof mission.accuracy !== "number" || !Number.isFinite(mission.accuracy) || mission.accuracy < 0 || mission.accuracy > 1 ||
+        !Number.isSafeInteger(mission.targetCount) || mission.targetCount < 1 ||
+        mission.startDate > currentDate || mission.dueDate <= currentDate ||
+        mission.reportId !== "scout-report-" + sequenceOf(mission.id, "scout-mission")) return false;
+    const sequence = sequenceOf(mission.id, "scout-mission");
+    if (!sequence) return false;
+    highestSequence = Math.max(highestSequence, sequence);
+  }
+
+  for (const report of scouting.reports) {
+    if (!isRecord(report) ||
+        !missionTypes.includes(report.missionType) ||
+        typeof report.missionName !== "string" || !report.missionName.trim() ||
+        typeof report.missionId !== "string" ||
+        !isValidCalendarDate(report.startDate) ||
+        !isValidCalendarDate(report.completedDate) ||
+        !Number.isSafeInteger(report.durationDays) || report.durationDays < 1 || report.durationDays > 60 ||
+        report.completedDate !== dateAfter(report.startDate, report.durationDays) ||
+        report.completedDate > currentDate ||
+        typeof report.countryId !== "string" || !report.countryId.trim() ||
+        !roles.includes(report.role) ||
+        typeof report.cost !== "number" || !Number.isFinite(report.cost) || report.cost < 0 ||
+        typeof report.accuracy !== "number" || !Number.isFinite(report.accuracy) || report.accuracy < 0 || report.accuracy > 1 ||
+        !Number.isSafeInteger(report.candidateCount) || report.candidateCount < 0 ||
+        !Array.isArray(report.findings) || report.findings.length > 6 ||
+        report.missionId !== "scout-mission-" + sequenceOf(report.id, "scout-report") ||
+        !sequenceOf(report.id, "scout-report")) return false;
+
+    const findingIds = report.findings.map((finding) => isRecord(finding) ? finding.playerId : null);
+    if (!findingIds.every((id) => typeof id === "string" && id.trim()) ||
+        new Set(findingIds).size !== findingIds.length) return false;
+    if (!report.findings.every((finding) =>
+      isRecord(finding) &&
+      typeof finding.playerName === "string" && finding.playerName.trim() &&
+      Number.isInteger(finding.age) && finding.age >= 15 && finding.age <= 45 &&
+      typeof finding.club === "string" &&
+      typeof finding.country === "string" &&
+      typeof finding.position === "string" &&
+      Number.isInteger(finding.estimatedRating) && finding.estimatedRating >= 1 && finding.estimatedRating <= 99 &&
+      Number.isInteger(finding.estimatedPotential) && finding.estimatedPotential >= finding.estimatedRating && finding.estimatedPotential <= 99 &&
+      Number.isInteger(finding.confidence) && finding.confidence >= 40 && finding.confidence <= 99 &&
+      Number.isInteger(finding.upside) && finding.upside === finding.estimatedPotential - finding.estimatedRating &&
+      recommendations.includes(finding.recommendation) &&
+      typeof finding.rationale === "string" && finding.rationale.trim()
+    )) return false;
+
+    highestSequence = Math.max(highestSequence, sequenceOf(report.id, "scout-report"));
+  }
+
+  return scouting.nextMissionSequence > highestSequence;
+}
+
 export function isValidSave(value) {
   if (!isRecord(value) || !isRecord(value.meta) || !isRecord(value.career)) return false;
   if (!isRecord(value.agency) || !isRecord(value.world)) return false;
@@ -153,7 +244,7 @@ export function isValidSave(value) {
   if (!isValidCalendarDate(currentDate)) return false;
   if (![players, clubs, competitions, activeOffers].every(Array.isArray)) return false;
   if (![players, clubs, competitions, activeOffers].every(hasUniqueIds)) return false;
-  return isValidActivityCollections(value.world);
+  return isValidActivityCollections(value.world) && isValidScoutingState(value.world.scouting, currentDate);
 }
 
 export function readWatchlist(storage) {
@@ -199,7 +290,7 @@ function resolveStorage(storage) {
 
 function migrateSave(value) {
   if (!isRecord(value) || !isRecord(value.meta) || !isRecord(value.world)) return value;
-  if (value.meta.version !== 1) return value;
+  if (![1, 2].includes(value.meta.version)) return value;
 
   return {
     ...value,
@@ -211,7 +302,8 @@ function migrateSave(value) {
       ...value.world,
       events: Array.isArray(value.world.events) ? value.world.events : [],
       inbox: Array.isArray(value.world.inbox) ? value.world.inbox : [],
-      tasks: Array.isArray(value.world.tasks) ? value.world.tasks : []
+      tasks: Array.isArray(value.world.tasks) ? value.world.tasks : [],
+      scouting: isRecord(value.world.scouting) ? value.world.scouting : createInitialScoutingState()
     }
   };
 }
