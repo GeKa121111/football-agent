@@ -1094,3 +1094,19 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   .representation-contract-row .representation-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
   .representation-contract-row .representation-actions button { min-width: 0; }
 }
+
+
+/* Phase 7 follow-up — client relationships and contact management */
+.representation-interactions-panel .representation-interaction-row { align-items: center; }
+.representation-interaction-row .representation-copy { min-width: 0; }
+.representation-interaction-row button { flex: 0 0 auto; }
+.representation-contract-row .representation-message-button,
+.representation-contract-row .representation-call-button,
+.representation-contract-row .representation-meeting-button { border-color: rgba(117,169,211,.24); color: #a8c9ec; }
+.representation-interaction-row .representation-meeting-complete-button { border-color: rgba(101,198,166,.34); color: #a0e4c9; }
+@media (max-width: 760px) {
+  .representation-interactions-panel .representation-interaction-row { align-items: stretch; }
+  .representation-interaction-row button { width: 100%; }
+  .representation-contract-row .representation-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .representation-contract-row .representation-actions button { min-width: 0; }
+}
