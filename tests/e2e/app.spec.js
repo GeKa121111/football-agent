@@ -38,10 +38,11 @@ test.describe("Desktop experience", () => {
 
   test("shows the dashboard reference and desktop navigation", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator(".home-stadium")).toBeVisible();
+    await expect(page.locator(".dashboard-intro")).toBeVisible();
     await expect(page.locator(".agent-profile-card")).toBeVisible();
     await expect(page.locator(".career-day-panel")).toBeVisible();
-    await expect(page.locator(".home-menu-grid .home-tile")).toHaveCount(18);
+    await expect(page.locator(".dashboard-quick-action")).toHaveCount(3);
+    await expect(page.locator(".home-menu-grid .home-tile")).toHaveCount(0);
     await expect(page.locator(".sidebar")).toBeVisible();
     await expect(page.locator(".mobile-nav")).toBeHidden();
     await hasNoHorizontalOverflow(page);
@@ -377,7 +378,8 @@ test.describe("Mobile experience", () => {
     await page.goto("/");
     await expect(page.locator(".mobile-nav")).toBeVisible();
     await expect(page.locator(".sidebar")).toBeHidden();
-    await expect(page.locator(".home-menu-grid .home-tile")).toHaveCount(18);
+    await expect(page.locator(".dashboard-quick-action")).toHaveCount(3);
+    await expect(page.locator(".home-menu-grid .home-tile")).toHaveCount(0);
     await hasNoHorizontalOverflow(page);
   });
 
