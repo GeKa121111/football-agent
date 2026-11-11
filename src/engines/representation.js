@@ -602,7 +602,8 @@ export function isValidRepresentationState(representation, currentDate, clients 
         const renewal = (contract.renewals ?? []).find((item) => item.offerId === offer.id);
         if (!renewal ||
             renewal.commissionRate !== acceptedTerms.commissionRate ||
-            renewal.termDays !== acceptedTerms.termDays) return false;
+            renewal.termDays !== acceptedTerms.termDays ||
+            (renewal.signingBonus ?? 0) !== (acceptedTerms.signingBonus ?? 0)) return false;
       } else if (
         contract.offerId !== offer.id ||
         contract.commissionRate !== acceptedTerms.commissionRate ||
