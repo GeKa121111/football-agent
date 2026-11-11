@@ -14,7 +14,8 @@ import {
   markCareerMessageRead,
   filterCareerEvents,
   getUpcomingCareerEvents,
-  filterCareerTasks
+  filterCareerTasks,
+  filterCareerMessages
 } from "./engines/career-calendar.js";
 
 const WORLD_PLAYERS = getWorldPlayerProfiles();
@@ -834,17 +835,21 @@ export function mountApp(root) {
     else state.save = previousSave;
   }
 
-  function markMessageRead(messageId) {
+  function markMessageRead(messageId, shouldRender = true) {
     if (!state.canWrite) {
       toast("ملف الحفظ غير قابل للتعديل؛ لم نغيّره.");
-      return;
+      return false;
     }
     const result = markCareerMessageRead(state.save, messageId);
-    if (!result.changed) return;
+    if (!result.changed) return false;
     const previousSave = state.save;
     state.save = result.save;
-    if (saveCareer()) render();
-    else state.save = previousSave;
+    if (!saveCareer()) {
+      state.save = previousSave;
+      return false;
+    }
+    if (shouldRender) render();
+    return true;
   }
 
   function openSeasonCalendar() {
@@ -1001,22 +1006,69 @@ export function mountApp(root) {
   }
 
   function openInbox() {
-    const messages = [...state.save.world.inbox].slice(-12).reverse();
-    const content = messages.length
-      ? messages.map((message) => {
-        const item = node("article", "inbox-modal-item");
+    let messages = [...(state.save.world.inbox ?? [])];
+    const controls = node("div", "event-history-controls");
+    const search = node("input", "event-history-search");
+    search.type = "search";
+    search.placeholder = "ابحث في عنوان الرسالة أو محتواها...";
+    search.setAttribute("aria-label", "البحث في صندوق الوارد");
+
+    const statusFilter = node("select", "event-history-filter");
+    statusFilter.setAttribute("aria-label", "تصفية حالة الرسالة");
+    [
+      ["all", "كل الرسائل"],
+      ["unread", "غير مقروءة"],
+      ["read", "مقروءة"]
+    ].forEach(([value, label]) => {
+      const option = node("option", "", label);
+      option.value = value;
+      statusFilter.append(option);
+    });
+    controls.append(search, statusFilter);
+
+    const count = node("p", "event-history-count");
+    const list = node("div", "event-history-results");
+    const content = node("div", "event-history-content");
+    content.append(controls, count, list);
+
+    const refresh = () => {
+      const filtered = filterCareerMessages(messages, {
+        status: statusFilter.value,
+        query: search.value
+      });
+      count.textContent = formatHomeNumber(filtered.length) + " رسالة";
+      list.replaceChildren();
+      if (filtered.length === 0) {
+        list.append(node("p", "career-activity-empty", "مفيش رسائل مطابقة للبحث أو التصفية."));
+        return;
+      }
+
+      filtered.forEach((message) => {
+        const item = node("article", message.read ? "inbox-modal-item is-read" : "inbox-modal-item is-unread");
         item.append(
           node("strong", "", message.title),
           node("p", "modal-copy", message.body),
           node("span", "modal-note", formatHomeDate(message.date))
         );
         if (!message.read) {
-          item.append(actionButton("تحديد كمقروء", "message-read-button", () => markMessageRead(message.id)));
+          item.append(actionButton("تحديد كمقروء", "message-read-button", () => {
+            if (markMessageRead(message.id, false)) {
+              messages = [...state.save.world.inbox];
+              refresh();
+            }
+          }));
+        } else {
+          item.append(node("span", "message-read-state", "تمت القراءة"));
         }
-        return item;
-      })
-      : [node("p", "modal-copy", "صندوق الوارد فارغ حاليًا. هتظهر فيه الإحاطات والتقارير مع تقدم الأيام.")];
-    openModal("صندوق الوارد", content, "إغلاق");
+        list.append(item);
+      });
+    };
+
+    search.addEventListener("input", refresh);
+    statusFilter.addEventListener("change", refresh);
+    refresh();
+    openModal("صندوق الوارد", [content], "إغلاق");
+    search.focus();
   }
 
   function navigate(view) {
