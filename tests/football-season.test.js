@@ -16,15 +16,30 @@ function dateDistance(left, right) {
   return Math.round((Date.parse(left + "T00:00:00Z") - Date.parse(right + "T00:00:00Z")) / 86400000);
 }
 
-test("builds complete simulation XIs and clearly marks anonymous generated squad players", () => {
+test("builds complete 18-player fictional squads and starting XIs without emergency fillers", () => {
   const club = WORLD_DATABASE.clubs[0];
   const team = buildSimulationTeam(club.id);
+  assert.equal(team.squad.length, 18);
   assert.equal(team.lineup.length, 11);
+  assert.equal(team.bench.length, 7);
   assert.equal(team.lineup.filter((player) => player.role === "حراسة").length, 1);
   assert.equal(new Set(team.lineup.map((player) => player.id)).size, 11);
-  assert.ok(team.lineup.some((player) => player.simulationOnly === false));
-  assert.ok(team.lineup.some((player) => player.simulationOnly === true));
-  assert.ok(team.lineup.filter((player) => player.simulationOnly).every((player) => player.name.includes("لاعب محاكاة")));
+  assert.ok(team.lineup.every((player) => player.simulationOnly === false));
+  assert.equal(new Set(team.squad.map((player) => player.id)).size, 18);
+});
+
+test("preserves 18-player squad composition, identity and portrait coverage for all clubs", () => {
+  const targets = new Map([["حراسة", 2], ["دفاع", 6], ["وسط", 6], ["هجوم", 4]]);
+  assert.equal(WORLD_DATABASE.players.length, 48);
+  assert.equal(WORLD_DATABASE.squadPlayers.length, 384);
+  assert.equal(new Set([...WORLD_DATABASE.players, ...WORLD_DATABASE.squadPlayers].map((player) => player.id)).size, 432);
+  for (const club of WORLD_DATABASE.clubs) {
+    const roster = [...WORLD_DATABASE.players, ...WORLD_DATABASE.squadPlayers].filter((player) => player.clubId === club.id);
+    assert.equal(roster.length, 18);
+    assert.equal(new Set(roster.map((player) => player.shirtNumber)).size, 18);
+    assert.equal(new Set(roster.map((player) => player.portraitAssetId)).size, 18);
+    for (const [role, count] of targets) assert.equal(roster.filter((player) => player.role === role).length, count);
+  }
 });
 
 test("generates deterministic home-and-away fixtures for all seeded competitions", () => {
@@ -81,14 +96,15 @@ test("plays fixtures once on their date, stores results and emits linked calenda
   assert.equal(replay.football.results.length, expectedToday.length);
 });
 
-test("match results carry real fictional player appearances and explicitly marked anonymous fillers", () => {
+test("match results persist full-squad player appearances without anonymous fillers in healthy XIs", () => {
   const initial = createInitialFootballState(1, "2026-07-01");
   const firstDate = getUpcomingFootballFixtures(initial, "2026-07-01", 1)[0].date;
   const played = advanceFootballSeasonDay(initial, firstDate, 1);
   const result = played.resultsToday[0];
   assert.equal(result.playerPerformances.length, 22);
   assert.ok(result.playerPerformances.some((player) => player.simulationOnly === false));
-  assert.ok(result.playerPerformances.some((player) => player.simulationOnly === true));
+  assert.ok(result.playerPerformances.every((player) => player.simulationOnly === false));
+  assert.equal(played.football.playerDevelopment.players.length, 432);
   assert.ok(played.football.playerDevelopment.players.some((player) => player.appearances > 0));
 });
 
@@ -138,7 +154,8 @@ test("excludes injured world players from a matchday starting XI", () => {
   const team = buildSimulationTeam(club.id, WORLD_DATABASE, development);
   assert.equal(team.lineup.length, 11);
   assert.equal(team.lineup.some((item) => item.id === player.id), false);
-  assert.ok(team.lineup.some((item) => item.simulationOnly));
+  assert.ok(team.squad.every((item) => item.id !== player.id));
+  assert.ok(team.lineup.every((item) => item.simulationOnly === false));
 });
 
 test("calculates competition standings from saved results with deterministic tie-breaks", () => {
@@ -177,4 +194,41 @@ test("calculates competition standings from saved results with deterministic tie
   assert.equal(table[1].clubId, zamalek);
   assert.equal(table[1].points, 1);
   assert.equal(getCompetitionStandings(state, "missing-competition").length, 0);
+});
+
+test("simulates three complete seasons without duplicate fixtures, lost results or invalid player state", () => {
+  const start = new Date("2026-07-01T00:00:00.000Z");
+  const end = new Date("2029-07-01T00:00:00.000Z");
+  let football = createInitialFootballState(1, "2026-07-01");
+  const expectedPerSeason = generateSeasonFixtures(1, "2026-07-01").length;
+  let dayIndex = 0;
+
+  for (const cursor = new Date(start); cursor < end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+    const currentDate = cursor.toISOString().slice(0, 10);
+    const season = Number(currentDate.slice(0, 4)) - 2026 +
+      (Number(currentDate.slice(5, 7)) >= 7 ? 1 : 0);
+    const advanced = advanceFootballSeasonDay(football, currentDate, season);
+    football = advanced.football;
+
+    const playedIds = football.results.map((result) => result.id);
+    assert.equal(new Set(playedIds).size, playedIds.length, "result IDs must remain unique");
+    if (dayIndex % 30 === 0) {
+      assert.equal(isValidFootballState(football, currentDate, season), true);
+    }
+    dayIndex += 1;
+  }
+
+  assert.equal(football.season, 3);
+  assert.equal(football.results.length, expectedPerSeason * 3);
+  assert.equal(football.fixtures.filter((fixture) => fixture.status === "scheduled").length, 0);
+  assert.equal(football.playerDevelopment.players.length, 432);
+  assert.ok(football.playerDevelopment.players.some((player) => player.appearances >= 10));
+  assert.ok(football.playerDevelopment.players.every((player) =>
+    player.rating <= player.potential && player.fitness >= 0 && player.fitness <= 100 &&
+    player.fatigue >= 0 && player.fatigue <= 100
+  ));
+  for (const season of [1, 2, 3]) {
+    assert.equal(football.results.filter((result) => result.season === season).length, expectedPerSeason);
+  }
+  assert.equal(isValidFootballState(football, "2029-06-30", 3), true);
 });
