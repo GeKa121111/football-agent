@@ -401,6 +401,12 @@ export function isValidRepresentationState(representation, currentDate, clients 
       !Number.isSafeInteger(representation.nextOfferSequence) || representation.nextOfferSequence < 1 ||
       !Number.isSafeInteger(representation.nextContractSequence) || representation.nextContractSequence < 1 ||
       !Number.isSafeInteger(representation.nextHistorySequence) || representation.nextHistorySequence < 1 ||
+      (representation.nextInteractionSequence !== undefined &&
+        (!Number.isSafeInteger(representation.nextInteractionSequence) || representation.nextInteractionSequence < 1)) ||
+      (representation.reputationScore !== undefined &&
+        (!Number.isInteger(representation.reputationScore) || representation.reputationScore < 0 || representation.reputationScore > 100)) ||
+      (representation.interactions !== undefined &&
+        (!Array.isArray(representation.interactions) || representation.interactions.length > MAX_INTERACTIONS)) ||
       !Array.isArray(representation.offers) ||
       !Array.isArray(representation.contracts) ||
       !Array.isArray(representation.history) ||
@@ -598,9 +604,63 @@ export function isValidRepresentationState(representation, currentDate, clients 
     if (entry.contractId !== undefined && !contractsById.has(entry.contractId)) return false;
   }
 
+  let highestInteractionSequence = 0;
+  const interactionIds = new Set();
+  const scheduledMeetingContracts = new Set();
+  for (const interaction of interactionList(representation)) {
+    if (!isRecord(interaction) ||
+        typeof interaction.id !== "string" ||
+        !sequenceOf(interaction.id, "representation-interaction") ||
+        typeof interaction.contractId !== "string" ||
+        typeof interaction.playerId !== "string" || !interaction.playerId.trim() ||
+        typeof interaction.playerName !== "string" || !interaction.playerName.trim() ||
+        !INTERACTION_KINDS.has(interaction.kind) ||
+        !INTERACTION_STATUSES.has(interaction.status) ||
+        !isCalendarDate(interaction.createdDate) ||
+        !isCalendarDate(interaction.dueDate) ||
+        interaction.createdDate > currentDate ||
+        interaction.dueDate < interaction.createdDate) return false;
+    const sequence = sequenceOf(interaction.id, "representation-interaction");
+    if (interactionIds.has(interaction.id) ||
+        sequence >= interactionSequence(representation)) return false;
+    highestInteractionSequence = Math.max(highestInteractionSequence, sequence);
+    interactionIds.add(interaction.id);
+    const contract = contractsById.get(interaction.contractId);
+    if (!contract || contract.playerId !== interaction.playerId) return false;
+
+    if (interaction.status === "pending_response") {
+      if (interaction.kind === "meeting" || currentDate >= interaction.dueDate ||
+          interaction.resolvedDate !== undefined || interaction.outcome !== undefined) return false;
+    } else if (interaction.status === "scheduled") {
+      if (interaction.kind !== "meeting" ||
+          currentDate > addDays(interaction.dueDate, 7) ||
+          interaction.resolvedDate !== undefined || interaction.outcome !== undefined ||
+          scheduledMeetingContracts.has(interaction.contractId)) return false;
+      scheduledMeetingContracts.add(interaction.contractId);
+    } else if (interaction.status === "resolved") {
+      if (!INTERACTION_OUTCOMES.has(interaction.outcome) ||
+          !isCalendarDate(interaction.resolvedDate) ||
+          interaction.resolvedDate < interaction.dueDate ||
+          interaction.resolvedDate > currentDate) return false;
+    } else if (
+      interaction.kind !== "meeting" ||
+      interaction.outcome !== undefined ||
+      !isCalendarDate(interaction.resolvedDate) ||
+      interaction.resolvedDate <= addDays(interaction.dueDate, 7) ||
+      interaction.resolvedDate > currentDate
+    ) {
+      return false;
+    }
+  }
+
+  for (const entry of representation.history) {
+    if (entry.interactionId !== undefined && !interactionIds.has(entry.interactionId)) return false;
+  }
+
   return representation.nextOfferSequence > highestOfferSequence &&
     representation.nextContractSequence > highestContractSequence &&
-    representation.nextHistorySequence > highestHistorySequence;
+    representation.nextHistorySequence > highestHistorySequence &&
+    interactionSequence(representation) > highestInteractionSequence;
 }
 
 /**
@@ -1127,8 +1187,71 @@ export function advanceRepresentationState(save, currentDate = save?.world?.curr
     }
   }
 
-  if (expiredOffers.length === 0 && expiredContracts.length === 0) {
-    return { save, expiredOffers, expiredContracts };
+  const resolvedInteractions = [];
+  const missedMeetings = [];
+  for (const interaction of interactionList(representation)) {
+    if (interaction.status === "pending_response" && currentDate >= interaction.dueDate) {
+      const contract = updated.contracts.find((item) => item.id === interaction.contractId);
+      const preferences = contract?.playerPreferences ?? getPlayerRepresentationProfile({
+        id: interaction.playerId,
+        age: contract?.age,
+        rating: contract?.rating,
+        potential: contract?.potential
+      });
+      const relationshipScore = contract?.relationshipScore ?? 50;
+      const responseScore = relationshipScore +
+        (preferences.professionalism - 3) * 5 +
+        (preferences.loyalty - 3) * 2 +
+        (currentAgencyReputation(updated) - 50) / 20 +
+        (interaction.kind === "call" ? 2 : 0);
+      const outcome = responseScore >= 68 ? "positive" : responseScore >= 45 ? "neutral" : "negative";
+      const relationshipDelta = outcome === "positive" ? 4 : outcome === "neutral" ? 1 : -3;
+      if (contract) {
+        updated = {
+          ...updated,
+          contracts: updated.contracts.map((item) => item.id === contract.id
+            ? { ...item, relationshipScore: clamp(item.relationshipScore + relationshipDelta, 0, 100) }
+            : item)
+        };
+      }
+      updated = replaceInteraction(updated, interaction.id, {
+        status: "resolved",
+        outcome,
+        resolvedDate: currentDate
+      });
+      updated = adjustAgencyReputation(updated, outcome === "positive" ? 1 : outcome === "negative" ? -1 : 0);
+      updated = nextHistory(updated, "message-replied", interaction, currentDate,
+        (interaction.kind === "call" ? "رد اللاعب على المكالمة برد " : "رد اللاعب على الرسالة برد ") +
+          (outcome === "positive" ? "إيجابي." : outcome === "neutral" ? "محايد." : "سلبي."),
+        { contractId: interaction.contractId, interactionId: interaction.id });
+      resolvedInteractions.push(interaction.id);
+    } else if (interaction.kind === "meeting" &&
+        interaction.status === "scheduled" &&
+        currentDate > addDays(interaction.dueDate, 7)) {
+      const contract = updated.contracts.find((item) => item.id === interaction.contractId);
+      if (contract) {
+        updated = {
+          ...updated,
+          contracts: updated.contracts.map((item) => item.id === contract.id
+            ? { ...item, relationshipScore: clamp(item.relationshipScore - 8, 0, 100) }
+            : item)
+        };
+      }
+      updated = replaceInteraction(updated, interaction.id, {
+        status: "missed",
+        resolvedDate: currentDate
+      });
+      updated = adjustAgencyReputation(updated, -2);
+      updated = nextHistory(updated, "meeting-missed", interaction, currentDate,
+        "فات موعد الاجتماع ولم يتم عقده؛ تراجعت ثقة اللاعب وسمعة الوكالة.",
+        { contractId: interaction.contractId, interactionId: interaction.id });
+      missedMeetings.push(interaction.id);
+    }
+  }
+
+  if (expiredOffers.length === 0 && expiredContracts.length === 0 &&
+      resolvedInteractions.length === 0 && missedMeetings.length === 0) {
+    return { save, expiredOffers, expiredContracts, resolvedInteractions, missedMeetings };
   }
 
   const representedPlayers = new Set(updated.contracts
@@ -1141,7 +1264,9 @@ export function advanceRepresentationState(save, currentDate = save?.world?.curr
   return {
     save: { ...save, agency: { ...save.agency, clients, representation: updated } },
     expiredOffers,
-    expiredContracts
+    expiredContracts,
+    resolvedInteractions,
+    missedMeetings
   };
 }
 
