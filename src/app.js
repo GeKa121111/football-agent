@@ -56,13 +56,8 @@ import {
 const WORLD_PLAYERS = getWorldPlayerProfiles();
 const WORLD_COUNTS = getWorldSummary();
 
-const NAV_ITEMS = [
-  { id: "dashboard", label: "الرئيسية", icon: "⌂" },
-  { id: "players", label: "اللاعبون", icon: "◉" },
-  { id: "scouting", label: "الكشافون", icon: "⌕" },
-  { id: "market", label: "الانتقالات", icon: "⇄" },
-  { id: "agency", label: "الوكالة", icon: "▦" }
-];
+import { NAV_ITEMS } from "./ui/layout/navigation.js";
+import { createAppShell } from "./ui/layout/app-shell.js";
 
 const MARKET_ITEMS = [
   { id: "deal-01", player: "آدم منصور", age: 21, position: "جناح أيمن", from: "نادي العاصمة", to: "مفتوح للعروض", fee: "€1.8M", note: "عقده ينتهي خلال 12 شهرًا", accent: "gold" },
@@ -101,6 +96,7 @@ function playerArt(player, featured = false) {
 
 function playerCard(player, onDetails) {
   const card = node("article", "player-card");
+  card.dataset.playerId = player.id;
   const visual = node("div", "player-card-visual");
   visual.append(playerArt(player));
 
@@ -109,21 +105,36 @@ function playerCard(player, onDetails) {
     node("strong", "", player.rating),
     node("span", "", "OVR")
   );
-  visual.append(rating, node("span", "player-position-tag", player.position));
+  const position = node("span", "player-position-tag", player.position);
+  const countryBadge = node("span", "player-nationality-tag", player.country);
+  visual.append(rating, position, countryBadge);
+
   const info = node("div", "player-card-info");
   info.append(
-    node("p", "player-country", player.country + "  ·  " + player.age + " سنة"),
+    node("p", "player-country", player.age + " سنة · " + (player.foot === "left" ? "قدم يسرى" : "قدم يمنى")),
     node("h3", "player-name", player.name),
-    node("p", "player-club", player.club)
+    node("p", "player-club", player.club + " · " + player.league)
   );
+
+  const potential = node("div", "player-potential-row");
+  potential.append(
+    node("span", "", "الإمكانيات"),
+    node("strong", "", String(player.potential) + " POT")
+  );
+  const potentialTrack = node("div", "player-potential-track");
+  const potentialFill = node("span", "player-potential-fill");
+  potentialFill.style.width = Math.max(0, Math.min(100, Number(player.potential) || 0)) + "%";
+  potentialTrack.append(potentialFill);
+  info.append(potential, potentialTrack);
 
   const stats = node("div", "player-card-stats");
   stats.append(
-    statMini("POT", player.potential),
-    statMini("القيمة", player.value),
-    statMini("العمر", player.age)
+    statMini("القيمة السوقية", player.value),
+    statMini("العمر", player.age),
+    statMini("التقييم", player.rating)
   );
   info.append(stats);
+
   const footer = node("div", "player-card-footer");
   footer.append(
     node("span", "scout-status", player.status),
@@ -327,165 +338,142 @@ function renderCareerOperations(context) {
 }
 
 function renderDashboard(context) {
-  const page = node("div", "page-content home-dashboard");
+  const page = node("div", "page-content home-dashboard rebuild-dashboard");
   const agency = context.save.agency;
   const career = context.save.career;
   const clients = agency.clients.length;
   const reputation = Math.max(0, Math.min(100, Number(agency.reputation) || 0));
   const balance = formatMoney(agency.balance);
+  const unreadMessages = context.save.world.inbox.filter((message) => !message.read).length;
 
-  const stadium = node("section", "home-stadium");
-  stadium.setAttribute("aria-label", "ملعب كرة قدم");
-  stadium.append(
-    node("span", "stadium-lights stadium-light-left"),
-    node("span", "stadium-lights stadium-light-right"),
-    node("span", "stadium-stands"),
-    node("span", "stadium-pitch"),
-    node("span", "stadium-center-line"),
-    node("span", "stadium-center-circle"),
-    node("span", "stadium-goal stadium-goal-left"),
-    node("span", "stadium-goal stadium-goal-right")
+  const intro = node("section", "dashboard-intro");
+  const introCopy = node("div", "dashboard-intro-copy");
+  introCopy.append(
+    node("span", "dashboard-eyebrow", "FOOTBALL AGENT · CAREER MODE"),
+    node("h1", "dashboard-heading", "إدارة وكالتك تبدأ من هنا"),
+    node("p", "dashboard-subtitle", "تابع عملاءك، اكتشف فرصًا جديدة، واتخذ قراراتك اليومية من مركز واحد.")
   );
-  const stadiumLabel = node("div", "stadium-label");
-  stadiumLabel.append(node("span", "stadium-live-dot"), node("span", "", "عالم الوكالة"));
-  stadium.append(stadiumLabel);
+  const introActions = node("div", "dashboard-intro-actions");
+  introActions.append(
+    actionButton("ابدأ يوم جديد", "day-advance-button", context.advanceDay),
+    actionButton("تقدم أسبوعًا", "week-advance-button", context.advanceWeek)
+  );
+  intro.append(introCopy, introActions);
 
-  const profile = node("section", "agent-profile-card");
-  const profileTop = node("div", "agent-profile-top");
-  const avatar = node("div", "agent-avatar", "FA");
-  avatar.append(node("span", "agent-avatar-star", "✦"));
-  const identity = node("div", "agent-identity");
+  const overview = node("section", "dashboard-overview");
+  const agencyCard = node("article", "dashboard-agency-card");
+  const agencyTop = node("div", "dashboard-agency-top");
+  const monogram = node("span", "dashboard-agency-monogram", "FA");
+  const identity = node("div", "dashboard-agency-identity");
   identity.append(
-    node("span", "agent-eyebrow", "ملف الوكيل"),
-    node("h1", "agent-name", agency.name),
-    node("span", "agent-status", "●  وكالتك نشطة")
+    node("small", "", "ملف الوكالة · المستوى 1"),
+    node("strong", "agent-name", agency.name)
   );
-  const level = node("span", "agent-level", "المستوى 1");
-  profileTop.append(avatar, identity, level);
+  agencyTop.append(monogram, identity, node("span", "dashboard-agency-status", "وكالتك نشطة"));
 
-  const profileStats = node("div", "agent-profile-stats");
-  const cash = node("div", "agent-stat-chip");
-  cash.append(node("span", "", "رصيد الوكالة"), node("strong", "", balance));
-  const reputationChip = node("div", "agent-stat-chip agent-reputation-chip");
-  reputationChip.append(node("span", "", "السمعة"), node("strong", "", formatHomeNumber(reputation) + " / 100"));
-  profileStats.append(cash, reputationChip);
+  const agencyStats = node("div", "dashboard-agency-stats");
+  [
+    ["الرصيد المتاح", balance],
+    ["العملاء", formatHomeNumber(clients)],
+    ["الرسائل الجديدة", formatHomeNumber(unreadMessages)]
+  ].forEach(([label, value]) => {
+    const stat = node("div", "dashboard-stat");
+    stat.append(node("span", "", label), node("strong", "", value));
+    agencyStats.append(stat);
+  });
+  const reputationHead = node("div", "dashboard-reputation");
+  reputationHead.append(node("span", "", "سمعة الوكالة"), node("strong", "", formatHomeNumber(reputation) + " / 100"));
+  const reputationTrack = node("div", "dashboard-reputation-track");
+  const reputationFill = node("span", "dashboard-reputation-fill");
+  reputationFill.style.width = reputation + "%";
+  reputationTrack.append(reputationFill);
+  agencyCard.append(agencyTop, agencyStats, reputationHead, reputationTrack);
 
-  const progressHead = node("div", "agent-progress-head");
-  progressHead.append(node("span", "", "تقدم سمعة الوكالة"), node("strong", "", formatHomeNumber(reputation) + "%"));
-  const progress = node("div", "agent-progress-track");
-  progress.setAttribute("role", "progressbar");
-  progress.setAttribute("aria-label", "تقدم سمعة الوكالة");
-  progress.setAttribute("aria-valuemin", "0");
-  progress.setAttribute("aria-valuemax", "100");
-  progress.setAttribute("aria-valuenow", String(reputation));
-  const progressFill = node("span", "agent-progress-fill");
-  progressFill.style.width = reputation + "%";
-  progress.append(progressFill);
-  profile.append(profileTop, profileStats, progressHead, progress);
-
-  const dayPanel = node("section", "career-day-panel");
-  const dayHeading = node("div", "career-day-heading");
-  dayHeading.append(
-    node("span", "career-date", formatHomeDate(context.save.world.currentDate)),
-    node("span", "career-season", "الموسم " + formatHomeNumber(career.season))
+  const dayCard = node("article", "dashboard-day-card");
+  const dayHead = node("div", "dashboard-day-head");
+  dayHead.append(
+    node("span", "", formatHomeDate(context.save.world.currentDate)),
+    node("strong", "", "الموسم " + formatHomeNumber(career.season))
   );
-  const dayStats = node("div", "career-day-stats");
+  const dayMetrics = node("div", "dashboard-day-metrics");
   [
     ["اليوم", formatHomeNumber(career.day)],
     ["الأسبوع", formatHomeNumber(career.week)],
-    ["العملاء", formatHomeNumber(clients)]
+    ["الوارد", formatHomeNumber(unreadMessages)]
   ].forEach(([label, value]) => {
-    const stat = node("div", "career-day-stat");
-    stat.append(node("span", "", label), node("strong", "", value));
-    dayStats.append(stat);
+    const metric = node("div", "dashboard-day-metric");
+    metric.append(node("small", "", label), node("strong", "", value));
+    dayMetrics.append(metric);
   });
-  const dayAction = actionButton("⚽  ابدأ يوم جديد", "day-advance-button", context.advanceDay);
-  const weekAction = actionButton("تقدم أسبوعًا · 7 أيام", "week-advance-button", context.advanceWeek);
-  const dayFoot = node("div", "career-day-foot");
-  dayFoot.append(node("span", "day-foot-dot"), node("span", "", "التقدم الأسبوعي يعالج كل يوم بالتتابع، بما في ذلك المواعيد والمهام المتأخرة"));
-  dayPanel.append(dayHeading, dayStats, dayAction, weekAction, dayFoot);
+  dayCard.append(
+    dayHead,
+    dayMetrics,
+    node("p", "dashboard-day-note", "تقدم الزمن يعالج الأحداث والمواعيد والمهام بالتتابع، ويحفظ التغييرات في مسيرتك.")
+  );
+  overview.append(agencyCard, dayCard);
 
-  const featureGrid = node("div", "home-feature-grid");
-  const playersFeature = actionButton("", "home-feature-card feature-players", () => context.navigate("players"));
-  playersFeature.append(
-    node("span", "feature-card-icon", "⚽"),
-    node("span", "feature-card-copy"),
-    node("span", "feature-card-arrow", "‹")
+  const quickSection = node("section", "dashboard-section");
+  const quickHeading = node("div", "dashboard-section-head");
+  quickHeading.append(
+    node("div", ""),
+    node("span", "", "")
   );
-  playersFeature.children[1].append(
-    node("strong", "", "اللاعبون"),
-    node("small", "", "اكتشف ملفات المواهب")
+  quickHeading.children[0].append(
+    node("h2", "", "اختصارات العمل"),
+    node("p", "", "انتقل مباشرة إلى الأنظمة المتاحة حاليًا.")
   );
-  const unreadMessages = context.save.world.inbox.filter((message) => !message.read).length;
-  const newsFeature = actionButton("", "home-feature-card feature-news", context.openInbox);
-  newsFeature.append(
-    node("span", "feature-card-icon", "▤"),
-    node("span", "feature-card-copy"),
-    node("span", "feature-news-count", formatHomeNumber(unreadMessages))
-  );
-  newsFeature.children[1].append(
-    node("strong", "", "الرسائل"),
-    node("small", "", "أحداث وتقارير الوكالة")
-  );
-  featureGrid.append(playersFeature, newsFeature);
-
-  const storeBanner = actionButton("", "home-store-banner", () => context.openModal("متجر الوكالة", [
-    node("p", "modal-copy", "المتجر هيضم أدوات وتطويرات تساعدك توسّع وكالتك وتدير مسيرتك."),
-    node("p", "modal-note", "المتجر لم يُفعّل بعد، ومفيش مشتريات أو مدفوعات في النسخة الحالية.")
-  ], "تمام"));
-  storeBanner.append(
-    node("span", "store-banner-icon", "♛"),
-    node("span", "store-banner-copy"),
-    node("span", "store-banner-arrow", "←")
-  );
-  storeBanner.children[1].append(
-    node("strong", "", "متجر الوكالة"),
-    node("small", "", "تطويرات ومزايا مستقبلية")
-  );
-
-  const menuHeading = node("div", "home-menu-heading");
-  menuHeading.append(
-    node("h2", "", "أقسام الوكالة"),
-    node("span", "", "اختر وجهتك")
-  );
-  const menu = node("div", "home-menu-grid");
-  const tiles = [
-    ["⚽", "اللاعبون", "ملفات المواهب", "violet", "players"],
-    ["▤", "الأخبار", "عالم كرة القدم", "orange", null],
-    ["⌂", "المكتب", "إدارة الوكالة", "blue", "agency"],
-    ["▥", "البنك", "الأرصدة", "teal", "agency"],
-    ["◈", "المالية", "حسابات الوكالة", "green", "agency"],
-    ["⌕", "الكشافون", "اكتشاف المواهب", "gold", "scouting"],
-    ["🏆", "البطولات", "إنجازات مستقبلية", "yellow", null],
-    ["▦", "الدوريات", "المسابقات", "indigo", null],
-    ["⇄", "الانتقالات", "سوق الصفقات", "orange", "market"],
-    ["▧", "العقود", "اتفاقيات اللاعبين", "cyan", null],
-    ["◎", "الاستثمارات", "توسيع الأعمال", "blue", null],
-    ["▤", "الصحافة", "التغطية الإعلامية", "pink", null],
-    ["♜", "مجلس الإدارة", "قرارات الوكالة", "purple", "agency"],
-    ["↗", "المسيرة", "تطور الوكالة", "rose", "agency"],
-    ["▣", "المهام", "أهدافك القادمة", "gold", null],
-    ["✦", "الرعاة", "الشراكات التجارية", "green", null],
-    ["◉", "التقارير", "أداء الوكالة", "teal", "agency"],
-    ["⚙", "الإعدادات", "تفضيلات اللعبة", "slate", null]
-  ];
-  tiles.forEach(([icon, title, subtitle, tone, destination]) => {
-    menu.append(homeTile(context, icon, title, subtitle, tone, destination));
+  const quickActions = node("div", "dashboard-quick-actions");
+  [
+    ["◉", "قاعدة اللاعبين", "استعرض ملفات المواهب", "players"],
+    ["⌕", "عمليات الكشافين", "ابدأ بعثة أو راجع تقريرًا", "scouting"],
+    ["▦", "إدارة العملاء", "العقود والعلاقات الحالية", "agency"]
+  ].forEach(([icon, title, description, destination]) => {
+    const button = actionButton("", "dashboard-quick-action", () => context.navigate(destination));
+    const copy = node("span", "dashboard-quick-copy");
+    copy.append(node("strong", "", title), node("small", "", description));
+    button.append(node("span", "dashboard-quick-icon", icon), copy);
+    quickActions.append(button);
   });
+  quickSection.append(quickHeading, quickActions);
 
-  const saveFooter = node("section", "home-save-footer");
-  const saveCopy = node("div", "home-save-copy");
-  saveCopy.append(
-    node("strong", "", "مسيرتك في أمان"),
-    node("span", "", "احفظ تقدمك على هذا الجهاز")
+  const prospectSection = node("section", "dashboard-section");
+  const prospectHeading = node("div", "dashboard-section-head");
+  const prospectHeadingCopy = node("div", "");
+  prospectHeadingCopy.append(
+    node("h2", "", "مواهب من عالم اللعبة"),
+    node("p", "", "عينة من قاعدة اللاعبين الخيالية — افتح الملف لمعرفة التفاصيل.")
   );
-  saveFooter.append(
-    node("span", "home-save-icon", "▣"),
-    saveCopy,
-    actionButton("حفظ", "home-save-button", context.saveCareer)
+  prospectHeading.append(
+    prospectHeadingCopy,
+    actionButton("عرض قاعدة اللاعبين", "text-button", () => context.navigate("players"))
   );
+  const prospects = node("div", "dashboard-prospects");
+  const featuredPlayers = [...context.players]
+    .sort((a, b) => (Number(b.potential) || 0) - (Number(a.potential) || 0))
+    .slice(0, 3);
+  featuredPlayers.forEach((player) => {
+    const card = node("article", "dashboard-prospect");
+    const art = node("div", "dashboard-prospect-art");
+    art.append(playerArt(player));
+    const copy = node("div", "dashboard-prospect-copy");
+    copy.append(
+      node("small", "", player.position + " · " + player.age + " سنة"),
+      node("strong", "", player.name),
+      node("span", "", "الإمكانيات " + player.potential + " · التقييم " + player.rating),
+      actionButton("فتح الملف", "", () => context.openPlayer(player))
+    );
+    card.append(art, copy);
+    prospects.append(card);
+  });
+  prospectSection.append(prospectHeading, prospects);
 
-  page.append(stadium, profile, dayPanel, renderCareerOperations(context), featureGrid, storeBanner, menuHeading, menu, saveFooter);
+  page.append(
+    intro,
+    overview,
+    quickSection,
+    prospectSection,
+    renderCareerOperations(context)
+  );
   return page;
 }
 
@@ -515,76 +503,127 @@ function emptyResults(title, description, actionLabel, callback) {
 }
 
 function renderPlayers(context) {
-  const page = node("div", "page-content");
+  const page = node("div", "page-content rebuild-screen players-screen");
   page.append(
-    node("p", "eyebrow", "إدارة المواهب"),
-    node("h1", "page-title", "اللاعبون"),
-    node("p", "page-subtitle", "قاعدة بيانات تأسيسية مترابطة للاعبين والأندية والدوريات والبطولات. ملفات اللاعبين خيالية ومخصصة للمحاكاة.")
+    node("p", "eyebrow rebuild-page-kicker", "إدارة المواهب"),
+    node("h1", "page-title rebuild-page-title", "قاعدة اللاعبين"),
+    node("p", "page-subtitle rebuild-page-subtitle", "ابحث في قاعدة العالم، قارن مستوى اللاعب بإمكانياته، وافتح ملفه قبل اتخاذ قرار المتابعة أو التمثيل. البيانات الحالية خيالية ومخصصة للمحاكاة.")
   );
 
   const worldStats = node("div", "metrics-grid world-metrics");
   worldStats.append(
-    metricCard("الدول", WORLD_COUNTS.countries, "نطاق تأسيسي", "◎", "purple"),
-    metricCard("الدوريات", WORLD_COUNTS.leagues, "درجات أولى", "▤", "cyan"),
+    metricCard("الدول", WORLD_COUNTS.countries, "نطاق جغرافي تأسيسي", "◎", "purple"),
+    metricCard("الدوريات", WORLD_COUNTS.leagues, "دوريات مرجعية", "▤", "cyan"),
     metricCard("الأندية", WORLD_COUNTS.clubs, "كيانات مترابطة", "♜", "gold"),
     metricCard("اللاعبون", WORLD_COUNTS.players, "ملفات خيالية", "⚽", "purple")
   );
-  page.append(worldStats);
 
-  const toolbar = node("div", "list-toolbar");
+  const toolbar = node("div", "player-library-toolbar");
   const search = node("input", "search-input");
   search.type = "search";
-  search.placeholder = "ابحث باسم اللاعب أو النادي أو المركز أو البلد...";
+  search.placeholder = "ابحث بالاسم أو النادي أو المركز أو البلد...";
   search.setAttribute("aria-label", "البحث عن لاعب");
-  const count = node("span", "result-count", WORLD_PLAYERS.length + " لاعبًا في قاعدة البيانات");
+
+  const role = node("select", "filter-select");
+  role.setAttribute("aria-label", "تصفية حسب مركز اللاعب");
+  [
+    ["all", "كل المراكز"],
+    ["هجوم", "الهجوم"],
+    ["وسط", "الوسط"],
+    ["دفاع", "الدفاع"],
+    ["حراسة", "حراسة المرمى"]
+  ].forEach(([value, label]) => {
+    const option = node("option", "", label);
+    option.value = value;
+    role.append(option);
+  });
+
+  const country = node("select", "filter-select");
+  country.setAttribute("aria-label", "تصفية حسب الجنسية");
+  const allCountries = node("option", "", "كل الجنسيات");
+  allCountries.value = "all";
+  country.append(allCountries);
+  [...new Map(WORLD_PLAYERS.map((player) => [player.country, player.country])).keys()]
+    .sort((a, b) => a.localeCompare(b, "ar"))
+    .forEach((name) => {
+      const option = node("option", "", name);
+      option.value = name;
+      country.append(option);
+    });
+
+  const sort = node("select", "filter-select");
+  sort.setAttribute("aria-label", "ترتيب اللاعبين");
+  [
+    ["potential", "الأعلى إمكانيات"],
+    ["rating", "الأعلى تقييمًا"],
+    ["youngest", "الأصغر سنًا"],
+    ["value", "الأعلى قيمة سوقية"]
+  ].forEach(([value, label]) => {
+    const option = node("option", "", label);
+    option.value = value;
+    sort.append(option);
+  });
+  const count = node("span", "result-count player-library-count", "");
   count.setAttribute("aria-live", "polite");
-  toolbar.append(search, count);
+  toolbar.append(search, role, country, sort, count);
 
   const grid = node("div", "players-grid players-grid-large");
   const refresh = () => {
     const query = search.value.trim().toLocaleLowerCase("ar");
-    const filtered = WORLD_PLAYERS.filter((player) =>
-      [player.name, player.club, player.position, player.country].some((value) =>
-        value.toLocaleLowerCase("ar").includes(query)
-      )
-    );
+    const selectedRole = role.value;
+    const selectedCountry = country.value;
+    const filtered = WORLD_PLAYERS.filter((player) => {
+      const matchesText = [player.name, player.club, player.position, player.country, player.league]
+        .some((value) => String(value ?? "").toLocaleLowerCase("ar").includes(query));
+      const matchesRole = selectedRole === "all" || player.role === selectedRole;
+      const matchesCountry = selectedCountry === "all" || player.country === selectedCountry;
+      return matchesText && matchesRole && matchesCountry;
+    });
 
-    count.textContent = query
-      ? filtered.length + " نتائج"
-      : WORLD_PLAYERS.length + " لاعبًا في قاعدة البيانات";
-
-    if (filtered.length === 0) {
+    const sorted = [...filtered].sort((a, b) => {
+      if (sort.value === "rating") return b.rating - a.rating || b.potential - a.potential;
+      if (sort.value === "youngest") return a.age - b.age || b.potential - a.potential;
+      if (sort.value === "value") return b.marketValueEur - a.marketValueEur || b.rating - a.rating;
+      return b.potential - a.potential || b.rating - a.rating;
+    });
+    count.textContent = formatHomeNumber(sorted.length) + " من " + formatHomeNumber(WORLD_PLAYERS.length) + " لاعب";
+    if (sorted.length === 0) {
       grid.replaceChildren(emptyResults(
         "مفيش لاعبين مطابقين للبحث",
-        "جرّب اسم لاعب أو نادي أو مركز مختلف.",
+        "جرّب تغيير المركز أو الجنسية أو كلمات البحث.",
         "مسح البحث",
         () => {
           search.value = "";
+          role.value = "all";
+          country.value = "all";
+          sort.value = "potential";
           refresh();
           search.focus();
         }
       ));
       return;
     }
-
-    grid.replaceChildren(...filtered.map((player) => playerCard(player, context.openPlayer)));
+    grid.replaceChildren(...sorted.map((player) => playerCard(player, context.openPlayer)));
   };
 
   search.addEventListener("input", refresh);
+  role.addEventListener("change", refresh);
+  country.addEventListener("change", refresh);
+  sort.addEventListener("change", refresh);
   refresh();
-  page.append(toolbar, grid);
+  page.append(worldStats, toolbar, grid);
   return page;
 }
 
 function renderScouting(context) {
-  const page = node("div", "page-content");
+  const page = node("div", "page-content rebuild-screen scouting-screen");
   const scouting = context.scouting;
   const activeMissions = scouting.activeMissions;
   const reports = scouting.reports;
   page.append(
-    node("p", "eyebrow", "شبكة اكتشاف المواهب"),
-    node("h1", "page-title", "الكشافون"),
-    node("p", "page-subtitle", "أطلق بعثات بميزانية ومدة ودقة مختلفة، ثم راجع تقارير المواهب وأسباب ترشيح كل لاعب.")
+    node("p", "eyebrow rebuild-page-kicker", "شبكة اكتشاف المواهب"),
+    node("h1", "page-title rebuild-page-title", "الكشافون"),
+    node("p", "page-subtitle rebuild-page-subtitle", "أطلق بعثات بميزانية ومدة ودقة مختلفة، ثم راجع تقارير المواهب وأسباب ترشيح كل لاعب.")
   );
 
   const summary = node("div", "metrics-grid scouting-metrics");
@@ -806,22 +845,39 @@ function renderScouting(context) {
 }
 
 function renderMarket(context) {
-  const page = node("div", "page-content");
+  const page = node("div", "page-content rebuild-screen market-screen");
   page.append(
-    node("p", "eyebrow", "حركة الأندية والصفقات"),
-    node("h1", "page-title", "سوق الانتقالات"),
-    node("p", "page-subtitle", "نظرة أولية على فرص السوق. التفاوض وإتمام الصفقات سيُنفذان في المرحلة الثامنة.")
+    node("p", "eyebrow rebuild-page-kicker", "حركة الأندية والصفقات"),
+    node("h1", "page-title rebuild-page-title", "سوق الانتقالات"),
+    node("p", "page-subtitle rebuild-page-subtitle", "مساحة لمتابعة فرص انتقال اللاعبين وربطها باحتياجات الأندية وعقود العملاء.")
   );
+
+  const previewNotice = node("section", "market-preview-notice");
+  previewNotice.append(
+    node("span", "market-preview-icon", "⇄"),
+    node("div", "market-preview-copy")
+  );
+  previewNotice.children[1].append(
+    node("strong", "", "معاينة واجهة السوق"),
+    node("p", "", "الأسماء والقيم الظاهرة أدناه أمثلة تجريبية لتصميم الواجهة وليست عروض انتقال حقيقية. ربط السوق بعقود الأندية والتفاوض سيتم في مرحلة الأنظمة.")
+  );
+  previewNotice.append(node("span", "market-preview-state", "DEMO DATA"));
+
   const summary = node("div", "market-summary");
   summary.append(
-    metricCard("فرص معروضة", "03", "بيانات توضيحية", "⇄", "purple"),
-    metricCard("النافذة الحالية", "صيف", "موسم 2026–2027", "◷", "cyan"),
-    metricCard("حالة السوق", "نشط", "واجهة معاينة", "◈", "gold")
+    metricCard("أمثلة معروضة", formatHomeNumber(MARKET_ITEMS.length), "بيانات واجهة فقط", "⇄", "purple"),
+    metricCard("الموسم الحالي", formatSeasonLabel(context.save.world.currentDate), "وفق تاريخ المسيرة", "◷", "cyan"),
+    metricCard("حالة المحرك", "قيد التطوير", "لا توجد صفقات فعلية", "◈", "gold")
+  );
+
+  const listHeading = sectionHeading(
+    "أمثلة بطاقات السوق",
+    "توضيح لطريقة عرض الوجهة والقيمة وحالة الفرصة عند تفعيل المحرك."
   );
   const list = node("div", "market-list");
   MARKET_ITEMS.forEach((item) => {
     const card = node("article", "market-card");
-    const badge = node("span", "market-badge badge-" + item.accent, item.to);
+    const badge = node("span", "market-badge badge-" + item.accent, "مثال · " + item.to);
     const details = node("div", "market-details");
     details.append(
       node("h3", "", item.player),
@@ -834,21 +890,21 @@ function renderMarket(context) {
       context.openModal("فرصة انتقال تجريبية", [
         node("p", "modal-copy", item.player + " — " + item.position),
         node("p", "modal-copy", item.note),
-        node("p", "modal-note", "هذه بيانات عرض تجريبية. محرك العروض والتفاوض لم يُفعّل بعد.")
-      ], "فهمت");
+        node("p", "modal-note", "هذه البطاقة لأغراض التصميم فقط. لا يوجد لاعب حقيقي أو نادٍ أرسل هذا العرض، ولا يمكن تنفيذ انتقال منها.")
+      ], "إغلاق");
     }));
     list.append(card);
   });
-  page.append(summary, list);
+  page.append(previewNotice, summary, listHeading, list);
   return page;
 }
 
 function renderAgency(context) {
-  const page = node("div", "page-content");
+  const page = node("div", "page-content rebuild-screen agency-screen");
   page.append(
-    node("p", "eyebrow", "إدارة أعمالك"),
-    node("h1", "page-title", "الوكالة"),
-    node("p", "page-subtitle", "ابنِ قائمة عملائك، تفاوض على شروط التمثيل، واهتم بالثقة والتواصل والمواعيد.")
+    node("p", "eyebrow rebuild-page-kicker", "إدارة أعمالك"),
+    node("h1", "page-title rebuild-page-title", "الوكالة"),
+    node("p", "page-subtitle rebuild-page-subtitle", "ابنِ قائمة عملائك، تفاوض على شروط التمثيل، واهتم بالثقة والتواصل والمواعيد.")
   );
 
   const agency = context.save.agency;
@@ -890,16 +946,42 @@ function renderAgency(context) {
 
   const contractsPanel = node("section", "surface-card representation-panel");
   const contractsHeading = node("div", "representation-heading");
-  contractsHeading.append(
-    node("h2", "", "عملاء الوكالة"),
-    node("span", "representation-count", activeContracts.length + " عقد نشط")
-  );
+  const contractsCount = node("span", "representation-count", activeContracts.length + " عقد نشط");
+  contractsHeading.append(node("h2", "", "عملاء الوكالة"), contractsCount);
   contractsPanel.append(contractsHeading);
+
+  const clientToolbar = node("div", "representation-client-toolbar");
+  const clientSearch = node("input", "search-input");
+  clientSearch.type = "search";
+  clientSearch.placeholder = "ابحث عن عميل بالاسم أو النادي أو المركز...";
+  clientSearch.setAttribute("aria-label", "البحث في عملاء الوكالة");
+  clientToolbar.append(clientSearch);
   const contractList = node("div", "representation-list");
-  if (activeContracts.length === 0) {
-    contractList.append(node("p", "representation-empty", "لسه مفيش عقود تمثيل موقعة. اختار لاعب وابدأ التفاوض."));
-  } else {
-    activeContracts.forEach((contract) => {
+  const renderContracts = () => {
+    const query = clientSearch.value.trim().toLocaleLowerCase("ar");
+    const filteredContracts = activeContracts.filter((contract) =>
+      [contract.playerName, contract.position, contract.club]
+        .some((value) => String(value ?? "").toLocaleLowerCase("ar").includes(query))
+    );
+    contractsCount.textContent = filteredContracts.length + " من " + activeContracts.length + " عقد نشط";
+    if (activeContracts.length === 0) {
+      contractList.replaceChildren(node("p", "representation-empty", "لسه مفيش عقود تمثيل موقعة. اختار لاعب من قائمة الاستقطاب وابدأ التفاوض."));
+      return;
+    }
+    if (filteredContracts.length === 0) {
+      contractList.replaceChildren(emptyResults(
+        "مش لاقيين عميل مطابق",
+        "جرّب اسم لاعب أو نادي أو مركز مختلف.",
+        "مسح البحث",
+        () => {
+          clientSearch.value = "";
+          renderContracts();
+          clientSearch.focus();
+        }
+      ));
+      return;
+    }
+    contractList.replaceChildren(...filteredContracts.map((contract) => {
       const row = node("article", "representation-row representation-contract-row");
       const copy = node("div", "representation-copy");
       const effectiveExpiry = getRepresentationContractExpiry(contract);
@@ -933,10 +1015,12 @@ function renderAgency(context) {
       }
       actions.append(actionButton("إنهاء التمثيل", "button-outline representation-terminate-button", () => context.terminateRepresentationContract(contract.id)));
       row.append(copy, actions);
-      contractList.append(row);
-    });
-  }
-  contractsPanel.append(contractList);
+      return row;
+    }));
+  };
+  clientSearch.addEventListener("input", renderContracts);
+  renderContracts();
+  contractsPanel.append(clientToolbar, contractList);
 
   const interactionsPanel = node("section", "surface-card representation-panel representation-interactions-panel");
   const interactionsHeading = node("div", "representation-heading");
@@ -1044,24 +1128,78 @@ function renderAgency(context) {
     prospectsHeading,
     node("p", "representation-intro", "كل لاعب له شخصية وطموح وولاء واحترافية تؤثر على عمولته والمدة التي يقبلها.")
   );
-  const prospectGrid = node("div", "representation-prospect-grid");
-  prospects.forEach((player) => {
-    const profile = getPlayerRepresentationProfile(player);
-    const card = node("article", "representation-prospect-card");
-    const copy = node("div", "representation-copy");
-    copy.append(
-      node("strong", "", player.name),
-      node("span", "", player.position + " · " + player.club),
-      node("small", "", player.age + " سنة · تقييم " + player.rating + " · إمكانيات " + player.potential),
-      node("small", "", "شخصية " + personalityLabels[profile.personality] +
-        " · طموح " + profile.ambition + "/5 · ولاء " + profile.loyalty + "/5"),
-      node("small", "", "احترافية " + profile.professionalism + "/5")
-    );
-    card.append(copy, actionButton("عرض تمثيل", "button-outline representation-offer-button", () => context.openRepresentationOffer(player)));
-    prospectGrid.append(card);
+  const prospectToolbar = node("div", "representation-prospect-toolbar");
+  const prospectSearch = node("input", "search-input");
+  prospectSearch.type = "search";
+  prospectSearch.placeholder = "ابحث عن لاعب بالاسم أو النادي أو المركز...";
+  prospectSearch.setAttribute("aria-label", "البحث عن لاعب لضمّه");
+  const prospectSort = node("select", "filter-select");
+  prospectSort.setAttribute("aria-label", "ترتيب اللاعبين المتاحين");
+  [
+    ["potential", "الأعلى إمكانيات"],
+    ["rating", "الأعلى تقييمًا"],
+    ["youngest", "الأصغر سنًا"]
+  ].forEach(([value, label]) => {
+    const option = node("option", "", label);
+    option.value = value;
+    prospectSort.append(option);
   });
-  if (prospects.length === 0) prospectGrid.append(node("p", "representation-empty", "كل اللاعبين المتاحين لديهم عروض مفتوحة أو عقود تمثيل."));
-  prospectsPanel.append(prospectGrid);
+  const prospectCount = node("span", "representation-count", "");
+  prospectCount.setAttribute("aria-live", "polite");
+  prospectToolbar.append(prospectSearch, prospectSort, prospectCount);
+
+  const prospectGrid = node("div", "representation-prospect-grid");
+  const renderProspects = () => {
+    const query = prospectSearch.value.trim().toLocaleLowerCase("ar");
+    const filtered = prospects.filter((player) =>
+      [player.name, player.club, player.position, player.country, player.league]
+        .some((value) => String(value ?? "").toLocaleLowerCase("ar").includes(query))
+    );
+    filtered.sort((a, b) => {
+      if (prospectSort.value === "rating") return b.rating - a.rating || b.potential - a.potential;
+      if (prospectSort.value === "youngest") return a.age - b.age || b.potential - a.potential;
+      return b.potential - a.potential || b.rating - a.rating;
+    });
+    prospectCount.textContent = formatHomeNumber(filtered.length) + " لاعب";
+    if (filtered.length === 0) {
+      prospectGrid.replaceChildren(emptyResults(
+        "مش لاقيين لاعب مطابق",
+        "غيّر كلمة البحث أو امسحها لعرض كل اللاعبين المتاحين.",
+        "مسح البحث",
+        () => {
+          prospectSearch.value = "";
+          renderProspects();
+          prospectSearch.focus();
+        }
+      ));
+      return;
+    }
+    prospectGrid.replaceChildren(...filtered.map((player) => {
+      const profile = getPlayerRepresentationProfile(player);
+      const card = node("article", "representation-prospect-card");
+      const portrait = node("div", "representation-prospect-portrait");
+      portrait.append(playerArt(player));
+      const copy = node("div", "representation-copy");
+      copy.append(
+        node("strong", "", player.name),
+        node("span", "", player.position + " · " + player.club),
+        node("small", "", player.age + " سنة · تقييم " + player.rating + " · إمكانيات " + player.potential),
+        node("small", "", "شخصية " + personalityLabels[profile.personality] +
+          " · طموح " + profile.ambition + "/5 · ولاء " + profile.loyalty + "/5"),
+        node("small", "", "احترافية " + profile.professionalism + "/5")
+      );
+      card.append(
+        portrait,
+        copy,
+        actionButton("عرض تمثيل", "button-primary representation-offer-button", () => context.openRepresentationOffer(player))
+      );
+      return card;
+    }));
+  };
+  prospectSearch.addEventListener("input", renderProspects);
+  prospectSort.addEventListener("change", renderProspects);
+  renderProspects();
+  prospectsPanel.append(prospectToolbar, prospectGrid);
 
   const historyPanel = node("section", "surface-card representation-panel");
   const historyHeading = node("div", "representation-heading");
@@ -2224,7 +2362,7 @@ export function mountApp(root) {
 
   function navigate(view) {
     state.view = view;
-    render();
+    render({ focusMain: true });
   }
 
   function openModal(title, children, closeLabel = "إغلاق") {
@@ -2286,50 +2424,93 @@ export function mountApp(root) {
   function openPlayer(player) {
     const art = playerArt(player, true);
     art.classList.add("modal-player-art");
-    const summary = node("div", "modal-player-summary");
-    summary.append(
-      node("p", "eyebrow", player.position + "  ·  " + player.country),
+
+    const identity = node("div", "player-profile-identity");
+    identity.append(
+      node("span", "player-profile-kicker", "PLAYER DOSSIER · ملف اللاعب"),
       node("h3", "", player.name),
-      node("p", "modal-copy", player.club + "  ·  " + player.league + "  ·  " + player.age + " سنة"),
-      node("p", "modal-note", "التقييم " + player.rating + "  |  الإمكانيات " + player.potential + "  |  القيمة " + player.value)
+      node("p", "", player.position + " · " + player.club),
+      node("span", "player-profile-status", player.status)
     );
-    const wrapper = node("div", "modal-player-layout");
-    wrapper.append(art, summary);
-    openModal("ملف اللاعب", [
-      wrapper,
-      node("p", "modal-note", "ملف لاعب خيالي ضمن بيانات البداية. يمكنك تقديم عرض تمثيل له من قسم الوكالة."),
-      actionButton(state.watchlist.has(player.id) ? "✓  في قائمة المتابعة" : "＋  أضف لقائمة المتابعة", "watch-button", () => {
+
+    const hero = node("div", "player-profile-hero");
+    hero.append(art, identity);
+
+    const ratingCards = node("div", "player-profile-stats");
+    [
+      ["التقييم الحالي", player.rating, "OVR"],
+      ["الإمكانيات", player.potential, "POT"],
+      ["العمر", player.age, "سنة"],
+      ["القيمة السوقية", player.value, "EUR"]
+    ].forEach(([label, value, suffix]) => {
+      const item = node("article", "player-profile-stat");
+      item.append(
+        node("small", "", label),
+        node("strong", "", String(value)),
+        node("span", "", suffix)
+      );
+      ratingCards.append(item);
+    });
+
+    const details = node("div", "player-profile-details");
+    [
+      ["الجنسية", player.country],
+      ["النادي", player.club],
+      ["الدوري", player.league],
+      ["القدم المفضلة", player.foot === "left" ? "اليسرى" : "اليمنى"],
+      ["المركز العام", player.role],
+      ["نهاية عقد النادي", player.contractUntil ? formatHomeDate(player.contractUntil) : "غير متاح"]
+    ].forEach(([label, value]) => {
+      const row = node("div", "player-profile-detail");
+      row.append(node("small", "", label), node("strong", "", String(value)));
+      details.append(row);
+    });
+
+    const growth = node("section", "player-profile-growth");
+    const growthHeading = node("div", "player-profile-growth-heading");
+    growthHeading.append(
+      node("strong", "", "مساحة التطور"),
+      node("span", "", "فرق " + Math.max(0, player.potential - player.rating) + " نقطة")
+    );
+    const growthTrack = node("div", "player-profile-growth-track");
+    const growthFill = node("span", "player-profile-growth-fill");
+    growthFill.style.width = Math.max(0, Math.min(100, Number(player.potential) || 0)) + "%";
+    growthTrack.append(growthFill);
+    growth.append(growthHeading, growthTrack);
+
+    const content = node("div", "player-profile-content");
+    content.append(hero, ratingCards, details, growth,
+      node("p", "player-profile-disclaimer", "هذا ملف لاعب خيالي من قاعدة العالم التجريبية. القيمة السوقية تقدير داخل اللعبة وليست عرض انتقال رسميًا.")
+    );
+
+    const isWatched = state.watchlist.has(player.id);
+    const actions = node("div", "player-profile-actions");
+    const watchButton = actionButton(
+      isWatched ? "✓  تمت إضافته للمتابعة" : "＋  أضف لقائمة المتابعة",
+      isWatched ? "button-outline player-profile-watch is-active" : "button-outline player-profile-watch",
+      () => {
         if (addToWatchlist(player)) {
-          root.querySelector(".modal-overlay .icon-button")?.click();
+          watchButton.textContent = "✓  تمت إضافته للمتابعة";
+          watchButton.classList.add("is-active");
+          watchButton.disabled = true;
+          watchButton.setAttribute("aria-pressed", "true");
         }
+      }
+    );
+    watchButton.disabled = isWatched;
+    watchButton.setAttribute("aria-pressed", String(isWatched));
+    actions.append(
+      watchButton,
+      actionButton("بدء عرض تمثيل", "button-primary player-profile-representation", () => {
+        root.querySelector(".modal-overlay .icon-button")?.click();
+        openRepresentationOffer(player);
       })
-    ]);
+    );
+
+    openModal("ملف اللاعب", [content, actions]);
   }
 
-  function render() {
-    const shell = node("div", state.view === "dashboard" ? "app-shell dashboard-shell" : "app-shell");
-    const header = node("header", "topbar");
-    const brand = node("div", "brand-lockup");
-    brand.append(node("span", "brand-mark", "FA"), node("span", "brand-name", "FOOTBALL AGENT"));
-    const season = node("span", "season-pill", "موسم " + formatSeasonLabel(state.save.world.currentDate));
-    const saveButton = actionButton(state.isSaved ? "✓  محفوظ" : "حفظ المسيرة", "save-chip", saveCareer);
-    header.append(brand, season, saveButton);
-
-    const layout = node("div", "app-layout");
-    const sidebar = node("nav", "sidebar");
-    sidebar.setAttribute("aria-label", "القائمة الرئيسية");
-    sidebar.append(node("p", "nav-caption", "القائمة"));
-    NAV_ITEMS.forEach((item) => {
-      const navButton = actionButton("", state.view === item.id ? "nav-link is-active" : "nav-link", () => navigate(item.id));
-      if (state.view === item.id) navButton.setAttribute("aria-current", "page");
-      navButton.append(node("span", "nav-icon", item.icon), node("span", "nav-label", item.label));
-      sidebar.append(navButton);
-    });
-    const sideBottom = node("div", "sidebar-bottom");
-    sideBottom.append(node("span", "online-dot"), node("span", "", "وضع المعاينة"));
-    sidebar.append(sideBottom);
-
-    const main = node("main", "main-stage");
+  function render({ focusMain = false } = {}) {
     const context = {
       save: state.save,
       navigate,
@@ -2381,19 +2562,19 @@ export function mountApp(root) {
       market: renderMarket,
       agency: renderAgency
     };
-    main.append(views[state.view](context));
-    layout.append(sidebar, main);
-
-    const bottomNav = node("nav", "mobile-nav");
-    bottomNav.setAttribute("aria-label", "التنقل");
-    NAV_ITEMS.forEach((item) => {
-      const navButton = actionButton("", state.view === item.id ? "mobile-nav-link is-active" : "mobile-nav-link", () => navigate(item.id));
-      if (state.view === item.id) navButton.setAttribute("aria-current", "page");
-      navButton.append(node("span", "mobile-nav-icon", item.icon), node("span", "mobile-nav-label", item.label));
-      bottomNav.append(navButton);
+    const page = views[state.view] ? views[state.view](context) : renderDashboard(context);
+    const shell = createAppShell({
+      node,
+      actionButton,
+      view: state.view,
+      seasonLabel: "موسم " + formatSeasonLabel(state.save.world.currentDate),
+      dateLabel: formatHomeDate(state.save.world.currentDate),
+      saveLabel: state.isSaved ? "✓ محفوظ" : "حفظ المسيرة",
+      onSave: saveCareer,
+      onNavigate: navigate,
+      agencyName: state.save.agency.name,
+      page
     });
-
-    shell.append(header, layout, bottomNav);
     root.replaceChildren(shell);
     if (loadedWatchlist.status === "corrupt" || loadedWatchlist.status === "unavailable") {
       const warning = node("div", "save-warning");
@@ -2413,6 +2594,9 @@ export function mountApp(root) {
     }
     if (state.toastMessage) {
       root.append(node("div", "toast-message", state.toastMessage));
+    }
+    if (focusMain) {
+      root.querySelector(".main-stage")?.focus();
     }
   }
 

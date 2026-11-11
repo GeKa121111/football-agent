@@ -38,13 +38,48 @@ test.describe("Desktop experience", () => {
 
   test("shows the dashboard reference and desktop navigation", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator(".home-stadium")).toBeVisible();
-    await expect(page.locator(".agent-profile-card")).toBeVisible();
-    await expect(page.locator(".career-day-panel")).toBeVisible();
-    await expect(page.locator(".home-menu-grid .home-tile")).toHaveCount(18);
+    await expect(page.locator(".dashboard-intro")).toBeVisible();
+    await expect(page.locator(".dashboard-agency-card")).toBeVisible();
+    await expect(page.locator(".dashboard-day-card")).toBeVisible();
+    await expect(page.locator(".dashboard-quick-action")).toHaveCount(3);
+    await expect(page.locator(".home-menu-grid .home-tile")).toHaveCount(0);
     await expect(page.locator(".sidebar")).toBeVisible();
     await expect(page.locator(".mobile-nav")).toBeHidden();
     await hasNoHorizontalOverflow(page);
+  });
+  
+  test("keeps all five workspaces within every supported viewport width", async ({ page }) => {
+    await page.goto("/");
+    const viewports = [
+      { width: 320, height: 800 },
+      { width: 390, height: 844 },
+      { width: 768, height: 900 },
+      { width: 1440, height: 960 }
+    ];
+    const screens = ["اللاعبون", "الكشافون", "الانتقالات", "الوكالة", "الرئيسية"];
+
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport);
+      for (const screen of screens) {
+        await navigateTo(page, screen);
+        await expect(page.locator(".main-stage")).toBeVisible();
+        await expect(page.locator(".main-stage")).toBeFocused();
+        const navigation = viewport.width <= 760
+          ? page.locator(".mobile-nav")
+          : page.locator(".sidebar");
+        await expect(navigation.locator('[aria-current="page"]')).toHaveCount(1);
+        await hasNoHorizontalOverflow(page);
+      }
+    }
+  });
+
+  test("provides a keyboard skip link that moves focus to the main workspace", async ({ page }) => {
+    await page.goto("/");
+    await page.keyboard.press("Tab");
+    const skipLink = page.locator(".rebuild-skip-link");
+    await expect(skipLink).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".main-stage")).toBeFocused();
   });
 
   test("navigates through all five primary screens", async ({ page }) => {
@@ -97,6 +132,14 @@ test.describe("Desktop experience", () => {
     expect(saved.agency.representation.contracts[0].commissionRate).toBeLessThan(15);
     expect(saved.agency.representation.history.map((entry) => entry.type)).toContain("contract-signed");
     await expect(page.locator(".representation-contract-row")).toBeVisible();
+
+    const clientSearch = page.getByRole("searchbox", { name: "البحث في عملاء الوكالة" });
+    await clientSearch.fill(saved.agency.representation.contracts[0].playerName.slice(0, 3));
+    await expect(page.locator(".representation-contract-row")).toHaveCount(1);
+    await clientSearch.fill("اسم غير موجود");
+    await expect(page.locator(".empty-results")).toBeVisible();
+    await page.getByRole("button", { name: "مسح البحث" }).click();
+    await expect(page.locator(".representation-contract-row")).toHaveCount(1);
 
     await page.locator(".representation-terminate-button").click();
     saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
@@ -348,6 +391,15 @@ test.describe("Desktop experience", () => {
     await page.locator(".modal-overlay").click({ position: { x: 5, y: 5 } });
     await expect(page.locator(".modal-overlay")).toHaveCount(0);
   });
+
+  test("labels all market cards as illustrative preview data", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الانتقالات");
+    await expect(page.locator(".market-preview-notice")).toContainText("ليست عروض انتقال حقيقية");
+    await expect(page.locator(".market-preview-state")).toHaveText("DEMO DATA");
+    await expect(page.locator(".market-card")).toHaveCount(3);
+    await hasNoHorizontalOverflow(page);
+  });
 });
 
 test.describe("Mobile experience", () => {
@@ -360,6 +412,21 @@ test.describe("Mobile experience", () => {
     await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
     await expect(page.getByLabel("نسبة العمولة")).toBeVisible();
     await expect(page.getByLabel("مدة العقد")).toBeVisible();
+    await hasNoHorizontalOverflow(page);
+  });
+
+  test("searches the agency prospect pool without changing its source data", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    await expect(page.locator(".representation-prospect-card")).toHaveCount(32);
+    const search = page.getByRole("searchbox", { name: "البحث عن لاعب لضمّه" });
+    await search.fill("ياسين");
+    await expect(page.locator(".representation-prospect-card")).toHaveCount(1);
+    await expect(page.locator(".representation-prospect-card")).toContainText("ياسين عادل");
+    await search.fill("لا يوجد لاعب بهذا الاسم");
+    await expect(page.locator(".empty-results")).toBeVisible();
+    await page.getByRole("button", { name: "مسح البحث" }).click();
+    await expect(page.locator(".representation-prospect-card")).toHaveCount(32);
     await hasNoHorizontalOverflow(page);
   });
 
@@ -377,7 +444,8 @@ test.describe("Mobile experience", () => {
     await page.goto("/");
     await expect(page.locator(".mobile-nav")).toBeVisible();
     await expect(page.locator(".sidebar")).toBeHidden();
-    await expect(page.locator(".home-menu-grid .home-tile")).toHaveCount(18);
+    await expect(page.locator(".dashboard-quick-action")).toHaveCount(3);
+    await expect(page.locator(".home-menu-grid .home-tile")).toHaveCount(0);
     await hasNoHorizontalOverflow(page);
   });
 
@@ -401,6 +469,47 @@ test.describe("Mobile experience", () => {
 
     await page.getByRole("button", { name: "مسح البحث" }).click();
     await expect(page.locator(".player-card")).toHaveCount(32);
+    await hasNoHorizontalOverflow(page);
+  });
+
+  test("filters the player library by role and nationality and supports sorting", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "اللاعبون");
+    const role = page.getByLabel("تصفية حسب مركز اللاعب");
+    const country = page.getByLabel("تصفية حسب الجنسية");
+    const sort = page.getByLabel("ترتيب اللاعبين");
+
+    await role.selectOption("هجوم");
+    const attackCount = await page.locator(".player-card").count();
+    expect(attackCount).toBeGreaterThan(0);
+    expect(attackCount).toBeLessThan(32);
+
+    await country.selectOption("مصر");
+    const egyptAttackCount = await page.locator(".player-card").count();
+    expect(egyptAttackCount).toBeGreaterThan(0);
+    expect(egyptAttackCount).toBeLessThanOrEqual(attackCount);
+
+    await role.selectOption("all");
+    await country.selectOption("all");
+    await sort.selectOption("youngest");
+    await expect(page.locator(".player-card").first().locator(".player-country")).toContainText("18 سنة");
+    await hasNoHorizontalOverflow(page);
+  });
+
+  test("opens a complete player dossier and starts a representation offer from the profile", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "اللاعبون");
+    await page.getByRole("searchbox", { name: "البحث عن لاعب" }).fill("ياسين عادل");
+    await page.locator(".player-card").getByRole("button", { name: "ملف اللاعب" }).click();
+
+    const dossier = page.getByRole("dialog", { name: "ملف اللاعب" });
+    await expect(dossier.locator(".player-profile-identity h3")).toHaveText("ياسين عادل");
+    await expect(dossier.locator(".player-profile-stats")).toContainText("OVR");
+    await expect(dossier.locator(".player-profile-details")).toContainText("الأهلي");
+    await expect(dossier.locator(".player-profile-details")).toContainText("الدوري المصري الممتاز");
+    await dossier.getByRole("button", { name: "بدء عرض تمثيل" }).click();
+    await expect(page.getByRole("dialog", { name: "عرض تمثيل جديد" })).toBeVisible();
+    await expect(page.getByLabel("نسبة العمولة")).toBeVisible();
     await hasNoHorizontalOverflow(page);
   });
 

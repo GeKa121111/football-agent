@@ -1,0 +1,531 @@
+/* Rebuild 2.0 — shared screen and player catalogue styling */
+.rebuild-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 5px 0 26px;
+}
+.rebuild-main .rebuild-screen > .eyebrow {
+  margin: 0 0 -7px;
+  color: var(--fa-accent);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+.rebuild-main .rebuild-screen > .page-title {
+  margin: 0;
+  color: var(--fa-text);
+  font-size: clamp(24px, 2.2vw, 31px);
+  font-weight: 900;
+  letter-spacing: -.035em;
+}
+.rebuild-main .rebuild-screen > .page-subtitle {
+  max-width: 760px;
+  margin: -8px 0 4px;
+  color: var(--fa-muted);
+  font-size: 10px;
+  line-height: 1.9;
+}
+.rebuild-main .rebuild-screen .metrics-grid {
+  gap: 10px;
+  margin: 3px 0 2px;
+}
+.rebuild-main .rebuild-screen .metric-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--fa-border);
+  border-radius: 15px;
+  background: rgba(17,24,39,.78);
+  box-shadow: none;
+}
+.rebuild-main .rebuild-screen .metric-label { color: var(--fa-muted); font-size: 9px; }
+.rebuild-main .rebuild-screen .metric-value { color: var(--fa-text); font-size: 19px; }
+.rebuild-main .rebuild-screen .metric-footnote { color: var(--fa-muted); font-size: 8px; }
+
+.rebuild-main .rebuild-screen .list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 2px 0 0;
+  padding: 12px;
+  border: 1px solid var(--fa-border);
+  border-radius: 15px;
+  background: rgba(17,24,39,.72);
+}
+.rebuild-main .rebuild-screen .search-input,
+.rebuild-main .rebuild-screen .filter-select {
+  min-height: 43px;
+  border: 1px solid var(--fa-border);
+  border-radius: 11px;
+  color: var(--fa-text);
+  background: rgba(5,10,18,.42);
+  font-size: 10px;
+}
+.rebuild-main .rebuild-screen .search-input { width: min(100%, 520px); }
+.rebuild-main .rebuild-screen .search-input:focus-visible,
+.rebuild-main .rebuild-screen .filter-select:focus-visible {
+  border-color: rgba(169,243,107,.5);
+  outline-color: var(--fa-accent);
+}
+.rebuild-main .rebuild-screen .result-count {
+  color: var(--fa-muted);
+  font-size: 9px;
+}
+.rebuild-main .rebuild-screen .players-grid,
+.rebuild-main .rebuild-screen .players-grid-large {
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 13px;
+  margin-top: 0;
+}
+.rebuild-main .rebuild-screen .player-card {
+  border: 1px solid var(--fa-border);
+  border-radius: 17px;
+  background: linear-gradient(160deg, rgba(25,36,53,.96), rgba(13,20,32,.98));
+  box-shadow: 0 12px 30px rgba(0,0,0,.18);
+}
+.rebuild-main .rebuild-screen .player-card:hover {
+  border-color: rgba(169,243,107,.31);
+  box-shadow: 0 16px 34px rgba(0,0,0,.26);
+}
+.rebuild-main .rebuild-screen .player-card-visual {
+  height: 205px;
+  background:
+    radial-gradient(circle at 50% 8%, rgba(169,243,107,.14), transparent 58%),
+    linear-gradient(150deg, #202f40, #111a29 72%);
+}
+.rebuild-main .rebuild-screen .player-rating {
+  top: 12px;
+  right: 12px;
+  width: 43px;
+  height: 46px;
+  border: 1px solid rgba(169,243,107,.28);
+  border-radius: 12px;
+  color: var(--fa-accent);
+  background: rgba(8,14,21,.84);
+  box-shadow: none;
+}
+.rebuild-main .rebuild-screen .player-position-tag {
+  bottom: 11px;
+  left: 11px;
+  border-color: var(--fa-border);
+  border-radius: 8px;
+  color: var(--fa-text-soft);
+  background: rgba(8,14,21,.78);
+  font-size: 8px;
+}
+.rebuild-main .rebuild-screen .player-card-info { padding: 13px 14px 11px; }
+.rebuild-main .rebuild-screen .player-country { color: var(--fa-muted); font-size: 8px; }
+.rebuild-main .rebuild-screen .player-name { color: var(--fa-text); font-size: 13px; }
+.rebuild-main .rebuild-screen .player-club { color: var(--fa-text-soft); font-size: 8px; }
+.rebuild-main .rebuild-screen .player-card-stats {
+  border-top-color: var(--fa-border);
+}
+.rebuild-main .rebuild-screen .mini-stat span { color: var(--fa-muted); font-size: 8px; }
+.rebuild-main .rebuild-screen .mini-stat strong { color: var(--fa-text-soft); font-size: 9px; }
+.rebuild-main .rebuild-screen .player-card-footer {
+  border-top-color: var(--fa-border);
+}
+.rebuild-main .rebuild-screen .scout-status { color: var(--fa-accent); font-size: 8px; }
+.rebuild-main .rebuild-screen .text-button { color: var(--fa-accent); font-size: 9px; }
+.rebuild-main .rebuild-screen .scout-banner,
+.rebuild-main .rebuild-screen .scout-team-panel,
+.rebuild-main .rebuild-screen .scout-operations-panel,
+.rebuild-main .rebuild-screen .agency-overview,
+.rebuild-main .rebuild-screen .representation-workspace,
+.rebuild-main .rebuild-screen .market-card {
+  border-color: var(--fa-border);
+  border-radius: 16px;
+}
+.rebuild-main .rebuild-screen .empty-results {
+  border: 1px dashed var(--fa-border-strong);
+  border-radius: 16px;
+  background: rgba(17,24,39,.45);
+}
+.rebuild-main .rebuild-screen .empty-results h2 { color: var(--fa-text); }
+.rebuild-main .rebuild-screen .empty-results p { color: var(--fa-muted); }
+
+@media (max-width: 1050px) {
+  .rebuild-main .rebuild-screen .players-grid,
+  .rebuild-main .rebuild-screen .players-grid-large { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 760px) {
+  .rebuild-screen { gap: 13px; padding-top: 2px; }
+  .rebuild-main .rebuild-screen > .page-title { font-size: 25px; }
+  .rebuild-main .rebuild-screen > .page-subtitle { font-size: 9px; }
+  .rebuild-main .rebuild-screen .metrics-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .rebuild-main .rebuild-screen .metric-card { padding: 11px; }
+  .rebuild-main .rebuild-screen .metric-value { font-size: 17px; }
+  .rebuild-main .rebuild-screen .list-toolbar { padding: 9px; }
+  .rebuild-main .rebuild-screen .search-input { width: 100%; }
+  .rebuild-main .rebuild-screen .players-grid,
+  .rebuild-main .rebuild-screen .players-grid-large { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
+  .rebuild-main .rebuild-screen .player-card-visual { height: 170px; }
+}
+@media (max-width: 390px) {
+  .rebuild-main .rebuild-screen .players-grid,
+  .rebuild-main .rebuild-screen .players-grid-large { grid-template-columns: minmax(0,1fr); }
+  .rebuild-main .rebuild-screen .player-card-visual { height: 205px; }
+}
+
+
+/* Rebuild 2.0 — player library, scouting, agency and market workspaces */
+.player-library-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.8fr) repeat(3, minmax(130px, .75fr)) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--fa-border);
+  border-radius: 16px;
+  background: rgba(17,24,39,.76);
+}
+.player-library-toolbar .search-input { width: 100%; min-width: 0; }
+.player-library-toolbar .filter-select { width: 100%; min-width: 0; }
+.player-library-count { margin-inline-start: 0; white-space: nowrap; }
+.player-nationality-tag {
+  position: absolute;
+  z-index: 5;
+  right: 12px;
+  bottom: 12px;
+  max-width: 46%;
+  overflow: hidden;
+  padding: 5px 8px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px;
+  color: #e8edf6;
+  background: rgba(7,12,21,.74);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rebuild-main .players-screen .player-card-visual { height: 222px; }
+.rebuild-main .players-screen .player-card-info { padding: 14px; }
+.player-potential-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 11px;
+  color: var(--fa-muted);
+  font-size: 8px;
+}
+.player-potential-row strong { color: var(--fa-accent); font-size: 9px; }
+.player-potential-track,
+.player-profile-growth-track {
+  height: 5px;
+  overflow: hidden;
+  margin-top: 6px;
+  border-radius: 99px;
+  background: rgba(255,255,255,.08);
+}
+.player-potential-fill,
+.player-profile-growth-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #74bd43, #b4f47d);
+}
+.rebuild-main .players-screen .player-card-stats { margin-top: 11px; }
+.rebuild-main .players-screen .mini-stat strong { font-size: 8px; }
+
+.player-profile-content { display: flex; flex-direction: column; gap: 16px; }
+.player-profile-hero {
+  display: grid;
+  grid-template-columns: 150px minmax(0,1fr);
+  align-items: center;
+  gap: 17px;
+}
+.player-profile-hero .modal-player-art {
+  height: 190px;
+  border: 1px solid var(--fa-border);
+  border-radius: 16px;
+  background: #162234;
+}
+.player-profile-identity { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; min-width: 0; }
+.player-profile-kicker { color: var(--fa-accent); font-size: 8px; font-weight: 900; letter-spacing: .12em; }
+.player-profile-identity h3 { margin: 0; color: var(--fa-text); font-size: 22px; font-weight: 900; line-height: 1.35; }
+.player-profile-identity p { margin: 0; color: var(--fa-text-soft); font-size: 10px; }
+.player-profile-status {
+  display: inline-flex;
+  width: fit-content;
+  padding: 6px 9px;
+  border: 1px solid rgba(169,243,107,.2);
+  border-radius: 999px;
+  color: var(--fa-accent);
+  background: rgba(169,243,107,.07);
+  font-size: 8px;
+  font-weight: 800;
+}
+.player-profile-stats {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 8px;
+}
+.player-profile-stat {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 11px;
+  border: 1px solid var(--fa-border);
+  border-radius: 13px;
+  background: rgba(255,255,255,.025);
+}
+.player-profile-stat small { color: var(--fa-muted); font-size: 8px; }
+.player-profile-stat strong { overflow: hidden; color: var(--fa-text); font-size: 14px; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
+.player-profile-stat span { color: var(--fa-accent); font-size: 7px; font-weight: 900; letter-spacing: .1em; }
+.player-profile-details {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 8px;
+}
+.player-profile-detail {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 11px;
+  border: 1px solid var(--fa-border);
+  border-radius: 12px;
+  background: rgba(17,24,39,.62);
+}
+.player-profile-detail small { color: var(--fa-muted); font-size: 8px; }
+.player-profile-detail strong { overflow: hidden; color: var(--fa-text-soft); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.player-profile-growth {
+  padding: 12px 14px;
+  border: 1px solid var(--fa-border);
+  border-radius: 13px;
+  background: rgba(17,24,39,.62);
+}
+.player-profile-growth-heading { display: flex; justify-content: space-between; gap: 10px; color: var(--fa-muted); font-size: 8px; }
+.player-profile-growth-heading strong { color: var(--fa-text-soft); font-size: 9px; }
+.player-profile-growth-heading span { color: var(--fa-accent); font-weight: 900; }
+.player-profile-disclaimer { margin: 0; color: var(--fa-muted); font-size: 8px; line-height: 1.8; }
+.player-profile-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 14px; }
+.player-profile-actions button { min-height: 43px; border-radius: 11px; font-size: 9px; }
+.player-profile-watch.is-active { color: var(--fa-accent); border-color: rgba(169,243,107,.25); background: rgba(169,243,107,.07); }
+
+.rebuild-main .scouting-screen .scout-banner {
+  align-items: center;
+  padding: 18px;
+  border: 1px solid rgba(97,213,215,.15);
+  background: linear-gradient(110deg, rgba(34,89,94,.23), rgba(29,42,60,.55));
+}
+.rebuild-main .scouting-screen .scout-symbol {
+  width: 48px;
+  height: 48px;
+  border: 1px solid rgba(97,213,215,.2);
+  border-radius: 14px;
+  color: var(--fa-cyan);
+  background: rgba(97,213,215,.08);
+}
+.rebuild-main .scouting-screen .scout-banner-copy h2 { color: var(--fa-text); font-size: 14px; }
+.rebuild-main .scouting-screen .scout-banner-copy p { color: var(--fa-muted); font-size: 9px; }
+.rebuild-main .scouting-screen .scout-team-panel,
+.rebuild-main .scouting-screen .scout-operations-panel {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--fa-border);
+  border-radius: 16px;
+  background: rgba(17,24,39,.7);
+}
+.rebuild-main .scouting-screen .scout-operations-heading h2 { color: var(--fa-text); font-size: 12px; }
+.rebuild-main .scouting-screen .scout-count { color: var(--fa-accent); font-size: 8px; }
+.rebuild-main .scouting-screen .scout-staff-card,
+.rebuild-main .scouting-screen .scout-mission-row,
+.rebuild-main .scouting-screen .scout-report-row {
+  border-color: var(--fa-border);
+  border-radius: 13px;
+  background: rgba(255,255,255,.025);
+}
+.rebuild-main .scouting-screen .scout-staff-card { padding: 12px; }
+.rebuild-main .scouting-screen .scout-staff-topline strong,
+.rebuild-main .scouting-screen .scout-mission-topline strong,
+.rebuild-main .scouting-screen .scout-report-copy strong { color: var(--fa-text); font-size: 10px; }
+.rebuild-main .scouting-screen .scout-staff-region,
+.rebuild-main .scouting-screen .scout-staff-roles,
+.rebuild-main .scouting-screen .scout-staff-record,
+.rebuild-main .scouting-screen .scout-mission-details,
+.rebuild-main .scouting-screen .scout-mission-footer,
+.rebuild-main .scouting-screen .scout-report-copy span { color: var(--fa-muted); font-size: 8px; line-height: 1.8; }
+.rebuild-main .scouting-screen .scout-staff-specialty { color: var(--fa-accent); font-size: 9px; }
+.rebuild-main .scouting-screen .scout-progress-track,
+.rebuild-main .scouting-screen .scout-staff-progress-track { height: 6px; border-radius: 99px; background: rgba(255,255,255,.08); }
+.rebuild-main .scouting-screen .scout-progress-bar,
+.rebuild-main .scouting-screen .scout-staff-progress-bar { border-radius: inherit; background: linear-gradient(90deg,#66b63b,#a9f36b); }
+.rebuild-main .scouting-screen .scout-report-button,
+.rebuild-main .scouting-screen .scout-sign-contract-button,
+.rebuild-main .scouting-screen .scout-contract-renew-button { min-height: 34px; padding-inline: 10px; border-radius: 9px; font-size: 8px; }
+
+.agency-screen .agency-overview {
+  padding: 17px;
+  border: 1px solid var(--fa-border);
+  border-radius: 17px;
+  background: linear-gradient(110deg, rgba(23,36,53,.96), rgba(15,22,34,.96));
+}
+.agency-screen .agency-summary h2 { color: var(--fa-text); }
+.agency-screen .agency-summary p { color: var(--fa-muted); }
+.agency-screen .agency-metrics .metric-card { background: rgba(17,24,39,.8); }
+.agency-screen .representation-panel {
+  padding: 16px;
+  border: 1px solid var(--fa-border);
+  border-radius: 17px;
+  background: rgba(17,24,39,.72);
+}
+.agency-screen .representation-heading h2 { color: var(--fa-text); font-size: 12px; }
+.agency-screen .representation-heading .representation-count { color: var(--fa-accent); font-size: 8px; }
+.agency-screen .representation-copy strong { color: var(--fa-text); font-size: 10px; }
+.agency-screen .representation-copy span,
+.agency-screen .representation-copy small { color: var(--fa-muted); font-size: 8px; line-height: 1.8; }
+.agency-screen .representation-row {
+  padding: 13px;
+  border-color: var(--fa-border);
+  border-radius: 13px;
+  background: rgba(255,255,255,.025);
+}
+.agency-screen .representation-actions { gap: 6px; }
+.agency-screen .representation-actions button,
+.agency-screen .representation-row > button { min-height: 33px; padding: 6px 10px; border-radius: 9px; font-size: 8px; }
+.agency-screen .representation-empty { color: var(--fa-muted); font-size: 9px; line-height: 1.8; }
+.representation-prospect-toolbar {
+  display: grid;
+  grid-template-columns: minmax(180px,1fr) minmax(135px,.35fr) auto;
+  align-items: center;
+  gap: 9px;
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid var(--fa-border);
+  border-radius: 13px;
+  background: rgba(5,10,18,.25);
+}
+.representation-prospect-toolbar .search-input,
+.representation-prospect-toolbar .filter-select { width: 100%; min-width: 0; }
+.representation-prospect-toolbar .representation-count { white-space: nowrap; }
+.agency-screen .representation-prospect-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.agency-screen .representation-prospect-card {
+  display: grid;
+  grid-template-columns: 64px minmax(0,1fr);
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid var(--fa-border);
+  border-radius: 14px;
+  background: rgba(255,255,255,.025);
+}
+.representation-prospect-portrait {
+  width: 64px;
+  height: 82px;
+  overflow: hidden;
+  align-self: start;
+  border: 1px solid var(--fa-border);
+  border-radius: 10px;
+  background: #172438;
+}
+.representation-prospect-portrait .player-portrait { width: 100%; height: 100%; border-radius: inherit; }
+.agency-screen .representation-prospect-card .representation-copy { min-width: 0; }
+.agency-screen .representation-prospect-card .representation-offer-button { grid-column: 1 / -1; min-height: 37px; border-radius: 10px; font-size: 8px; }
+.agency-screen .representation-intro { color: var(--fa-muted); font-size: 8px; line-height: 1.8; }
+.agency-screen .representation-history-row { border-color: var(--fa-border); }
+.agency-screen .representation-history-row strong { color: var(--fa-text-soft); font-size: 9px; }
+.agency-screen .representation-history-row span,
+.agency-screen .representation-history-row small { color: var(--fa-muted); font-size: 8px; }
+.agency-screen .roadmap-card { padding: 16px; border: 1px solid var(--fa-border); border-radius: 17px; background: rgba(17,24,39,.72); }
+.agency-screen .roadmap-card h2 { color: var(--fa-text); font-size: 12px; }
+.agency-screen .roadmap-copy strong { color: var(--fa-text-soft); font-size: 9px; }
+.agency-screen .roadmap-copy span { color: var(--fa-muted); font-size: 8px; }
+
+.market-preview-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid rgba(232,189,114,.2);
+  border-radius: 15px;
+  background: rgba(232,189,114,.055);
+}
+.market-preview-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--fa-gold);
+  background: rgba(232,189,114,.1);
+  font-size: 19px;
+}
+.market-preview-copy { min-width: 0; flex: 1; }
+.market-preview-copy strong { color: var(--fa-text); font-size: 10px; }
+.market-preview-copy p { margin: 4px 0 0; color: var(--fa-muted); font-size: 8px; line-height: 1.8; }
+.market-preview-state {
+  padding: 6px 8px;
+  border: 1px solid rgba(232,189,114,.2);
+  border-radius: 8px;
+  color: var(--fa-gold);
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  white-space: nowrap;
+}
+.market-screen .market-summary { margin-top: 0; }
+.market-screen .market-card {
+  border: 1px solid var(--fa-border);
+  background: rgba(17,24,39,.72);
+  grid-template-columns: auto minmax(0,1fr) minmax(155px,.55fr) auto;
+}
+.market-screen .market-details h3 { color: var(--fa-text); font-size: 12px; }
+.market-screen .market-details p,
+.market-screen .market-route { color: var(--fa-muted); font-size: 8px; }
+.market-screen .market-value strong { color: var(--fa-text); font-size: 13px; }
+.market-screen .market-value span { color: var(--fa-muted); font-size: 8px; }
+.market-screen .market-badge { color: var(--fa-gold); background: rgba(232,189,114,.08); }
+.market-screen .market-card .button-outline { min-height: 36px; border-radius: 9px; font-size: 8px; }
+
+@media (max-width: 1080px) {
+  .player-library-toolbar { grid-template-columns: minmax(190px,1.5fr) repeat(2,minmax(120px,.8fr)); }
+  .player-library-count { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+  .player-library-toolbar { grid-template-columns: minmax(0,1fr) minmax(0,1fr); padding: 9px; gap: 7px; }
+  .player-library-toolbar .search-input { grid-column: 1 / -1; }
+  .player-library-count { grid-column: 1 / -1; }
+  .rebuild-main .players-screen .player-card-visual { height: 180px; }
+  .player-profile-hero { grid-template-columns: 112px minmax(0,1fr); gap: 11px; }
+  .player-profile-hero .modal-player-art { height: 154px; }
+  .player-profile-identity h3 { font-size: 16px; }
+  .player-profile-stats { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .player-profile-details { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .player-profile-actions { grid-template-columns: minmax(0,1fr); }
+  .rebuild-main .scouting-screen .scout-banner { align-items: flex-start; }
+  .rebuild-main .scouting-screen .scout-launch-button { width: 100%; }
+  .agency-screen .representation-prospect-grid { grid-template-columns: minmax(0,1fr); }
+  .representation-prospect-toolbar { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .representation-prospect-toolbar .search-input { grid-column: 1 / -1; }
+  .representation-prospect-toolbar .representation-count { grid-column: 1 / -1; }
+  .market-preview-notice { align-items: flex-start; flex-wrap: wrap; }
+  .market-preview-state { margin-inline-start: auto; }
+  .market-screen .market-card { grid-template-columns: minmax(0,1fr) auto; }
+  .market-screen .market-details { grid-column: 1 / -1; }
+  .market-screen .market-value { grid-column: 1; }
+  .market-screen .market-card .button-outline { grid-column: 2; grid-row: 3; }
+}
+@media (max-width: 390px) {
+  .rebuild-main .players-screen .players-grid,
+  .rebuild-main .players-screen .players-grid-large { grid-template-columns: minmax(0,1fr); }
+  .player-profile-hero { grid-template-columns: 92px minmax(0,1fr); }
+  .player-profile-hero .modal-player-art { height: 132px; }
+  .player-profile-identity h3 { font-size: 14px; }
+  .player-profile-details { gap: 6px; }
+  .player-profile-detail { padding: 8px; }
+}
+
+.representation-client-toolbar {
+  margin: 11px 0;
+  padding: 9px;
+  border: 1px solid var(--fa-border);
+  border-radius: 12px;
+  background: rgba(5,10,18,.25);
+}
+.representation-client-toolbar .search-input { width: 100%; min-width: 0; }
+@media (max-width: 760px) {
+  .representation-client-toolbar { padding: 8px; }
+}

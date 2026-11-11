@@ -1,0 +1,24 @@
+:root {
+  color-scheme: dark;
+  --fa-bg: #080b13;
+  --fa-bg-soft: #0d1220;
+  --fa-surface: #111827;
+  --fa-surface-raised: #172235;
+  --fa-surface-hover: #1b2a40;
+  --fa-border: rgba(163, 181, 208, 0.13);
+  --fa-border-strong: rgba(163, 181, 208, 0.23);
+  --fa-text: #f4f6fb;
+  --fa-text-soft: #b1bdd0;
+  --fa-muted: #77859b;
+  --fa-accent: #a9f36b;
+  --fa-accent-strong: #8bd94b;
+  --fa-accent-ink: #10190b;
+  --fa-cyan: #61d5d7;
+  --fa-gold: #e8bd72;
+  --fa-danger: #ef8989;
+  --fa-radius-sm: 10px;
+  --fa-radius-md: 16px;
+  --fa-radius-lg: 22px;
+  --fa-shadow-panel: 0 18px 48px rgba(0, 0, 0, 0.22);
+  --fa-content-width: 1420px;
+}
