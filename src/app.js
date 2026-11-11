@@ -1235,7 +1235,8 @@ export function mountApp(root) {
       const result = createRepresentationOfferInEngine(state.save, player, {
         commissionRate: Number(commission.value),
         termDays: Number(duration.value),
-        representationType: representationType.value
+        representationType: representationType.value,
+        signingBonus: Number(signingBonus.value)
       });
       if (!result.changed) { toast(result.error); return; }
       state.save = result.save;
@@ -1300,7 +1301,8 @@ export function mountApp(root) {
       const result = submitRepresentationCounterOfferInEngine(state.save, offer.id, {
         commissionRate: Number(commission.value),
         termDays: Number(duration.value),
-        representationType: representationType.value
+        representationType: representationType.value,
+        signingBonus: Number(signingBonus.value)
       });
       if (!result.changed) { toast(result.error); return; }
       state.save = result.save;
