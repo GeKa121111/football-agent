@@ -55,7 +55,15 @@ export function getPortraitProfile(player = {}) {
     hairStyle: safeChoice(appearance.haircut ?? legacyHair, HAIR_STYLES, "short"),
     facialHair: safeChoice(appearance.facialHair, FACIAL_HAIR, "none"),
     kitPattern: safeChoice(appearance.kitPattern, KIT_PATTERNS, "solid"),
-    shirtNumber
+    shirtNumber,
+    portraitAssetId: typeof player.portraitAssetId === "string"
+      ? player.portraitAssetId
+      : (typeof player.id === "string" ? "portrait-" + player.id.toLowerCase().replace(/[^a-z0-9-]+/g, "-") : null),
+    portraitVersion: Number.isInteger(player.portraitVersion) && player.portraitVersion > 0
+      ? player.portraitVersion
+      : 1,
+    portraitStyle: typeof player.portraitStyle === "string" ? player.portraitStyle : "illustrated-pro",
+    portraitSeed: Number.isInteger(player.portraitSeed) ? player.portraitSeed : null
   });
 }
 
@@ -209,6 +217,9 @@ export function createPlayerPortrait(player, { featured = false } = {}) {
     : "player-portrait";
   wrapper.setAttribute("role", "img");
   wrapper.setAttribute("aria-label", "رسم اللاعب " + (player?.name || "لاعب"));
+  wrapper.dataset.portraitAssetId = profile.portraitAssetId || "portrait-unassigned";
+  wrapper.dataset.portraitVersion = String(profile.portraitVersion);
+  wrapper.dataset.portraitStyle = profile.portraitStyle;
   wrapper.dataset.hairStyle = profile.hairStyle;
   wrapper.dataset.faceShape = profile.faceShape;
   wrapper.dataset.facialHair = profile.facialHair;
@@ -319,6 +330,22 @@ export function createPlayerPortrait(player, { featured = false } = {}) {
     "stroke-width": 2,
     opacity: 0.34
   });
+  const badge = svgElement("g", athlete, { class: "portrait-shirt-badge" });
+  svgElement("path", badge, {
+    d: "M151 207 L169 207 L167 225 L160 231 L153 225 Z",
+    fill: profile.kitLight,
+    stroke: "#ffffff",
+    "stroke-opacity": 0.56,
+    "stroke-width": 1.2
+  });
+  svgElement("path", badge, {
+    d: "M157 212 L163 212 L162 220 L160 222 L158 220 Z",
+    fill: profile.kit
+  });
+  svgElement("circle", badge, {
+    cx: 160, cy: 216, r: 2, fill: "#ffffff", opacity: 0.9
+  });
+
   svgElement("text", athlete, {
     x: 120, y: 265,
     "text-anchor": "middle",
@@ -362,6 +389,14 @@ export function createPlayerPortrait(player, { featured = false } = {}) {
     "stroke-linecap": "round"
   });
 
+  svgElement("path", athlete, {
+    d: "M88 137 Q93 150 103 153 M152 137 Q147 150 137 153",
+    fill: "none",
+    stroke: "#754a3c",
+    "stroke-opacity": 0.17,
+    "stroke-width": 5,
+    "stroke-linecap": "round"
+  });
   addEye(athlete, 102, 119, profile);
   addEye(athlete, 138, 119, profile);
   svgElement("path", athlete, {
