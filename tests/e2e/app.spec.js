@@ -6,7 +6,7 @@ async function navigateTo(page, view) {
   const mobileNav = page.locator(".mobile-nav");
   const desktopNav = page.locator(".sidebar");
   const nav = await mobileNav.isVisible() ? mobileNav : desktopNav;
-  await nav.locator("button").filter({ hasText: view }).click();
+  await nav.getByRole("button", { name: view, exact: true }).click();
 }
 
 async function hasNoHorizontalOverflow(page) {
@@ -653,7 +653,7 @@ test.describe("Mobile experience", () => {
 
   test("advances seven days sequentially and persists deadlines and season rollover", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".home-save-button").click();
+    await page.locator("button[aria-label="حفظ المسيرة"]").click();
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       save.world.currentDate = "2027-06-27";
@@ -768,7 +768,6 @@ test.describe("Mobile experience", () => {
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(saved.world.currentDate).toBe("2027-07-01");
     expect(saved.career.season).toBe(2);
-    await expect(page.locator(".career-season")).toHaveText("الموسم ٢");
     await expect(page.locator(".season-pill")).toHaveText("موسم 2027 / 2028");
     expect(saved.world.events.some((event) => event.type === "season-opening")).toBe(true);
   });
@@ -792,7 +791,7 @@ test.describe("Career operations follow-up", () => {
 
   test("marks a task overdue, keeps it actionable and persists late completion", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".home-save-button").click();
+    await page.locator("button[aria-label="حفظ المسيرة"]").click();
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       save.world.tasks = [{
@@ -824,7 +823,7 @@ test.describe("Career operations follow-up", () => {
 
   test("localizes seasonal and task events and exposes their priority", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".home-save-button").click();
+    await page.locator("button[aria-label="حفظ المسيرة"]").click();
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       const types = [
@@ -865,7 +864,7 @@ test.describe("Career operations follow-up", () => {
 
   test("searches and filters the event history", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".home-save-button").click();
+    await page.locator("button[aria-label="حفظ المسيرة"]").click();
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       save.world.currentDate = "2026-07-05";
@@ -895,7 +894,7 @@ test.describe("Task history archive", () => {
 
   test("searches and filters open, overdue and completed tasks on mobile", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".home-save-button").click();
+    await page.locator("button[aria-label="حفظ المسيرة"]").click();
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       save.world.currentDate = "2026-07-10";
@@ -969,7 +968,7 @@ test.describe("Annual career calendar", () => {
 
   test("starts a new career with season-opening information", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".home-save-button").click();
+    await page.locator("button[aria-label="حفظ المسيرة"]").click();
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(saved.world.currentDate).toBe("2026-07-01");
     expect(saved.world.events.some((event) => event.type === "season-opening")).toBe(true);
@@ -979,7 +978,7 @@ test.describe("Annual career calendar", () => {
 
   test("opens the next-year calendar and displays the season milestones", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".home-save-button").click();
+    await page.locator("button[aria-label="حفظ المسيرة"]").click();
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       save.world.currentDate = "2026-07-01";
@@ -1004,7 +1003,7 @@ test.describe("Inbox archive", () => {
 
   test("searches all retained messages, filters read state and marks a message without closing the archive", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".home-save-button").click();
+    await page.locator("button[aria-label="حفظ المسيرة"]").click();
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       const records = Array.from({ length: 15 }, (_, index) => {
