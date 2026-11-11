@@ -8,6 +8,7 @@ import {
   markCareerMessageRead,
   filterCareerEvents,
   filterCareerTasks,
+  filterCareerMessages,
   createInitialCareerCalendar,
   getUpcomingCareerEvents
 } from "../src/engines/career-calendar.js";
@@ -384,4 +385,33 @@ test("bounds completed task history without evicting open or overdue work", () =
   assert.ok(next.world.tasks.some((task) => task.id === openTask.id));
   assert.ok(next.world.tasks.some((task) => task.id === overdueTask.id));
   assert.equal(isValidSave(next), true);
+});
+
+
+test("filters the full inbox by read state and Arabic/date search without mutating it", () => {
+  const messages = [
+    { id: "message-a", eventId: "event-a", date: "2026-07-02", title: "تقرير السوق", body: "حركة الأندية", read: false },
+    { id: "message-b", eventId: "event-b", date: "2026-07-03", title: "إحاطة أسبوعية", body: "قائمة المواهب", read: true },
+    { id: "message-c", eventId: "event-c", date: "2026-07-03", title: "رسالة الكشاف", body: "موهبة جديدة", read: false }
+  ];
+  const original = JSON.stringify(messages);
+
+  assert.deepEqual(
+    filterCareerMessages(messages, { status: "unread" }).map((message) => message.id),
+    ["message-c", "message-a"]
+  );
+  assert.deepEqual(
+    filterCareerMessages(messages, { status: "read" }).map((message) => message.id),
+    ["message-b"]
+  );
+  assert.deepEqual(
+    filterCareerMessages(messages, { query: "المواهب" }).map((message) => message.id),
+    ["message-b"]
+  );
+  assert.deepEqual(
+    filterCareerMessages(messages, { query: "2026-07-02" }).map((message) => message.id),
+    ["message-a"]
+  );
+  assert.deepEqual(filterCareerMessages(messages, { status: "unknown" }), []);
+  assert.equal(JSON.stringify(messages), original);
 });
