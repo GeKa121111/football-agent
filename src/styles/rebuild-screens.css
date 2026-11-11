@@ -707,3 +707,70 @@
 .talent-activity-row strong { color: var(--fa-text); font-size: 10px; }
 .talent-activity-row > small { color: var(--fa-muted); font-size: 8px; }
 .talent-activity-row p { margin: 0; color: var(--fa-text); font-size: 9px; line-height: 1.7; overflow-wrap: anywhere; }
+
+
+/* Phase 5 — football season, match reports and player development */
+.football-screen { display: grid; gap: 14px; }
+.football-summary-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 9px; }
+.football-summary-card { display: grid; gap: 5px; padding: 13px; min-width: 0; border: 1px solid var(--fa-border); border-radius: 13px; background: rgba(255,255,255,.025); }
+.football-summary-card small { color: var(--fa-muted); font-size: 8px; }
+.football-summary-card strong { color: var(--fa-text); font-size: 20px; font-variant-numeric: tabular-nums; }
+.football-panel { display: grid; gap: 11px; min-width: 0; }
+.football-panel-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.football-panel-heading h2 { margin: 0; color: var(--fa-text); font-size: 13px; }
+.football-fixture-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 9px; }
+.football-fixture-card { display: grid; gap: 11px; min-width: 0; padding: 12px; border: 1px solid var(--fa-border); border-radius: 12px; background: rgba(255,255,255,.025); }
+.football-fixture-meta { display: flex; justify-content: space-between; gap: 8px; color: var(--fa-muted); font-size: 8px; }
+.football-fixture-teams { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 7px; text-align: center; }
+.football-fixture-teams strong { color: var(--fa-text); font-size: 10px; overflow-wrap: anywhere; }
+.football-fixture-teams span { color: var(--fa-accent); font-size: 8px; font-weight: 900; }
+.football-fixture-date { color: var(--fa-muted); font-size: 8px; }
+.football-result-list { display: grid; gap: 8px; }
+.football-result-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,2fr) auto; align-items: center; gap: 10px; padding: 11px; border: 1px solid var(--fa-border); border-radius: 11px; background: rgba(255,255,255,.02); }
+.football-result-row > small { color: var(--fa-muted); font-size: 8px; }
+.football-result-score { color: var(--fa-text); font-size: 11px; text-align: center; }
+.football-result-actions { display: flex; align-items: center; gap: 7px; }
+.football-result-badge { color: var(--fa-accent); font-size: 8px; white-space: nowrap; }
+.football-result-actions .button-outline { min-height: 32px; padding-inline: 9px; font-size: 8px; }
+.football-training-intro { margin: 0; color: var(--fa-muted); font-size: 9px; line-height: 1.8; }
+.football-training-form { display: grid; grid-template-columns: minmax(0,1.5fr) repeat(2,minmax(120px,.8fr)); gap: 8px; }
+.football-training-save { justify-self: start; min-height: 38px; }
+.football-development-detail { display: grid; gap: 12px; }
+.football-player-metrics { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 7px; }
+.football-player-metric { display: grid; gap: 4px; padding: 9px; min-width: 0; border: 1px solid var(--fa-border); border-radius: 10px; background: rgba(255,255,255,.02); }
+.football-player-metric small { color: var(--fa-muted); font-size: 7px; }
+.football-player-metric strong { color: var(--fa-text); font-size: 12px; overflow-wrap: anywhere; }
+.football-development-detail h3 { margin: 0; color: var(--fa-text); font-size: 10px; }
+.football-skill-list { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 9px; }
+.football-skill-item { display: grid; gap: 5px; min-width: 0; }
+.football-skill-line { display: flex; justify-content: space-between; gap: 8px; color: var(--fa-muted); font-size: 8px; }
+.football-skill-line strong { color: var(--fa-text); }
+.football-skill-track { height: 5px; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.07); }
+.football-skill-fill { display: block; height: 100%; border-radius: inherit; background: var(--fa-accent); }
+.football-training-history { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--fa-border); }
+.football-training-history strong { color: var(--fa-text); font-size: 9px; }
+.football-training-history small { color: var(--fa-muted); font-size: 8px; }
+.football-match-report { display: grid; gap: 11px; }
+.football-match-report-score { margin: 0; color: var(--fa-text); font-size: 16px; text-align: center; }
+.football-match-events, .football-performers-list { display: grid; gap: 7px; }
+.football-match-event, .football-performer-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--fa-border); }
+.football-match-event strong, .football-performer-row strong { color: var(--fa-text); font-size: 9px; white-space: nowrap; }
+.football-match-event span, .football-performer-row span { color: var(--fa-muted); font-size: 8px; text-align: end; overflow-wrap: anywhere; }
+
+@media (max-width: 900px) {
+  .football-fixture-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .football-player-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); }
+}
+@media (max-width: 760px) {
+  .football-summary-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .football-fixture-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .football-training-form { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .football-training-form .filter-select:first-child { grid-column: 1 / -1; }
+  .football-result-row { grid-template-columns: minmax(0,1fr); gap: 7px; }
+  .football-result-score { text-align: start; }
+  .football-result-actions { justify-content: space-between; }
+}
+@media (max-width: 390px) {
+  .football-fixture-grid, .football-skill-list { grid-template-columns: minmax(0,1fr); }
+  .football-player-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
