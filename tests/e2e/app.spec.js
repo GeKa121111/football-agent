@@ -244,6 +244,28 @@ test.describe("Mobile experience", () => {
     await hasNoHorizontalOverflow(page);
   });
 
+
+  test("rolls the season over on July 1 and updates the season header", async ({ page }) => {
+    await page.goto("/");
+    const legacySave = {
+      meta: { version: 1, createdAt: "2027-06-30T00:00:00.000Z", updatedAt: "2027-06-30T00:00:00.000Z" },
+      career: { day: 365, week: 53, season: 1 },
+      agency: { id: "agency-player", name: "وكالتك الجديدة", balance: 100000, reputation: 1, clients: [] },
+      world: { currentDate: "2027-06-30", players: [], clubs: [], competitions: [], activeOffers: [] }
+    };
+    await page.evaluate((save) => localStorage.setItem("football-agent.save", JSON.stringify(save)), legacySave);
+    await page.reload();
+    await expect(page.locator(".season-pill")).toHaveText("موسم 2026 / 2027");
+
+    await page.locator(".day-advance-button").click();
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.world.currentDate).toBe("2027-07-01");
+    expect(saved.career.season).toBe(2);
+    await expect(page.locator(".career-season")).toHaveText("الموسم 2");
+    await expect(page.locator(".season-pill")).toHaveText("موسم 2027 / 2028");
+    expect(saved.world.events.some((event) => event.type === "season-opening")).toBe(true);
+  });
+
   test("never overwrites a corrupt save when starting a new day", async ({ page }) => {
     await page.goto("/");
     await page.evaluate(() => localStorage.setItem("football-agent.save", "{broken json"));
