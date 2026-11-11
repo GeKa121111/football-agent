@@ -275,6 +275,8 @@ export function getWorldPlayerProfiles(database = WORLD_DATABASE) {
       ...player,
       country: countries.get(player.countryId).nameAr,
       club: club.nameAr,
+      clubShortName: club.shortName,
+      clubId: club.id,
       league: league.nameAr,
       leagueId: league.id,
       clubColor: club.primaryColor,
