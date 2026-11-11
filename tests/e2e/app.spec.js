@@ -499,7 +499,7 @@ test.describe("Mobile experience", () => {
     await expect(page.getByText("مفيش لاعبين مطابقين للبحث")).toBeVisible();
 
     await page.getByRole("button", { name: "مسح البحث" }).click();
-    await expect(page.locator(".player-card")).toHaveCount(32);
+    await expect(page.locator(".player-card")).toHaveCount(48);
     await hasNoHorizontalOverflow(page);
   });
 
@@ -508,12 +508,13 @@ test.describe("Mobile experience", () => {
     await navigateTo(page, "اللاعبون");
     const role = page.getByLabel("تصفية حسب مركز اللاعب");
     const country = page.getByLabel("تصفية حسب الجنسية");
+    const league = page.getByLabel("تصفية حسب الدوري");
     const sort = page.getByLabel("ترتيب اللاعبين");
 
     await role.selectOption("هجوم");
     const attackCount = await page.locator(".player-card").count();
     expect(attackCount).toBeGreaterThan(0);
-    expect(attackCount).toBeLessThan(32);
+    expect(attackCount).toBeLessThan(48);
 
     await country.selectOption("مصر");
     const egyptAttackCount = await page.locator(".player-card").count();
@@ -522,6 +523,10 @@ test.describe("Mobile experience", () => {
 
     await role.selectOption("all");
     await country.selectOption("all");
+    await league.selectOption("league-br-serie-a");
+    await expect(page.locator(".player-card")).toHaveCount(4);
+    await expect(page.locator(".player-card").first().locator(".player-club")).toContainText("الدوري البرازيلي");
+    await league.selectOption("all");
     await sort.selectOption("youngest");
     await expect(page.locator(".player-card").first().locator(".player-country")).toContainText("18 سنة");
     await hasNoHorizontalOverflow(page);
@@ -549,9 +554,9 @@ test.describe("Mobile experience", () => {
     await navigateTo(page, "الكشافون");
     const roleFilter = page.getByLabel("تصفية حسب المركز");
     await roleFilter.selectOption("هجوم");
-    await expect(page.locator(".player-card")).toHaveCount(8);
+    await expect(page.locator(".player-card")).toHaveCount(12);
     await roleFilter.selectOption("حراسة");
-    await expect(page.locator(".player-card")).toHaveCount(8);
+    await expect(page.locator(".player-card")).toHaveCount(12);
     await roleFilter.selectOption("all");
 
     await page.getByRole("searchbox", { name: "البحث في المواهب" }).fill("ياسين");
