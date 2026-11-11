@@ -391,7 +391,7 @@ test.describe("Career operations follow-up", () => {
     await search.clear();
     await dialog.getByLabel("تصفية نوع الحدث").selectOption("midseason-review");
     await expect(dialog.locator(".event-history-row")).toHaveCount(1);
-    await expect(dialog.locator(".event-history-row")).toContainText("أولوية الحدث: عالية");
+    await expect(dialog.locator(".event-history-row")).toContainText("الأولوية: عالية");
     await hasNoHorizontalOverflow(page);
   });
 
