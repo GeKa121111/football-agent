@@ -15,7 +15,10 @@ test("ships a compact but connected multi-country world seed", () => {
     competitions: 15,
     clubs: 24,
     players: 48,
-    portraitAssets: 48
+    squadPlayers: 384,
+    rosterPlayers: 432,
+    portraitAssets: 48,
+    rosterPortraitAssets: 432
   });
   assert.equal(validateWorldDatabase().valid, true);
 });
