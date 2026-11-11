@@ -849,18 +849,35 @@ function renderMarket(context) {
   page.append(
     node("p", "eyebrow rebuild-page-kicker", "حركة الأندية والصفقات"),
     node("h1", "page-title rebuild-page-title", "سوق الانتقالات"),
-    node("p", "page-subtitle rebuild-page-subtitle", "نظرة أولية على فرص السوق. التفاوض وإتمام الصفقات سيُنفذان في المرحلة الثامنة.")
+    node("p", "page-subtitle rebuild-page-subtitle", "مساحة لمتابعة فرص انتقال اللاعبين وربطها باحتياجات الأندية وعقود العملاء.")
   );
+
+  const previewNotice = node("section", "market-preview-notice");
+  previewNotice.append(
+    node("span", "market-preview-icon", "⇄"),
+    node("div", "market-preview-copy")
+  );
+  previewNotice.children[1].append(
+    node("strong", "", "معاينة واجهة السوق"),
+    node("p", "", "الأسماء والقيم الظاهرة أدناه أمثلة تجريبية لتصميم الواجهة وليست عروض انتقال حقيقية. ربط السوق بعقود الأندية والتفاوض سيتم في مرحلة الأنظمة.")
+  );
+  previewNotice.append(node("span", "market-preview-state", "DEMO DATA"));
+
   const summary = node("div", "market-summary");
   summary.append(
-    metricCard("فرص معروضة", "03", "بيانات توضيحية", "⇄", "purple"),
-    metricCard("النافذة الحالية", "صيف", "موسم 2026–2027", "◷", "cyan"),
-    metricCard("حالة السوق", "نشط", "واجهة معاينة", "◈", "gold")
+    metricCard("أمثلة معروضة", formatHomeNumber(MARKET_ITEMS.length), "بيانات واجهة فقط", "⇄", "purple"),
+    metricCard("الموسم الحالي", formatSeasonLabel(context.save.world.currentDate), "وفق تاريخ المسيرة", "◷", "cyan"),
+    metricCard("حالة المحرك", "قيد التطوير", "لا توجد صفقات فعلية", "◈", "gold")
+  );
+
+  const listHeading = sectionHeading(
+    "أمثلة بطاقات السوق",
+    "توضيح لطريقة عرض الوجهة والقيمة وحالة الفرصة عند تفعيل المحرك."
   );
   const list = node("div", "market-list");
   MARKET_ITEMS.forEach((item) => {
     const card = node("article", "market-card");
-    const badge = node("span", "market-badge badge-" + item.accent, item.to);
+    const badge = node("span", "market-badge badge-" + item.accent, "مثال · " + item.to);
     const details = node("div", "market-details");
     details.append(
       node("h3", "", item.player),
@@ -869,16 +886,16 @@ function renderMarket(context) {
     );
     const value = node("div", "market-value");
     value.append(node("strong", "", item.fee), node("span", "", item.note));
-    card.append(badge, details, value, actionButton("التفاصيل", "button-outline", () => {
-      context.openModal("فرصة انتقال تجريبية", [
+    card.append(badge, details, value, actionButton("عرض المثال", "button-outline", () => {
+      context.openModal("بطاقة سوق تجريبية", [
         node("p", "modal-copy", item.player + " — " + item.position),
         node("p", "modal-copy", item.note),
-        node("p", "modal-note", "هذه بيانات عرض تجريبية. محرك العروض والتفاوض لم يُفعّل بعد.")
-      ], "فهمت");
+        node("p", "modal-note", "هذه البطاقة لأغراض التصميم فقط. لا يوجد لاعب حقيقي أو نادٍ أرسل هذا العرض، ولا يمكن تنفيذ انتقال منها.")
+      ], "إغلاق");
     }));
     list.append(card);
   });
-  page.append(summary, list);
+  page.append(previewNotice, summary, listHeading, list);
   return page;
 }
 
@@ -1083,24 +1100,78 @@ function renderAgency(context) {
     prospectsHeading,
     node("p", "representation-intro", "كل لاعب له شخصية وطموح وولاء واحترافية تؤثر على عمولته والمدة التي يقبلها.")
   );
-  const prospectGrid = node("div", "representation-prospect-grid");
-  prospects.forEach((player) => {
-    const profile = getPlayerRepresentationProfile(player);
-    const card = node("article", "representation-prospect-card");
-    const copy = node("div", "representation-copy");
-    copy.append(
-      node("strong", "", player.name),
-      node("span", "", player.position + " · " + player.club),
-      node("small", "", player.age + " سنة · تقييم " + player.rating + " · إمكانيات " + player.potential),
-      node("small", "", "شخصية " + personalityLabels[profile.personality] +
-        " · طموح " + profile.ambition + "/5 · ولاء " + profile.loyalty + "/5"),
-      node("small", "", "احترافية " + profile.professionalism + "/5")
-    );
-    card.append(copy, actionButton("عرض تمثيل", "button-outline representation-offer-button", () => context.openRepresentationOffer(player)));
-    prospectGrid.append(card);
+  const prospectToolbar = node("div", "representation-prospect-toolbar");
+  const prospectSearch = node("input", "search-input");
+  prospectSearch.type = "search";
+  prospectSearch.placeholder = "ابحث عن لاعب بالاسم أو النادي أو المركز...";
+  prospectSearch.setAttribute("aria-label", "البحث عن لاعب لضمّه");
+  const prospectSort = node("select", "filter-select");
+  prospectSort.setAttribute("aria-label", "ترتيب اللاعبين المتاحين");
+  [
+    ["potential", "الأعلى إمكانيات"],
+    ["rating", "الأعلى تقييمًا"],
+    ["youngest", "الأصغر سنًا"]
+  ].forEach(([value, label]) => {
+    const option = node("option", "", label);
+    option.value = value;
+    prospectSort.append(option);
   });
-  if (prospects.length === 0) prospectGrid.append(node("p", "representation-empty", "كل اللاعبين المتاحين لديهم عروض مفتوحة أو عقود تمثيل."));
-  prospectsPanel.append(prospectGrid);
+  const prospectCount = node("span", "representation-count", "");
+  prospectCount.setAttribute("aria-live", "polite");
+  prospectToolbar.append(prospectSearch, prospectSort, prospectCount);
+
+  const prospectGrid = node("div", "representation-prospect-grid");
+  const renderProspects = () => {
+    const query = prospectSearch.value.trim().toLocaleLowerCase("ar");
+    const filtered = prospects.filter((player) =>
+      [player.name, player.club, player.position, player.country, player.league]
+        .some((value) => String(value ?? "").toLocaleLowerCase("ar").includes(query))
+    );
+    filtered.sort((a, b) => {
+      if (prospectSort.value === "rating") return b.rating - a.rating || b.potential - a.potential;
+      if (prospectSort.value === "youngest") return a.age - b.age || b.potential - a.potential;
+      return b.potential - a.potential || b.rating - a.rating;
+    });
+    prospectCount.textContent = formatHomeNumber(filtered.length) + " لاعب";
+    if (filtered.length === 0) {
+      prospectGrid.replaceChildren(emptyResults(
+        "مش لاقيين لاعب مطابق",
+        "غيّر كلمة البحث أو امسحها لعرض كل اللاعبين المتاحين.",
+        "مسح البحث",
+        () => {
+          prospectSearch.value = "";
+          renderProspects();
+          prospectSearch.focus();
+        }
+      ));
+      return;
+    }
+    prospectGrid.replaceChildren(...filtered.map((player) => {
+      const profile = getPlayerRepresentationProfile(player);
+      const card = node("article", "representation-prospect-card");
+      const portrait = node("div", "representation-prospect-portrait");
+      portrait.append(playerArt(player));
+      const copy = node("div", "representation-copy");
+      copy.append(
+        node("strong", "", player.name),
+        node("span", "", player.position + " · " + player.club),
+        node("small", "", player.age + " سنة · تقييم " + player.rating + " · إمكانيات " + player.potential),
+        node("small", "", "شخصية " + personalityLabels[profile.personality] +
+          " · طموح " + profile.ambition + "/5 · ولاء " + profile.loyalty + "/5"),
+        node("small", "", "احترافية " + profile.professionalism + "/5")
+      );
+      card.append(
+        portrait,
+        copy,
+        actionButton("عرض تمثيل", "button-primary representation-offer-button", () => context.openRepresentationOffer(player))
+      );
+      return card;
+    }));
+  };
+  prospectSearch.addEventListener("input", renderProspects);
+  prospectSort.addEventListener("change", renderProspects);
+  renderProspects();
+  prospectsPanel.append(prospectToolbar, prospectGrid);
 
   const historyPanel = node("section", "surface-card representation-panel");
   const historyHeading = node("div", "representation-heading");
