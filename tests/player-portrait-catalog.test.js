@@ -43,3 +43,29 @@ test("portrait assignment requires a stable player ID and defaults safely withou
   assert.equal(assignment.kit, "#344d78");
   assert.equal(assignment.portraitAssetId, "portrait-test-player");
 });
+
+
+test("portrait catalog rejects an asset ID or seed that belongs to another player", () => {
+  const player = WORLD_DATABASE.players[0];
+  const valid = createPortraitAssignment(player, clubById(player.clubId));
+  const wrongAsset = { ...player, ...valid, portraitAssetId: "portrait-another-player" };
+  assert.equal(validatePortraitAssignments([wrongAsset]).valid, false);
+
+  const wrongSeed = { ...player, ...valid, portraitSeed: valid.portraitSeed + 1 };
+  assert.equal(validatePortraitAssignments([wrongSeed]).valid, false);
+
+  const unsupportedVersion = { ...player, ...valid, portraitVersion: 99 };
+  assert.equal(validatePortraitAssignments([unsupportedVersion]).valid, false);
+});
+
+test("all 48 players have visually unique core portrait signatures", () => {
+  const assignments = WORLD_DATABASE.players.map((player) => createPortraitAssignment(player, clubById(player.clubId)));
+  const signatures = assignments.map((item) => [
+    item.skin,
+    item.hair,
+    item.appearance.haircut,
+    item.appearance.faceShape,
+    item.appearance.kitPattern
+  ].join("|"));
+  assert.equal(new Set(signatures).size, signatures.length);
+});
