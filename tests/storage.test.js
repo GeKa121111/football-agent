@@ -27,11 +27,15 @@ function memoryStorage(seed = {}) {
   };
 }
 
-test("creates a new save when storage is empty", () => {
+test("creates a new save with calendar, inbox and starter tasks", () => {
   const result = readSave(memoryStorage());
   assert.equal(result.status, "new");
   assert.equal(result.save.meta.version, SAVE_VERSION);
   assert.equal(result.save.agency.clients.length, 0);
+  assert.equal(result.save.career.totalDays, 1);
+  assert.equal(result.save.world.events.length, 1);
+  assert.equal(result.save.world.inbox.length, 1);
+  assert.equal(result.save.world.tasks.length, 2);
 });
 
 test("writes and reads a save without losing the agency data", () => {
@@ -102,4 +106,39 @@ test("does not overwrite a corrupt watchlist", () => {
   assert.equal(result.status, "corrupt");
   assert.equal(storage.getItem(WATCHLIST_KEY), "{broken json");
   assert.throws(() => writeWatchlist([42], storage), TypeError);
+});
+
+
+test("migrates version 1 saves to the calendar schema without losing agency data", () => {
+  const legacy = createInitialSave("2026-11-10T18:00:00.000Z");
+  legacy.meta.version = 1;
+  delete legacy.career.totalDays;
+  delete legacy.world.events;
+  delete legacy.world.inbox;
+  delete legacy.world.tasks;
+  legacy.career.day = 25;
+  legacy.career.week = 4;
+  legacy.agency.name = "Legacy Agency";
+  const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(legacy) });
+  const loaded = readSave(storage);
+  assert.equal(loaded.status, "loaded");
+  assert.equal(loaded.migrated, true);
+  assert.equal(loaded.save.meta.version, SAVE_VERSION);
+  assert.equal(loaded.save.agency.name, "Legacy Agency");
+  assert.equal(loaded.save.career.totalDays, 25);
+  assert.equal(loaded.save.career.day, 25);
+  assert.equal(loaded.save.career.week, 4);
+  assert.equal(loaded.save.world.inbox.length, 1);
+  assert.equal(isValidSave(loaded.save), true);
+  writeSave(loaded.save, storage);
+  assert.equal(readSave(storage).migrated, false);
+});
+
+test("rejects malformed calendar records and inconsistent career counters", () => {
+  const invalidEvent = createInitialSave();
+  invalidEvent.world.events = [{ id: "bad", type: "daily", title: "bad", description: "bad", date: "2026-02-30" }];
+  assert.equal(isValidSave(invalidEvent), false);
+  const inconsistentCareer = createInitialSave();
+  inconsistentCareer.career.totalDays = 2;
+  assert.equal(isValidSave(inconsistentCareer), false);
 });

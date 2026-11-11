@@ -698,3 +698,43 @@ button:focus-visible, input:focus-visible, select:focus-visible {
     transform: none !important;
   }
 }
+
+
+/* Phase 5 — career calendar, tasks and event timeline */
+.career-agenda { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr); gap:10px; margin:0 5px 14px; }
+.agenda-panel { min-width:0; padding:12px; border:1px solid rgba(143,163,197,.16); border-radius:14px; background:linear-gradient(145deg,rgba(22,29,48,.92),rgba(10,16,29,.96)); }
+.agenda-panel-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
+.agenda-panel-heading h2 { margin:0; color:#f5f0e7; font-size:12px; font-weight:900; }
+.agenda-count { color:#93a2bb; font-size:8px; white-space:nowrap; }
+.agenda-task-list,.career-event-list { display:flex; flex-direction:column; gap:7px; }
+.agenda-task { display:flex; align-items:center; gap:8px; min-width:0; padding:8px; border:1px solid rgba(255,255,255,.07); border-radius:10px; background:rgba(3,8,18,.32); }
+.agenda-task-copy { display:flex; flex:1; min-width:0; flex-direction:column; gap:3px; }
+.agenda-task-copy strong { color:#e9edfa; font-size:9px; }
+.agenda-task-copy span { color:#98a5bb; font-size:8px; line-height:1.5; }
+.agenda-task-copy small { color:#8291aa; font-size:7px; }
+.task-overdue .agenda-task-copy small { color:#ff9d9d; }
+.task-completed .agenda-task-copy strong { color:#99d9b1; }
+.agenda-task-action,.inbox-read-button { flex:0 0 auto; padding:6px 9px; border:1px solid rgba(104,217,160,.3); border-radius:8px; color:#bdf4d0; background:rgba(54,159,104,.12); cursor:pointer; font-size:8px; font-weight:800; }
+.agenda-task-action:hover,.inbox-read-button:hover { background:rgba(54,159,104,.22); }
+.agenda-task-done { color:#85dfaa; font-size:15px; font-weight:900; }
+.agenda-empty { margin:0; padding:12px 4px; color:#8592a9; font-size:9px; }
+.career-event { display:flex; align-items:flex-start; gap:8px; padding:5px 0; }
+.career-event-dot { width:7px; height:7px; flex:0 0 auto; margin-top:4px; border-radius:50%; background:#9f83e8; box-shadow:0 0 0 4px rgba(159,131,232,.1); }
+.event-weekly .career-event-dot { background:#7cc6ef; box-shadow:0 0 0 4px rgba(124,198,239,.1); }
+.event-season .career-event-dot,.event-milestone .career-event-dot { background:#e9bd6e; box-shadow:0 0 0 4px rgba(233,189,110,.1); }
+.event-task-overdue .career-event-dot { background:#ee8585; box-shadow:0 0 0 4px rgba(238,133,133,.1); }
+.event-task-completed .career-event-dot { background:#76d49c; box-shadow:0 0 0 4px rgba(118,212,156,.1); }
+.career-event-copy { display:flex; flex:1; min-width:0; flex-direction:column; gap:3px; }
+.career-event-copy strong { color:#e9edfa; font-size:8px; }
+.career-event-copy span { color:#8997ad; font-size:7px; line-height:1.5; }
+.career-event-date { color:#75829a; font-size:7px; white-space:nowrap; }
+.inbox-message { margin-bottom:9px; padding:11px; border:1px solid rgba(143,163,197,.16); border-radius:11px; background:rgba(15,24,40,.75); }
+.inbox-message.is-unread { border-color:rgba(127,110,205,.38); background:rgba(48,37,82,.18); }
+.inbox-message-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.inbox-message-heading strong { color:#f4f0ff; font-size:11px; }
+.inbox-message-status { color:#a991f0; font-size:8px; }
+.inbox-message.is-read .inbox-message-status { color:#8eb99e; }
+.inbox-message-body { margin:8px 0; color:#aab4c8; font-size:9px; line-height:1.7; }
+.inbox-message-date { display:block; margin-bottom:8px; color:#75829a; font-size:8px; }
+.feature-news-count[hidden] { display:none; }
+@media (max-width:760px) { .career-agenda { grid-template-columns:1fr; margin-inline:2px; gap:8px; } .agenda-panel { padding:10px; } }

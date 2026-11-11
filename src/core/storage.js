@@ -1,5 +1,7 @@
+import { createInitialCalendarRecords, DAYS_PER_SEASON, DAYS_PER_WEEK } from "../engines/calendar-engine.js";
+
 export const STORAGE_KEY = "football-agent.save";
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 export const WATCHLIST_KEY = "football-agent.watchlist";
 
 export function createInitialSave(now = new Date().toISOString()) {
@@ -12,7 +14,8 @@ export function createInitialSave(now = new Date().toISOString()) {
     career: {
       day: 1,
       week: 1,
-      season: 1
+      season: 1,
+      totalDays: 1
     },
     agency: {
       id: "agency-player",
@@ -26,7 +29,8 @@ export function createInitialSave(now = new Date().toISOString()) {
       players: [],
       clubs: [],
       competitions: [],
-      activeOffers: []
+      activeOffers: [],
+      ...createInitialCalendarRecords("2026-07-01")
     }
   };
 }
@@ -45,26 +49,67 @@ function isValidCalendarDate(value) {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
+function isValidAgency(value) {
+  if (!isRecord(value)) return false;
+  const { id, name, balance, reputation, clients } = value;
+  return typeof id === "string" && Boolean(id.trim())
+    && typeof name === "string" && Boolean(name.trim())
+    && typeof balance === "number" && Number.isFinite(balance) && balance >= 0
+    && Number.isInteger(reputation) && reputation >= 0 && reputation <= 100
+    && Array.isArray(clients);
+}
+function isValidWorldBase(value) {
+  if (!isRecord(value) || !isValidCalendarDate(value.currentDate)) return false;
+  return ["players", "clubs", "competitions", "activeOffers"].every((key) => Array.isArray(value[key]));
+}
+function isValidLegacySave(value) {
+  if (!isRecord(value) || !isRecord(value.meta) || !isRecord(value.career)) return false;
+  if (!isRecord(value.agency) || !isValidWorldBase(value.world) || value.meta.version !== 1) return false;
+  if (!isValidTimestamp(value.meta.createdAt) || !isValidTimestamp(value.meta.updatedAt)) return false;
+  const { day, week, season } = value.career;
+  return [day, week, season].every((item) => Number.isInteger(item) && item >= 1) && isValidAgency(value.agency);
+}
+function isValidEvent(item) {
+  return isRecord(item) && typeof item.id === "string" && Boolean(item.id.trim())
+    && typeof item.type === "string" && typeof item.title === "string"
+    && typeof item.description === "string" && isValidCalendarDate(item.date);
+}
+function isValidInboxMessage(item) {
+  return isRecord(item) && typeof item.id === "string" && Boolean(item.id.trim())
+    && typeof item.type === "string" && typeof item.title === "string"
+    && typeof item.body === "string" && isValidCalendarDate(item.date) && typeof item.read === "boolean";
+}
+function isValidTask(item) {
+  return isRecord(item) && typeof item.id === "string" && Boolean(item.id.trim())
+    && typeof item.title === "string" && typeof item.description === "string"
+    && isValidCalendarDate(item.createdAt) && isValidCalendarDate(item.dueDate)
+    && ["active", "overdue", "completed"].includes(item.status)
+    && (item.completedAt === null || isValidCalendarDate(item.completedAt));
+}
+
 export function isValidSave(value) {
   if (!isRecord(value) || !isRecord(value.meta) || !isRecord(value.career)) return false;
-  if (!isRecord(value.agency) || !isRecord(value.world)) return false;
-  if (value.meta.version !== SAVE_VERSION) return false;
-  if (!isValidTimestamp(value.meta.createdAt) || !isValidTimestamp(value.meta.updatedAt)) return false;
-
-  const { day, week, season } = value.career;
-  if (![day, week, season].every((item) => Number.isInteger(item) && item >= 1)) return false;
-
-  const { id, name, balance, reputation, clients } = value.agency;
-  if (typeof id !== "string" || !id.trim()) return false;
-  if (typeof name !== "string" || !name.trim()) return false;
-  if (typeof balance !== "number" || !Number.isFinite(balance) || balance < 0) return false;
-  if (!Number.isInteger(reputation) || reputation < 0 || reputation > 100) return false;
-  if (!Array.isArray(clients)) return false;
-
-  const { currentDate, players, clubs, competitions, activeOffers } = value.world;
-  if (!isValidCalendarDate(currentDate)) return false;
-  if (![players, clubs, competitions, activeOffers].every(Array.isArray)) return false;
-  return true;
+  if (!isRecord(value.agency) || !isValidWorldBase(value.world) || value.meta.version !== SAVE_VERSION) return false;
+  if (!isValidTimestamp(value.meta.createdAt) || !isValidTimestamp(value.meta.updatedAt) || !isValidAgency(value.agency)) return false;
+  const { day, week, season, totalDays } = value.career;
+  if (![day, week, season, totalDays].every((item) => Number.isInteger(item) && item >= 1)) return false;
+  if (totalDays !== (season - 1) * DAYS_PER_SEASON + day) return false;
+  if (day > DAYS_PER_SEASON || week !== Math.floor((day - 1) / DAYS_PER_WEEK) + 1) return false;
+  return ["events", "inbox", "tasks"].every((key) => Array.isArray(value.world[key]))
+    && value.world.events.every(isValidEvent)
+    && value.world.inbox.every(isValidInboxMessage)
+    && value.world.tasks.every(isValidTask);
+}
+function migrateLegacySave(value) {
+  const totalDays = Math.max(1, Math.floor(value.career.day));
+  const day = ((totalDays - 1) % DAYS_PER_SEASON) + 1;
+  const season = Math.floor((totalDays - 1) / DAYS_PER_SEASON) + 1;
+  return {
+    ...value,
+    meta: { ...value.meta, version: SAVE_VERSION },
+    career: { ...value.career, day, week: Math.floor((day - 1) / DAYS_PER_WEEK) + 1, season, totalDays },
+    world: { ...value.world, ...createInitialCalendarRecords(value.world.currentDate) }
+  };
 }
 
 export function readWatchlist(storage) {
@@ -132,12 +177,14 @@ export function readSave(storage) {
     if (parsed?.meta?.version > SAVE_VERSION) {
       return { status: "unsupported", save: null, error: null };
     }
-
-    if (!isValidSave(parsed)) {
-      return { status: "corrupt", save: null, error: null };
+    if (parsed?.meta?.version === 1) {
+      if (!isValidLegacySave(parsed)) return { status: "corrupt", save: null, error: null };
+      const migrated = migrateLegacySave(parsed);
+      if (!isValidSave(migrated)) return { status: "corrupt", save: null, error: null };
+      return { status: "loaded", save: migrated, error: null, migrated: true };
     }
-
-    return { status: "loaded", save: parsed, error: null };
+    if (!isValidSave(parsed)) return { status: "corrupt", save: null, error: null };
+    return { status: "loaded", save: parsed, error: null, migrated: false };
   } catch (error) {
     return { status: "unavailable", save: null, error };
   }

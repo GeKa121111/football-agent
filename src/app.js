@@ -7,6 +7,7 @@ import {
 } from "./core/storage.js";
 import { getWorldPlayerProfiles, getWorldSummary } from "./data/world-database.js";
 import { createPlayerPortrait } from "./ui/player-portrait.js";
+import { advanceCareerDay, completeCareerTask, getUnreadMessageCount, markInboxMessageRead } from "./engines/calendar-engine.js";
 
 const WORLD_PLAYERS = getWorldPlayerProfiles();
 const WORLD_COUNTS = getWorldSummary();
@@ -234,14 +235,11 @@ function renderDashboard(context) {
     node("strong", "", "اللاعبون"),
     node("small", "", "اكتشف ملفات المواهب")
   );
-  const newsFeature = actionButton("", "home-feature-card feature-news", () => context.openModal("أخبار الوكالة", [
-    node("p", "modal-copy", "هنا هتظهر أخبار اللاعبين والأندية والانتقالات والأحداث المؤثرة في عالمك."),
-    node("p", "modal-note", "مركز الأخبار قيد التطوير.")
-  ], "تمام"));
+  const newsFeature = actionButton("", "home-feature-card feature-news", context.openInbox);
   newsFeature.append(
     node("span", "feature-card-icon", "▤"),
     node("span", "feature-card-copy"),
-    node("span", "feature-news-count", "3")
+    node("span", "feature-news-count", String(context.unreadMessages))
   );
   newsFeature.children[1].append(
     node("strong", "", "الأخبار"),
@@ -305,8 +303,47 @@ function renderDashboard(context) {
     actionButton("حفظ", "home-save-button", context.saveCareer)
   );
 
-  page.append(stadium, profile, dayPanel, featureGrid, storeBanner, menuHeading, menu, saveFooter);
+  page.append(stadium, profile, dayPanel, renderCareerAgenda(context), featureGrid, storeBanner, menuHeading, menu, saveFooter);
   return page;
+}
+
+function renderCareerAgenda(context) {
+  const section = node("section", "career-agenda");
+  const taskPanel = node("div", "agenda-panel agenda-task-panel");
+  const taskHead = node("div", "agenda-panel-heading");
+  taskHead.append(node("h2", "", "مهام الوكالة"),
+    node("span", "agenda-count", String(context.save.world.tasks.filter((task) => task.status !== "completed").length) + " مفتوحة"));
+  const taskList = node("div", "agenda-task-list");
+  const order = { active: 0, overdue: 1, completed: 2 };
+  const tasks = [...context.save.world.tasks].sort((a,b)=>order[a.status]-order[b.status]||a.dueDate.localeCompare(b.dueDate)).slice(0,4);
+  if (!tasks.length) taskList.append(node("p", "agenda-empty", "لا توجد مهام حاليًا."));
+  tasks.forEach((task) => {
+    const item = node("article", "agenda-task task-" + task.status);
+    const copy = node("div", "agenda-task-copy");
+    copy.append(node("strong", "", task.title), node("span", "", task.description),
+      node("small", "", task.status === "completed" ? "تم الإنجاز" : (task.status === "overdue" ? "متأخرة · " : "الموعد · ") + formatHomeDate(task.dueDate)));
+    item.append(copy);
+    if (task.status !== "completed") item.append(actionButton("إنجاز", "agenda-task-action", () => context.completeTask(task.id)));
+    else item.append(node("span", "agenda-task-done", "✓"));
+    taskList.append(item);
+  });
+  taskPanel.append(taskHead, taskList);
+
+  const eventPanel = node("div", "agenda-panel agenda-event-panel");
+  const eventHead = node("div", "agenda-panel-heading");
+  eventHead.append(node("h2", "", "سجل الأحداث"), node("span", "agenda-count", "آخر المستجدات"));
+  const eventList = node("div", "career-event-list");
+  const events = [...context.save.world.events].slice(-4).reverse();
+  if (!events.length) eventList.append(node("p", "agenda-empty", "لا توجد أحداث مسجلة بعد."));
+  events.forEach((event) => {
+    const item = node("article", "career-event event-" + event.type);
+    item.append(node("span", "career-event-dot"), node("div", "career-event-copy"), node("time", "career-event-date", formatHomeDate(event.date)));
+    item.children[1].append(node("strong", "", event.title), node("span", "", event.description));
+    eventList.append(item);
+  });
+  eventPanel.append(eventHead, eventList);
+  section.append(taskPanel, eventPanel);
+  return section;
 }
 
 function activityRow(icon, title, detail, time, tone) {
@@ -637,31 +674,34 @@ export function mountApp(root) {
 
   function advanceDay() {
     if (!state.canWrite) {
-      toast(loaded.status === "unsupported"
-        ? "ملف الحفظ من إصدار أحدث؛ لا يمكن بدء يوم جديد."
-        : "ملف الحفظ غير صالح أو غير متاح؛ لم نغيّره.");
+      toast(loaded.status === "unsupported" ? "ملف الحفظ من إصدار أحدث؛ لا يمكن بدء يوم جديد." : "ملف الحفظ غير صالح أو غير متاح؛ لم نغيّره.");
       return;
     }
-
-    const currentDate = new Date(state.save.world.currentDate + "T12:00:00Z");
-    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-    const day = state.save.career.day + 1;
-    state.save = {
-      ...state.save,
-      career: {
-        ...state.save.career,
-        day,
-        week: Math.ceil(day / 7)
-      },
-      world: {
-        ...state.save.world,
-        currentDate: currentDate.toISOString().slice(0, 10)
-      }
-    };
-    saveCareer();
-    render();
+    try {
+      state.save = advanceCareerDay(state.save);
+      saveCareer();
+      render();
+      toast("بدأ يوم جديد. تم تحديث التقويم والمهام والأحداث.");
+    } catch (error) {
+      toast("تعذر تقدم اليوم: " + error.message);
+    }
   }
 
+  function completeTask(taskId) {
+    if (!state.canWrite) {
+      toast("ملف الحفظ غير صالح أو غير متاح؛ لم نغيّره.");
+      return;
+    }
+    const nextSave = completeCareerTask(state.save, taskId);
+    if (!nextSave) {
+      toast("المهمة غير موجودة أو تم إنجازها بالفعل.");
+      return;
+    }
+    state.save = nextSave;
+    saveCareer();
+    render();
+    toast("تم إنجاز المهمة بنجاح.");
+  }
   function navigate(view) {
     state.view = view;
     render();
@@ -746,12 +786,41 @@ export function mountApp(root) {
     ]);
   }
 
+  function openInbox() {
+    const messages = [...state.save.world.inbox].sort((a,b)=>b.date.localeCompare(a.date));
+    const rows = messages.length ? messages.map((message) => {
+      const item = node("article", "inbox-message" + (message.read ? " is-read" : " is-unread"));
+      item.append(node("div", "inbox-message-heading"), node("p", "inbox-message-body", message.body),
+        node("time", "inbox-message-date", formatHomeDate(message.date)));
+      item.children[0].append(node("strong", "", message.title),
+        node("span", "inbox-message-status", message.read ? "مقروءة" : "جديدة"));
+      if (!message.read) {
+        const readButton = actionButton("تحديد كمقروء", "inbox-read-button", () => {
+          if (!state.canWrite) { toast("ملف الحفظ غير متاح؛ لم نغيّره."); return; }
+          state.save = markInboxMessageRead(state.save, message.id);
+          saveCareer();
+          item.classList.remove("is-unread");
+          item.classList.add("is-read");
+          item.querySelector(".inbox-message-status").textContent = "مقروءة";
+          readButton.disabled = true;
+          readButton.textContent = "تمت القراءة";
+          const badge = root.querySelector(".feature-news-count");
+          const unread = getUnreadMessageCount(state.save);
+          if (badge) { badge.textContent = String(unread); badge.hidden = unread === 0; }
+        });
+        item.append(readButton);
+      }
+      return item;
+    }) : [node("p", "modal-copy", "صندوق الوارد فارغ حاليًا. ستصل هنا الرسائل المهمة مع تقدم المسيرة.")];
+    openModal("صندوق الوارد", rows, "إغلاق");
+  }
+
   function render() {
     const shell = node("div", state.view === "dashboard" ? "app-shell dashboard-shell" : "app-shell");
     const header = node("header", "topbar");
     const brand = node("div", "brand-lockup");
     brand.append(node("span", "brand-mark", "FA"), node("span", "brand-name", "FOOTBALL AGENT"));
-    const season = node("span", "season-pill", "موسم 2026 / 2027");
+    const season = node("span", "season-pill", "الموسم " + formatHomeNumber(state.save.career.season));
     const saveButton = actionButton(state.isSaved ? "✓  محفوظ" : "حفظ المسيرة", "save-chip", saveCareer);
     header.append(brand, season, saveButton);
 
@@ -770,7 +839,7 @@ export function mountApp(root) {
     sidebar.append(sideBottom);
 
     const main = node("main", "main-stage");
-    const context = { save: state.save, navigate, openPlayer, openModal, saveCareer, advanceDay, toast, watchlist: state.watchlist, addToWatchlist };
+    const context = { save: state.save, navigate, openPlayer, openModal, openInbox, saveCareer, advanceDay, completeTask, toast, unreadMessages: getUnreadMessageCount(state.save), watchlist: state.watchlist, addToWatchlist };
     const views = {
       dashboard: renderDashboard,
       players: renderPlayers,

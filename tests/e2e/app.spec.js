@@ -209,3 +209,38 @@ test.describe("Mobile experience", () => {
     expect(untouched).toBe("{broken json");
   });
 });
+
+
+test.describe("Career calendar and daily loop", () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test("shows starter tasks and persists completion", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator(".agenda-task")).toHaveCount(2);
+    await page.locator(".agenda-task").filter({ hasText: "استكشف قاعدة اللاعبين" }).getByRole("button", { name: "إنجاز" }).click();
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.world.tasks.find((task) => task.id === "task-review-players").status).toBe("completed");
+    expect(saved.world.events.some((event) => event.type === "task-completed")).toBe(true);
+    await page.reload();
+    await expect(page.locator(".agenda-task").filter({ hasText: "استكشف قاعدة اللاعبين" })).toContainText("تم الإنجاز");
+  });
+
+  test("opens the inbox and persists read status", async ({ page }) => {
+    await page.goto("/");
+    await page.locator(".feature-news").click();
+    await expect(page.getByRole("dialog", { name: "صندوق الوارد" })).toBeVisible();
+    await page.getByRole("button", { name: "تحديد كمقروء" }).click();
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.world.inbox[0].read).toBe(true);
+    await expect(page.locator(".feature-news-count")).toBeHidden();
+  });
+
+  test("records weekly events and messages during time progression", async ({ page }) => {
+    await page.goto("/");
+    for (let day = 0; day < 6; day += 1) await page.locator(".day-advance-button").click();
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.career.totalDays).toBe(7);
+    expect(saved.world.events.some((event) => event.type === "weekly")).toBe(true);
+    expect(saved.world.inbox.some((message) => message.type === "weekly")).toBe(true);
+  });
+});
