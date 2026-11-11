@@ -339,18 +339,22 @@ test.describe("Desktop experience", () => {
     await navigateTo(page, "اللاعبون");
 
     const portraits = page.locator(".player-card .player-portrait");
-    await expect(portraits).toHaveCount(32);
+    await expect(portraits).toHaveCount(48);
 
     const profiles = await portraits.evaluateAll((elements) => elements.map((element) => ({
       hair: element.dataset.hairStyle,
       face: element.dataset.faceShape,
       beard: element.dataset.facialHair,
       kit: element.dataset.kitPattern,
+      assetId: element.dataset.portraitAssetId,
+      assetVersion: element.dataset.portraitVersion,
       paths: element.querySelectorAll("svg path").length
     })));
     expect(new Set(profiles.map((profile) => profile.face)).size).toBe(4);
     expect(new Set(profiles.map((profile) => profile.hair)).size).toBeGreaterThanOrEqual(4);
     expect(new Set(profiles.map((profile) => profile.kit)).size).toBe(4);
+    expect(new Set(profiles.map((profile) => profile.assetId)).size).toBe(48);
+    expect(profiles.every((profile) => profile.assetId.startsWith("portrait-") && profile.assetVersion === "1")).toBe(true);
     expect(profiles.every((profile) => profile.paths >= 10)).toBe(true);
 
     const animationName = await portraits.first().locator(".portrait-athlete").evaluate(
@@ -362,6 +366,7 @@ test.describe("Desktop experience", () => {
     await expect(page.locator(".modal-player-art .portrait-svg")).toBeVisible();
     await expect(page.locator(".modal-player-art")).toHaveAttribute("aria-label", /ياسين عادل/);
     await expect(page.locator(".modal-player-art")).toHaveAttribute("data-hair-style", profiles[0].hair);
+    await expect(page.locator(".modal-player-art")).toHaveAttribute("data-portrait-asset-id", profiles[0].assetId);
   });
 
   test("opens a player profile and restores focus after Escape", async ({ page }) => {
