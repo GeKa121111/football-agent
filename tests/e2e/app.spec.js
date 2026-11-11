@@ -85,7 +85,7 @@ test.describe("Desktop experience", () => {
   test("navigates through all five primary screens", async ({ page }) => {
     await page.goto("/");
     const screens = [
-      ["اللاعبون", "اللاعبون"],
+      ["اللاعبون", "قاعدة اللاعبين"],
       ["الكشافون", "الكشافون"],
       ["الانتقالات", "سوق الانتقالات"],
       ["الوكالة", "الوكالة"],
@@ -1033,7 +1033,7 @@ test.describe("Inbox archive", () => {
       localStorage.setItem("football-agent.save", JSON.stringify(save));
     });
     await page.reload();
-    await page.locator(".feature-news").click();
+    await page.getByRole("button", { name: "عرض كل الرسائل" }).click();
 
     const dialog = page.getByRole("dialog", { name: "صندوق الوارد" });
     await expect(dialog).toBeVisible();
