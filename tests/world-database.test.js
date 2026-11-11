@@ -90,6 +90,21 @@ test("player profiles are enriched from related club, league and nationality rec
   assert.ok(profiles.every((player) => player.appearance && player.kit && player.hair));
 });
 
+test("assigns every fictional player to valid, reusable discovery channels", () => {
+  const sourceIds = ["academy", "club-network", "youth-tournament", "agent-referral"];
+  for (const sourceId of sourceIds) {
+    assert.ok(WORLD_DATABASE.players.some((player) => player.discoverySourceIds.includes(sourceId)), sourceId);
+  }
+  assert.ok(WORLD_DATABASE.players.every((player) =>
+    player.discoverySourceIds.length > 0 &&
+    new Set(player.discoverySourceIds).size === player.discoverySourceIds.length &&
+    player.discoverySourceIds.every((sourceId) => sourceIds.includes(sourceId))
+  ));
+  const invalid = structuredClone(WORLD_DATABASE);
+  invalid.players[0].discoverySourceIds = ["unknown-channel"];
+  assert.equal(validateWorldDatabase(invalid).valid, false);
+});
+
 test("findWorldPlayer returns the stable record or null", () => {
   assert.equal(findWorldPlayer("demo-yassin-adel")?.name, "ياسين عادل");
   assert.equal(findWorldPlayer("missing-player"), null);
