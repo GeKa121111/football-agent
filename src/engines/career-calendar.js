@@ -1,6 +1,6 @@
 const MAX_EVENTS = 90;
 const MAX_MESSAGES = 90;
-const MAX_TASKS = 60;
+const MAX_COMPLETED_TASK_HISTORY = 60;
 
 function parseCalendarDate(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -166,6 +166,37 @@ function scheduledItems(date, season) {
 }
 
 /**
+ * Keeps actionable work intact while bounding completed history. A recurring
+ * task category is not queued again while an earlier task in that category
+ * is still open or overdue; the calendar event itself is still recorded.
+ */
+function mergeCareerTasks(existingTasks, scheduledTasks) {
+  const activeCategories = new Set(
+    existingTasks
+      .filter((task) => task.status === "open" || task.status === "overdue")
+      .map((task) => task.category)
+  );
+  const knownIds = new Set(existingTasks.map((task) => task.id));
+  const appended = [];
+
+  for (const task of scheduledTasks) {
+    if (knownIds.has(task.id) || activeCategories.has(task.category)) continue;
+    appended.push(task);
+    knownIds.add(task.id);
+    activeCategories.add(task.category);
+  }
+
+  const combined = [...existingTasks, ...appended];
+  const actionable = combined.filter((task) => task.status !== "completed");
+  const completedHistory = combined
+    .filter((task) => task.status === "completed")
+    .sort((a, b) => a.completedDate.localeCompare(b.completedDate) || a.id.localeCompare(b.id))
+    .slice(-MAX_COMPLETED_TASK_HISTORY);
+
+  return [...actionable, ...completedHistory];
+}
+
+/**
  * Advances one in-game day and deterministically schedules calendar activity.
  * The input save is never mutated; callers decide when to persist the result.
  */
@@ -213,7 +244,7 @@ export function advanceCareerDay(save) {
   const inbox = [...(save.world.inbox ?? []), ...scheduled.messages, ...overdueMessages]
     .filter((message) => retainedEventIds.has(message.eventId))
     .slice(-MAX_MESSAGES);
-  const tasks = [...currentTasks, ...scheduled.tasks].slice(-MAX_TASKS);
+  const tasks = mergeCareerTasks(currentTasks, scheduled.tasks);
 
   return {
     ...save,
