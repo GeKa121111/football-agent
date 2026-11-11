@@ -180,7 +180,20 @@ test("allows a late task to be completed and records that it missed its due date
   assert.equal(result.save.world.tasks[0].status, "completed");
   assert.equal(result.save.world.tasks[0].completedLate, true);
   assert.equal(result.save.world.tasks[0].completedDate, "2026-07-03");
-  assert.ok(result.save.world.events.some((event) => event.type === "task-completed"));
+  const completionEvent = result.save.world.events.find((event) => event.type === "task-completed");
+  assert.ok(completionEvent);
+  const completionMessage = result.save.world.inbox.find((message) => message.eventId === completionEvent.id);
+  assert.deepEqual(completionMessage, {
+    id: "message-" + completionEvent.id,
+    eventId: completionEvent.id,
+    date: "2026-07-03",
+    title: completionEvent.title,
+    body: completionEvent.description,
+    read: false
+  });
+  const repeated = completeCareerTask(result.save, save.world.tasks[0].id);
+  assert.equal(repeated.changed, false);
+  assert.equal(repeated.save.world.inbox.length, result.save.world.inbox.length);
   assert.equal(isValidSave(result.save), true);
 });
 
@@ -274,8 +287,11 @@ test("keeps inbox references valid when a completion event evicts the oldest his
 
   assert.equal(result.changed, true);
   assert.equal(result.save.world.events.length, 90);
-  assert.equal(result.save.world.events.some((event) => event.type === "task-completed"), true);
-  assert.equal(result.save.world.inbox.length, 0);
+  const completionEvent = result.save.world.events.find((event) => event.type === "task-completed");
+  assert.ok(completionEvent);
+  assert.equal(result.save.world.inbox.length, 1);
+  assert.equal(result.save.world.inbox[0].eventId, completionEvent.id);
+  assert.equal(result.save.world.inbox[0].read, false);
   assert.equal(isValidSave(result.save), true);
 });
 
