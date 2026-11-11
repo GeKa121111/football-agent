@@ -620,7 +620,7 @@ function renderScouting(context) {
       node("p", "scout-staff-roles", (scout.roles.includes("all") ? "كل المراكز" : scout.roles.join(" · ")) + " · " + scout.experience + " نقطة خبرة"),
       track,
       node("small", "scout-staff-record", scout.missionsCompleted + " بعثة مكتملة"),
-      node("small", "scout-staff-record", scout.isContracted ? (scout.isContractExpired ? "انتهى العقد في " + formatHomeDate(scout.contractExpiresOn) : "عقد حتى " + formatHomeDate(scout.contractExpiresOn) + " · متبقي " + scout.contractDaysRemaining + " يوم") : "عضو أساسي دائم")
+      node("small", "scout-staff-record", scout.isContracted ? (scout.isContractExpired ? "انتهى العقد في " + formatHomeDate(scout.contractExpiresOn) : "ينتهي في " + formatHomeDate(scout.contractExpiresOn) + " · متبقي " + scout.contractDaysRemaining + " يوم") : "عضو أساسي دائم")
     );
     if (scout.canRenewContract) card.append(actionButton(scout.isContractExpired ? "تجديد العقد" : "تجديد مبكر", "button-outline scout-contract-renew-button", () => context.renewScoutingContract(scout.id)));
     teamGrid.append(card);

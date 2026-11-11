@@ -750,7 +750,7 @@ test.describe("Scouting recruitment contracts", () => {
     expect(signed.agency.balance).toBe(82000); expect(contract.contractStartedOn).toBe("2026-07-01");
     expect(contract.contractExpiresOn).toBe("2027-07-01"); expect(contract.contractCost).toBe(18000);
     await page.reload(); await navigateTo(page, "الكشافون"); await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)")).toHaveCount(5);
-    await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)").filter({ hasText: "رافاييل أورتيغا" })).toContainText("عقد حتى");
+    await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)").filter({ hasText: "رافاييل أورتيغا" })).toContainText("ينتهي في");
     await page.getByRole("button", { name: /إطلاق بعثة كشف/ }).click();
     await page.getByLabel("مستوى البعثة").selectOption("local"); await page.getByLabel("الدولة المستهدفة").selectOption("all");
     await page.getByLabel("المركز المستهدف").selectOption("all"); await page.getByLabel("الكشاف المكلف").selectOption("scout-iberian-network");
