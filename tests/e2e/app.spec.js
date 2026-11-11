@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { advanceCareerDays } from "../../src/engines/career-calendar.js";
+import { advanceRepresentationState } from "../../src/engines/representation.js";
 
 async function navigateTo(page, view) {
   const mobileNav = page.locator(".mobile-nav");
@@ -29,7 +30,7 @@ function advanceSaveToDate(save, targetDate) {
     advanced = advanceCareerDays(advanced, step);
     days -= step;
   }
-  return advanced;
+  return advanceRepresentationState(advanced, targetDate).save;
 }
 
 test.describe("Desktop experience", () => {
@@ -185,6 +186,75 @@ test.describe("Desktop experience", () => {
       .toBeGreaterThan(Date.parse(original.expiresOn + "T00:00:00.000Z"));
     expect(saved.agency.clients).toContain(renewed.playerId);
     expect(saved.agency.representation.history.some((entry) => entry.type === "contract-renewed")).toBe(true);
+  });
+
+  test("manages player messages, scheduled meetings and relationship outcomes", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+    const offerModal = page.locator(".modal-overlay");
+    await expect(offerModal.getByLabel("نوع التمثيل")).toBeVisible();
+    await offerModal.getByLabel("نسبة العمولة").selectOption("15");
+    await offerModal.getByLabel("مدة العقد").selectOption("1095");
+    await offerModal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+    await page.locator(".representation-evaluate-button").click();
+    await page.locator(".representation-accept-button").click();
+
+    let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const contract = saved.agency.representation.contracts[0];
+    expect(["exclusive", "non-exclusive"]).toContain(contract.representationType);
+    const startingTrust = contract.relationshipScore;
+    const startingReputation = saved.agency.representation.reputationScore;
+
+    await page.locator(".representation-message-button").click();
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const message = saved.agency.representation.interactions[0];
+    expect(message.kind).toBe("message");
+    expect(message.status).toBe("pending_response");
+
+    const afterReply = advanceSaveToDate(saved, message.dueDate);
+    await page.evaluate((snapshot) => {
+      localStorage.setItem("football-agent.save", JSON.stringify(snapshot));
+    }, afterReply);
+    await page.reload();
+    await navigateTo(page, "الوكالة");
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const repliedMessage = saved.agency.representation.interactions.find((item) => item.id === message.id);
+    expect(repliedMessage.status).toBe("resolved");
+    expect(saved.agency.representation.history.some((entry) => entry.type === "message-replied")).toBe(true);
+    expect(saved.agency.representation.contracts[0].relationshipScore).not.toBe(startingTrust);
+
+    const currentDate = saved.world.currentDate;
+    const meetingDate = new Date(Date.parse(currentDate + "T00:00:00.000Z") + 5 * 86400000)
+      .toISOString().slice(0, 10);
+    await page.locator(".representation-meeting-button").click();
+    const meetingModal = page.locator(".modal-overlay");
+    await meetingModal.getByLabel("موعد الاجتماع").fill(meetingDate);
+    await meetingModal.getByRole("button", { name: "تأكيد الموعد" }).click();
+
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const meeting = saved.agency.representation.interactions.find((item) => item.kind === "meeting");
+    expect(meeting.status).toBe("scheduled");
+    const beforeMeetingTrust = saved.agency.representation.contracts[0].relationshipScore;
+    const beforeMeetingReputation = saved.agency.representation.reputationScore;
+
+    const atMeeting = advanceSaveToDate(saved, meetingDate);
+    await page.evaluate((snapshot) => {
+      localStorage.setItem("football-agent.save", JSON.stringify(snapshot));
+    }, atMeeting);
+    await page.reload();
+    await navigateTo(page, "الوكالة");
+    await page.locator(".representation-meeting-complete-button").click();
+    const outcomeModal = page.locator(".modal-overlay");
+    await outcomeModal.getByLabel("نتيجة الاجتماع").selectOption("positive");
+    await outcomeModal.getByRole("button", { name: "حفظ نتيجة الاجتماع" }).click();
+
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.agency.representation.interactions.find((item) => item.id === meeting.id).outcome).toBe("positive");
+    expect(saved.agency.representation.contracts[0].relationshipScore).toBe(beforeMeetingTrust + 7);
+    expect(saved.agency.representation.reputationScore).toBe(beforeMeetingReputation + 2);
+    expect(saved.agency.representation.history.some((entry) => entry.type === "meeting-completed")).toBe(true);
+    expect(saved.agency.representation.reputationScore).toBeGreaterThanOrEqual(startingReputation);
   });
 
   test("renders distinct SVG player portraits and reuses them in player details", async ({ page }) => {

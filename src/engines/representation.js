@@ -3,6 +3,11 @@ const OFFER_VALIDITY_DAYS = 30;
 const MAX_OFFERS = 50;
 const MAX_CONTRACTS = 100;
 const MAX_HISTORY = 300;
+const MAX_INTERACTIONS = 300;
+const INTERACTION_KINDS = new Set(["message", "call", "meeting"]);
+const INTERACTION_STATUSES = new Set(["pending_response", "scheduled", "resolved", "missed"]);
+const INTERACTION_OUTCOMES = new Set(["positive", "neutral", "negative"]);
+const REPRESENTATION_TYPES = new Set(["exclusive", "non-exclusive"]);
 
 const OFFER_STATUSES = new Set(["pending", "countered", "accepted", "rejected", "expired"]);
 const CONTRACT_STATUSES = new Set(["active", "terminated", "expired"]);
@@ -16,6 +21,11 @@ const HISTORY_TYPES = new Set([
   "contract-signed",
   "contract-renewed",
   "renewal-offer-sent",
+  "message-sent",
+  "message-replied",
+  "meeting-scheduled",
+  "meeting-completed",
+  "meeting-missed",
   "contract-terminated",
   "contract-expired"
 ]);
@@ -75,7 +85,8 @@ function isValidPlayerPreferences(value) {
     Number.isInteger(value.loyalty) && value.loyalty >= 1 && value.loyalty <= 5 &&
     Number.isInteger(value.professionalism) && value.professionalism >= 1 && value.professionalism <= 5 &&
     Number.isInteger(value.preferredCommissionRate) && value.preferredCommissionRate >= 5 && value.preferredCommissionRate <= 15 &&
-    CONTRACT_TERMS.includes(value.preferredTermDays);
+    CONTRACT_TERMS.includes(value.preferredTermDays) &&
+    (value.prefersExclusive === undefined || typeof value.prefersExclusive === "boolean");
 }
 
 /**
@@ -108,7 +119,8 @@ export function getPlayerRepresentationProfile(player) {
     loyalty,
     professionalism,
     preferredCommissionRate,
-    preferredTermDays
+    preferredTermDays,
+    prefersExclusive: loyalty >= 4
   };
 }
 
@@ -138,20 +150,100 @@ export function getRepresentationContractCommission(contract, currentDate) {
   return commissionRate;
 }
 
+export function getRepresentationContractType(contract, currentDate) {
+  let representationType = normalizeRepresentationType(contract?.representationType);
+  const renewals = Array.isArray(contract?.renewals) ? contract.renewals : [];
+  for (const renewal of renewals) {
+    if (isCalendarDate(currentDate) && currentDate >= renewal.startsOn) {
+      representationType = normalizeRepresentationType(renewal.representationType);
+    }
+  }
+  return representationType;
+}
+
 function playerAcceptsTerms(offer, terms) {
   const preferences = getOfferPreferences(offer);
-  const commissionAllowance = preferences.preferredCommissionRate + (offer.round >= 2 ? 1 : 0);
+  const agencyReputation = Number.isInteger(offer.agencyReputation) ? offer.agencyReputation : 50;
+  const commissionAllowance = preferences.preferredCommissionRate -
+    (agencyReputation >= 80 ? 1 : 0) + (offer.round >= 2 ? 1 : 0);
+  const preferredRepresentationType = preferences.prefersExclusive === true || agencyReputation >= 90
+    ? "exclusive"
+    : "non-exclusive";
+  const offeredRepresentationType = terms.representationType ?? offer.representationType ??
+    (preferences.prefersExclusive === true ? "exclusive" : "non-exclusive");
   return terms.commissionRate <= commissionAllowance &&
-    terms.termDays === preferences.preferredTermDays;
+    terms.termDays === preferences.preferredTermDays &&
+    normalizeRepresentationType(offeredRepresentationType) === preferredRepresentationType;
 }
 
 function buildPlayerCounterOffer(offer) {
   const preferences = getOfferPreferences(offer);
   const concession = offer.round >= 2 ? 1 : 0;
+  const agencyReputation = Number.isInteger(offer.agencyReputation) ? offer.agencyReputation : 50;
   return {
     commissionRate: clamp(preferences.preferredCommissionRate + concession, 5, 15),
-    termDays: preferences.preferredTermDays
+    termDays: preferences.preferredTermDays,
+    representationType: preferences.prefersExclusive === true || agencyReputation >= 90
+      ? "exclusive"
+      : "non-exclusive"
   };
+}
+
+
+function normalizeRepresentationType(value) {
+  return value === "non-exclusive" ? "non-exclusive" : "exclusive";
+}
+
+function isValidRepresentationType(value) {
+  return REPRESENTATION_TYPES.has(value);
+}
+
+function currentAgencyReputation(representation) {
+  return Number.isInteger(representation?.reputationScore)
+    ? clamp(representation.reputationScore, 0, 100)
+    : 50;
+}
+
+function adjustAgencyReputation(representation, delta) {
+  return {
+    ...representation,
+    reputationScore: clamp(currentAgencyReputation(representation) + delta, 0, 100)
+  };
+}
+
+function interactionList(representation) {
+  return Array.isArray(representation?.interactions) ? representation.interactions : [];
+}
+
+function interactionSequence(representation) {
+  return Number.isSafeInteger(representation?.nextInteractionSequence) &&
+    representation.nextInteractionSequence > 0
+    ? representation.nextInteractionSequence
+    : 1;
+}
+
+function replaceInteraction(representation, interactionId, patch) {
+  return {
+    ...representation,
+    interactions: interactionList(representation).map((interaction) =>
+      interaction.id === interactionId ? { ...interaction, ...patch } : interaction
+    )
+  };
+}
+
+function relationshipLabel(score) {
+  if (score >= 80) return "ممتازة";
+  if (score >= 60) return "جيدة";
+  if (score >= 40) return "متوسطة";
+  return "متوترة";
+}
+
+export function getRepresentationRelationshipLabel(score) {
+  return Number.isInteger(score) ? relationshipLabel(clamp(score, 0, 100)) : "غير محددة";
+}
+
+export function getAgencyReputationScore(representation) {
+  return currentAgencyReputation(representation);
 }
 
 function nextHistory(representation, type, player, date, note, references = {}) {
@@ -194,12 +286,18 @@ function createContract(save, offer, terms, currentDate, resolution) {
     rating: offer.rating,
     potential: offer.potential,
     playerPreferences: getOfferPreferences(offer),
+    representationType: normalizeRepresentationType(terms.representationType ?? offer.representationType),
     signedOn: currentDate,
     expiresOn: addDays(currentDate, terms.termDays),
     termDays: terms.termDays,
     commissionRate: terms.commissionRate,
     renewals: [],
-    relationshipScore: resolution === "counter-accepted" ? 68 : resolution === "agency-countered" ? 74 : 70,
+    relationshipScore: clamp(
+      (resolution === "counter-accepted" ? 68 : resolution === "agency-countered" ? 74 : 70) -
+      (normalizeRepresentationType(terms.representationType ?? offer.representationType) === "non-exclusive" ? 8 : 0),
+      0,
+      100
+    ),
     status: "active"
   };
   let updated = {
@@ -215,8 +313,10 @@ function createContract(save, offer, terms, currentDate, resolution) {
   updated = nextHistory(updated, "offer-accepted", offer, currentDate,
     resolution === "counter-accepted" ? "وافق الوكيل على الشروط المضادة للاعب." : "وافق اللاعب على عرض التمثيل.");
   updated = nextHistory(updated, "contract-signed", offer, currentDate,
-    "تم توقيع عقد تمثيل لمدة " + Math.round(terms.termDays / 365) + " سنة وبعمولة " + terms.commissionRate + "%.",
+    "تم توقيع عقد تمثيل " + (contract.representationType === "exclusive" ? "حصري" : "غير حصري") +
+      " لمدة " + Math.round(terms.termDays / 365) + " سنة وبعمولة " + terms.commissionRate + "%.",
     { offerId: offer.id, contractId });
+  updated = adjustAgencyReputation(updated, contract.representationType === "exclusive" ? 2 : 1);
   const clients = save.agency.clients.includes(offer.playerId)
     ? save.agency.clients
     : [...save.agency.clients, offer.playerId];
@@ -248,14 +348,16 @@ function commitRepresentationAgreement(save, offer, terms, currentDate, resoluti
       startsOn,
       expiresOn: addDays(startsOn, terms.termDays),
       termDays: terms.termDays,
-      commissionRate: terms.commissionRate
+      commissionRate: terms.commissionRate,
+      representationType: normalizeRepresentationType(terms.representationType ?? offer.representationType ?? contract.representationType)
     };
-    const updated = {
+    let updated = {
       ...representation,
       contracts: representation.contracts.map((item) => item.id === contract.id
         ? { ...item, renewals: [...(item.renewals ?? []), renewal], relationshipScore: clamp(item.relationshipScore + 3, 0, 100) }
         : item)
     };
+    updated = adjustAgencyReputation(updated, renewal.representationType === "exclusive" ? 1 : 0);
     let history = replaceOffer(updated, offer.id, {
       status: "accepted",
       contractId: contract.id,
@@ -293,8 +395,11 @@ export function createInitialRepresentationState() {
     nextOfferSequence: 1,
     nextContractSequence: 1,
     nextHistorySequence: 1,
+    nextInteractionSequence: 1,
+    reputationScore: 50,
     offers: [],
     contracts: [],
+    interactions: [],
     history: []
   };
 }
@@ -312,6 +417,12 @@ export function isValidRepresentationState(representation, currentDate, clients 
       !Number.isSafeInteger(representation.nextOfferSequence) || representation.nextOfferSequence < 1 ||
       !Number.isSafeInteger(representation.nextContractSequence) || representation.nextContractSequence < 1 ||
       !Number.isSafeInteger(representation.nextHistorySequence) || representation.nextHistorySequence < 1 ||
+      (representation.nextInteractionSequence !== undefined &&
+        (!Number.isSafeInteger(representation.nextInteractionSequence) || representation.nextInteractionSequence < 1)) ||
+      (representation.reputationScore !== undefined &&
+        (!Number.isInteger(representation.reputationScore) || representation.reputationScore < 0 || representation.reputationScore > 100)) ||
+      (representation.interactions !== undefined &&
+        (!Array.isArray(representation.interactions) || representation.interactions.length > MAX_INTERACTIONS)) ||
       !Array.isArray(representation.offers) ||
       !Array.isArray(representation.contracts) ||
       !Array.isArray(representation.history) ||
@@ -327,6 +438,8 @@ export function isValidRepresentationState(representation, currentDate, clients 
         !sequenceOf(offer.id, "representation-offer") ||
         (offer.kind !== undefined && !["new", "renewal"].includes(offer.kind)) ||
         (offer.playerPreferences !== undefined && !isValidPlayerPreferences(offer.playerPreferences)) ||
+        (offer.representationType !== undefined && !isValidRepresentationType(offer.representationType)) ||
+        (offer.agencyReputation !== undefined && (!Number.isInteger(offer.agencyReputation) || offer.agencyReputation < 0 || offer.agencyReputation > 100)) ||
         (offer.renewalContractId !== undefined && (typeof offer.renewalContractId !== "string" || !offer.renewalContractId.trim())) ||
         typeof offer.playerId !== "string" || !offer.playerId.trim() ||
         typeof offer.playerName !== "string" || !offer.playerName.trim() ||
@@ -348,7 +461,8 @@ export function isValidRepresentationState(representation, currentDate, clients 
     if (["pending", "countered"].includes(offer.status) && currentDate > offer.expiresDate) return false;
     if (offer.status === "countered" || offer.status === "accepted" && offer.counterOffer !== undefined) {
       if (!isRecord(offer.counterOffer) ||
-          !validTerms(offer.counterOffer.commissionRate, offer.counterOffer.termDays)) return false;
+          !validTerms(offer.counterOffer.commissionRate, offer.counterOffer.termDays) ||
+          (offer.counterOffer.representationType !== undefined && !isValidRepresentationType(offer.counterOffer.representationType))) return false;
     } else if (offer.counterOffer !== undefined) {
       return false;
     }
@@ -383,6 +497,7 @@ export function isValidRepresentationState(representation, currentDate, clients 
         (contract.rating !== undefined && (!Number.isInteger(contract.rating) || contract.rating < 1 || contract.rating > 99)) ||
         (contract.potential !== undefined && (!Number.isInteger(contract.potential) || contract.potential < 1 || contract.potential > 99)) ||
         (contract.playerPreferences !== undefined && !isValidPlayerPreferences(contract.playerPreferences)) ||
+        (contract.representationType !== undefined && !isValidRepresentationType(contract.representationType)) ||
         (contract.renewals !== undefined && (!Array.isArray(contract.renewals) || contract.renewals.length > 20)) ||
         !Number.isInteger(contract.relationshipScore) || contract.relationshipScore < 0 || contract.relationshipScore > 100 ||
         !CONTRACT_STATUSES.has(contract.status)) return false;
@@ -404,6 +519,7 @@ export function isValidRepresentationState(representation, currentDate, clients 
           !isCalendarDate(renewal.startsOn) ||
           !isCalendarDate(renewal.expiresOn) ||
           !validTerms(renewal.commissionRate, renewal.termDays) ||
+          (renewal.representationType !== undefined && !isValidRepresentationType(renewal.representationType)) ||
           renewal.startsOn !== expectedRenewalStart ||
           renewal.expiresOn !== addDays(renewal.startsOn, renewal.termDays) ||
           renewal.signedOn < contract.signedOn ||
@@ -420,7 +536,8 @@ export function isValidRepresentationState(representation, currentDate, clients 
           renewalOffer.playerId !== contract.playerId ||
           !acceptedRenewalTerms ||
           acceptedRenewalTerms.commissionRate !== renewal.commissionRate ||
-          acceptedRenewalTerms.termDays !== renewal.termDays) return false;
+          acceptedRenewalTerms.termDays !== renewal.termDays ||
+          normalizeRepresentationType(acceptedRenewalTerms.representationType ?? renewalOffer.representationType) !== normalizeRepresentationType(renewal.representationType ?? renewalOffer.representationType)) return false;
       renewalOfferIds.add(renewal.offerId);
       expectedRenewalStart = renewal.expiresOn;
     }
@@ -476,7 +593,8 @@ export function isValidRepresentationState(representation, currentDate, clients 
       } else if (
         contract.offerId !== offer.id ||
         contract.commissionRate !== acceptedTerms.commissionRate ||
-        contract.termDays !== acceptedTerms.termDays
+        contract.termDays !== acceptedTerms.termDays ||
+        normalizeRepresentationType(contract.representationType) !== normalizeRepresentationType(acceptedTerms.representationType ?? offer.representationType)
       ) {
         return false;
       }
@@ -502,9 +620,63 @@ export function isValidRepresentationState(representation, currentDate, clients 
     if (entry.contractId !== undefined && !contractsById.has(entry.contractId)) return false;
   }
 
+  let highestInteractionSequence = 0;
+  const interactionIds = new Set();
+  const scheduledMeetingContracts = new Set();
+  for (const interaction of interactionList(representation)) {
+    if (!isRecord(interaction) ||
+        typeof interaction.id !== "string" ||
+        !sequenceOf(interaction.id, "representation-interaction") ||
+        typeof interaction.contractId !== "string" ||
+        typeof interaction.playerId !== "string" || !interaction.playerId.trim() ||
+        typeof interaction.playerName !== "string" || !interaction.playerName.trim() ||
+        !INTERACTION_KINDS.has(interaction.kind) ||
+        !INTERACTION_STATUSES.has(interaction.status) ||
+        !isCalendarDate(interaction.createdDate) ||
+        !isCalendarDate(interaction.dueDate) ||
+        interaction.createdDate > currentDate ||
+        interaction.dueDate < interaction.createdDate) return false;
+    const sequence = sequenceOf(interaction.id, "representation-interaction");
+    if (interactionIds.has(interaction.id) ||
+        sequence >= interactionSequence(representation)) return false;
+    highestInteractionSequence = Math.max(highestInteractionSequence, sequence);
+    interactionIds.add(interaction.id);
+    const contract = contractsById.get(interaction.contractId);
+    if (!contract || contract.playerId !== interaction.playerId) return false;
+
+    if (interaction.status === "pending_response") {
+      if (interaction.kind === "meeting" || currentDate >= interaction.dueDate ||
+          interaction.resolvedDate !== undefined || interaction.outcome !== undefined) return false;
+    } else if (interaction.status === "scheduled") {
+      if (interaction.kind !== "meeting" ||
+          currentDate > addDays(interaction.dueDate, 7) ||
+          interaction.resolvedDate !== undefined || interaction.outcome !== undefined ||
+          scheduledMeetingContracts.has(interaction.contractId)) return false;
+      scheduledMeetingContracts.add(interaction.contractId);
+    } else if (interaction.status === "resolved") {
+      if (!INTERACTION_OUTCOMES.has(interaction.outcome) ||
+          !isCalendarDate(interaction.resolvedDate) ||
+          interaction.resolvedDate < interaction.dueDate ||
+          interaction.resolvedDate > currentDate) return false;
+    } else if (
+      interaction.kind !== "meeting" ||
+      interaction.outcome !== undefined ||
+      !isCalendarDate(interaction.resolvedDate) ||
+      interaction.resolvedDate <= addDays(interaction.dueDate, 7) ||
+      interaction.resolvedDate > currentDate
+    ) {
+      return false;
+    }
+  }
+
+  for (const entry of representation.history) {
+    if (entry.interactionId !== undefined && !interactionIds.has(entry.interactionId)) return false;
+  }
+
   return representation.nextOfferSequence > highestOfferSequence &&
     representation.nextContractSequence > highestContractSequence &&
-    representation.nextHistorySequence > highestHistorySequence;
+    representation.nextHistorySequence > highestHistorySequence &&
+    interactionSequence(representation) > highestInteractionSequence;
 }
 
 /**
@@ -527,8 +699,9 @@ export function createRepresentationOffer(save, player, terms, currentDate = sav
     return { changed: false, save, error: "ملف اللاعب غير مكتمل ولا يمكن تقديم عرض تمثيل." };
   }
   if (!isCalendarDate(currentDate)) return { changed: false, save, error: "تاريخ المسيرة غير صالح." };
-  if (!validTerms(terms?.commissionRate, terms?.termDays)) {
-    return { changed: false, save, error: "اختر عمولة من 5% إلى 15% ومدة سنة أو سنتين أو ثلاث سنوات." };
+  if (!validTerms(terms?.commissionRate, terms?.termDays) ||
+      (terms?.representationType !== undefined && !isValidRepresentationType(terms.representationType))) {
+    return { changed: false, save, error: "اختر عمولة من 5% إلى 15% ومدة سنة أو سنتين أو ثلاث سنوات ونوع تمثيل صالح." };
   }
   if (save.agency.clients.includes(player.id) ||
       representation.contracts.some((contract) => contract.playerId === player.id && contract.status === "active")) {
@@ -545,6 +718,10 @@ export function createRepresentationOffer(save, player, terms, currentDate = sav
     return { changed: false, save, error: "وصل سجل عروض التمثيل إلى الحد المتاح." };
   }
 
+  const playerPreferences = getPlayerRepresentationProfile(player);
+  const representationType = normalizeRepresentationType(
+    terms.representationType ?? (playerPreferences.prefersExclusive ? "exclusive" : "non-exclusive")
+  );
   const offer = {
     id: "representation-offer-" + representation.nextOfferSequence,
     kind: "new",
@@ -555,7 +732,9 @@ export function createRepresentationOffer(save, player, terms, currentDate = sav
     position: player.position,
     rating: player.rating,
     potential: player.potential,
-    playerPreferences: getPlayerRepresentationProfile(player),
+    playerPreferences,
+    representationType,
+    agencyReputation: currentAgencyReputation(representation),
     commissionRate: terms.commissionRate,
     termDays: terms.termDays,
     createdDate: currentDate,
@@ -646,14 +825,19 @@ export function submitRepresentationCounterOffer(save, offerId, terms, currentDa
     return { changed: false, save, error: "سجل التفاوض ممتلئ ولا يمكن إضافة جولة جديدة." };
   }
 
+  if (terms.representationType !== undefined && !isValidRepresentationType(terms.representationType)) {
+    return { changed: false, save, error: "نوع التمثيل في العرض المضاد غير صالح." };
+  }
   const agencyOffer = {
     ...offer,
     commissionRate: terms.commissionRate,
-    termDays: terms.termDays
+    termDays: terms.termDays,
+    representationType: normalizeRepresentationType(terms.representationType ?? offer.counterOffer?.representationType ?? offer.representationType)
   };
   let updated = replaceOffer(representation, offer.id, {
     commissionRate: terms.commissionRate,
-    termDays: terms.termDays
+    termDays: terms.termDays,
+    representationType: normalizeRepresentationType(terms.representationType ?? offer.counterOffer?.representationType ?? offer.representationType)
   });
   updated = nextHistory(updated, "agency-countered", offer, currentDate,
     "ردت الوكالة بعمولة " + terms.commissionRate + "% لمدة " + Math.round(terms.termDays / 365) + " سنة.",
@@ -742,8 +926,9 @@ export function createRepresentationRenewalOffer(save, contractId, terms, curren
   if (remainingDays < 1 || remainingDays > 90) {
     return { changed: false, save, error: "يمكن فتح التجديد خلال آخر 90 يومًا من العقد فقط." };
   }
-  if (!validTerms(terms?.commissionRate, terms?.termDays)) {
-    return { changed: false, save, error: "اختر عمولة من 5% إلى 15% ومدة تجديد سنة أو سنتين أو ثلاث سنوات." };
+  if (!validTerms(terms?.commissionRate, terms?.termDays) ||
+      (terms?.representationType !== undefined && !isValidRepresentationType(terms.representationType))) {
+    return { changed: false, save, error: "اختر عمولة ومدة تجديد ونوع تمثيل صالح." };
   }
   if (representation.offers.some((offer) =>
     offer.kind === "renewal" && offer.renewalContractId === contract.id &&
@@ -776,6 +961,8 @@ export function createRepresentationRenewalOffer(save, contractId, terms, curren
     rating,
     potential,
     playerPreferences,
+    representationType: normalizeRepresentationType(terms.representationType ?? contract.representationType),
+    agencyReputation: currentAgencyReputation(representation),
     commissionRate: terms.commissionRate,
     termDays: terms.termDays,
     createdDate: currentDate,
@@ -795,6 +982,126 @@ export function createRepresentationRenewalOffer(save, contractId, terms, curren
     changed: true,
     status: "pending",
     offer,
+    save: { ...save, agency: { ...save.agency, representation: updated } }
+  };
+}
+
+/**
+ * Sends a client message/call or schedules a meeting. Messages and calls
+ * resolve automatically when their response deadline is reached; meetings
+ * remain scheduled until the agent records the meeting outcome.
+ */
+export function createRepresentationInteraction(save, contractId, kind, meetingDate, currentDate = save?.world?.currentDate) {
+  const representation = save?.agency?.representation;
+  const contract = representation?.contracts?.find((item) => item.id === contractId);
+  if (!contract || contract.status !== "active") {
+    return { changed: false, save, error: "لا يوجد عقد نشط لهذا اللاعب." };
+  }
+  if (!isCalendarDate(currentDate) || !INTERACTION_KINDS.has(kind)) {
+    return { changed: false, save, error: "نوع التواصل أو تاريخ المسيرة غير صالح." };
+  }
+  const interactions = interactionList(representation);
+  if (interactions.length >= MAX_INTERACTIONS ||
+      !Number.isSafeInteger(interactionSequence(representation)) ||
+      representation.history.length >= MAX_HISTORY) {
+    return { changed: false, save, error: "وصل سجل تواصل العملاء إلى الحد المتاح." };
+  }
+
+  let dueDate;
+  let status;
+  if (kind === "meeting") {
+    if (!isCalendarDate(meetingDate)) {
+      return { changed: false, save, error: "حدد تاريخًا صالحًا للاجتماع." };
+    }
+    const daysUntilMeeting = Math.round((Date.parse(meetingDate + "T00:00:00.000Z") -
+      Date.parse(currentDate + "T00:00:00.000Z")) / 86400000);
+    if (daysUntilMeeting < 1 || daysUntilMeeting > 30) {
+      return { changed: false, save, error: "يمكن تحديد الاجتماع خلال الثلاثين يومًا القادمة." };
+    }
+    if (interactions.some((item) => item.contractId === contract.id && item.kind === "meeting" && item.status === "scheduled")) {
+      return { changed: false, save, error: "يوجد اجتماع مجدول بالفعل لهذا اللاعب." };
+    }
+    dueDate = meetingDate;
+    status = "scheduled";
+  } else {
+    if (interactions.some((item) => item.contractId === contract.id && item.kind === kind && item.status === "pending_response")) {
+      return { changed: false, save, error: kind === "message"
+        ? "هناك رسالة بانتظار رد اللاعب بالفعل."
+        : "هناك مكالمة بانتظار رد اللاعب بالفعل." };
+    }
+    dueDate = addDays(currentDate, kind === "message" ? 3 : 1);
+    status = "pending_response";
+  }
+
+  const interaction = {
+    id: "representation-interaction-" + interactionSequence(representation),
+    contractId: contract.id,
+    playerId: contract.playerId,
+    playerName: contract.playerName,
+    kind,
+    createdDate: currentDate,
+    dueDate,
+    status
+  };
+  let updated = {
+    ...representation,
+    nextInteractionSequence: interactionSequence(representation) + 1,
+    interactions: [interaction, ...interactions]
+  };
+  const historyType = kind === "meeting" ? "meeting-scheduled" : "message-sent";
+  const note = kind === "meeting"
+    ? "تم تحديد اجتماع مع اللاعب في " + dueDate + "."
+    : kind === "call"
+      ? "تم تسجيل مكالمة مع اللاعب، والرد متوقع خلال يوم."
+      : "تم إرسال رسالة للاعب، والرد متوقع خلال ثلاثة أيام.";
+  updated = nextHistory(updated, historyType, contract, currentDate, note, {
+    contractId: contract.id,
+    interactionId: interaction.id
+  });
+  return {
+    changed: true,
+    interaction,
+    save: { ...save, agency: { ...save.agency, representation: updated } }
+  };
+}
+
+/** Records the outcome of a scheduled client meeting within its grace period. */
+export function completeRepresentationMeeting(save, interactionId, outcome, currentDate = save?.world?.currentDate) {
+  const representation = save?.agency?.representation;
+  const interaction = interactionList(representation).find((item) => item.id === interactionId);
+  if (!interaction || interaction.kind !== "meeting" || interaction.status !== "scheduled") {
+    return { changed: false, save, error: "لا يوجد اجتماع مجدول يمكن تسجيل نتيجته." };
+  }
+  if (!isCalendarDate(currentDate) || !INTERACTION_OUTCOMES.has(outcome) ||
+      currentDate < interaction.dueDate || currentDate > addDays(interaction.dueDate, 7)) {
+    return { changed: false, save, error: "يمكن تسجيل نتيجة الاجتماع من موعده وحتى سبعة أيام بعده." };
+  }
+  const contract = representation.contracts.find((item) => item.id === interaction.contractId);
+  if (!contract || contract.status !== "active") {
+    return { changed: false, save, error: "عقد التمثيل لم يعد نشطًا." };
+  }
+  const relationshipDelta = outcome === "positive" ? 7 : outcome === "neutral" ? 3 : -6;
+  const reputationDelta = outcome === "positive" ? 2 : outcome === "neutral" ? 0 : -2;
+  let updated = {
+    ...representation,
+    contracts: representation.contracts.map((item) => item.id === contract.id
+      ? { ...item, relationshipScore: clamp(item.relationshipScore + relationshipDelta, 0, 100) }
+      : item)
+  };
+  updated = replaceInteraction(updated, interaction.id, {
+    status: "resolved",
+    outcome,
+    resolvedDate: currentDate
+  });
+  updated = adjustAgencyReputation(updated, reputationDelta);
+  const outcomeLabel = outcome === "positive" ? "إيجابية" : outcome === "neutral" ? "محايدة" : "سلبية";
+  updated = nextHistory(updated, "meeting-completed", interaction, currentDate,
+    "تم عقد الاجتماع وكانت نتيجته " + outcomeLabel + ".",
+    { contractId: contract.id, interactionId: interaction.id });
+  return {
+    changed: true,
+    interaction: updated.interactions.find((item) => item.id === interaction.id),
+    contract: updated.contracts.find((item) => item.id === contract.id),
     save: { ...save, agency: { ...save.agency, representation: updated } }
   };
 }
@@ -901,8 +1208,71 @@ export function advanceRepresentationState(save, currentDate = save?.world?.curr
     }
   }
 
-  if (expiredOffers.length === 0 && expiredContracts.length === 0) {
-    return { save, expiredOffers, expiredContracts };
+  const resolvedInteractions = [];
+  const missedMeetings = [];
+  for (const interaction of interactionList(representation)) {
+    if (interaction.status === "pending_response" && currentDate >= interaction.dueDate) {
+      const contract = updated.contracts.find((item) => item.id === interaction.contractId);
+      const preferences = contract?.playerPreferences ?? getPlayerRepresentationProfile({
+        id: interaction.playerId,
+        age: contract?.age,
+        rating: contract?.rating,
+        potential: contract?.potential
+      });
+      const relationshipScore = contract?.relationshipScore ?? 50;
+      const responseScore = relationshipScore +
+        (preferences.professionalism - 3) * 5 +
+        (preferences.loyalty - 3) * 2 +
+        (currentAgencyReputation(updated) - 50) / 20 +
+        (interaction.kind === "call" ? 2 : 0);
+      const outcome = responseScore >= 68 ? "positive" : responseScore >= 45 ? "neutral" : "negative";
+      const relationshipDelta = outcome === "positive" ? 4 : outcome === "neutral" ? 1 : -3;
+      if (contract) {
+        updated = {
+          ...updated,
+          contracts: updated.contracts.map((item) => item.id === contract.id
+            ? { ...item, relationshipScore: clamp(item.relationshipScore + relationshipDelta, 0, 100) }
+            : item)
+        };
+      }
+      updated = replaceInteraction(updated, interaction.id, {
+        status: "resolved",
+        outcome,
+        resolvedDate: currentDate
+      });
+      updated = adjustAgencyReputation(updated, outcome === "positive" ? 1 : outcome === "negative" ? -1 : 0);
+      updated = nextHistory(updated, "message-replied", interaction, currentDate,
+        (interaction.kind === "call" ? "رد اللاعب على المكالمة برد " : "رد اللاعب على الرسالة برد ") +
+          (outcome === "positive" ? "إيجابي." : outcome === "neutral" ? "محايد." : "سلبي."),
+        { contractId: interaction.contractId, interactionId: interaction.id });
+      resolvedInteractions.push(interaction.id);
+    } else if (interaction.kind === "meeting" &&
+        interaction.status === "scheduled" &&
+        currentDate > addDays(interaction.dueDate, 7)) {
+      const contract = updated.contracts.find((item) => item.id === interaction.contractId);
+      if (contract) {
+        updated = {
+          ...updated,
+          contracts: updated.contracts.map((item) => item.id === contract.id
+            ? { ...item, relationshipScore: clamp(item.relationshipScore - 8, 0, 100) }
+            : item)
+        };
+      }
+      updated = replaceInteraction(updated, interaction.id, {
+        status: "missed",
+        resolvedDate: currentDate
+      });
+      updated = adjustAgencyReputation(updated, -2);
+      updated = nextHistory(updated, "meeting-missed", interaction, currentDate,
+        "فات موعد الاجتماع ولم يتم عقده؛ تراجعت ثقة اللاعب وسمعة الوكالة.",
+        { contractId: interaction.contractId, interactionId: interaction.id });
+      missedMeetings.push(interaction.id);
+    }
+  }
+
+  if (expiredOffers.length === 0 && expiredContracts.length === 0 &&
+      resolvedInteractions.length === 0 && missedMeetings.length === 0) {
+    return { save, expiredOffers, expiredContracts, resolvedInteractions, missedMeetings };
   }
 
   const representedPlayers = new Set(updated.contracts
@@ -915,7 +1285,9 @@ export function advanceRepresentationState(save, currentDate = save?.world?.curr
   return {
     save: { ...save, agency: { ...save.agency, clients, representation: updated } },
     expiredOffers,
-    expiredContracts
+    expiredContracts,
+    resolvedInteractions,
+    missedMeetings
   };
 }
 
