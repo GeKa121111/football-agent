@@ -302,9 +302,18 @@ export function completeCareerTask(save, taskId) {
   };
   const events = [...(save.world.events ?? []), completionEvent].slice(-MAX_EVENTS);
   const retainedEventIds = new Set(events.map((event) => event.id));
-  const inbox = (save.world.inbox ?? [])
-    .filter((message) => retainedEventIds.has(message.eventId))
-    .slice(-MAX_MESSAGES);
+  const completionMessage = {
+    id: "message-" + completionEvent.id,
+    eventId: completionEvent.id,
+    date: save.world.currentDate,
+    title: completionEvent.title,
+    body: completionEvent.description,
+    read: false
+  };
+  const inbox = [
+    ...(save.world.inbox ?? []).filter((message) => retainedEventIds.has(message.eventId)),
+    completionMessage
+  ].slice(-MAX_MESSAGES);
   return {
     changed: true,
     save: {
