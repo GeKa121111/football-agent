@@ -39,6 +39,9 @@ test("advances the date, day and week without mutating the original save", () =>
 test("starts a weekly briefing, inbox message and actionable task on Monday", () => {
   const save = createInitialSave();
   save.world.currentDate = "2026-07-05";
+  save.world.events = [];
+  save.world.inbox = [];
+  save.world.tasks = [];
   save.career.day = 5;
 
   const next = advanceCareerDay(save);
@@ -69,7 +72,7 @@ test("starts a new season on July 1 and creates a season planning task", () => {
 
   assert.equal(next.world.currentDate, "2027-07-01");
   assert.equal(next.career.season, 2);
-  assert.ok(next.world.events.some((event) => event.type === "season-opening"));
+  assert.equal(next.world.events.filter((event) => event.type === "season-opening" && event.date === "2027-07-01").length, 1);
   assert.ok(next.world.tasks.some((task) => task.category === "season-planning"));
 });
 
@@ -140,6 +143,9 @@ test("allows a late task to be completed and records that it missed its due date
 test("filters event history by type and Arabic or date search in newest-first order", () => {
   const save = createInitialSave();
   save.world.currentDate = "2026-07-05";
+  save.world.events = [];
+  save.world.inbox = [];
+  save.world.tasks = [];
   const monday = advanceCareerDay(save);
   const events = [
     { id: "z", date: "2026-07-07", type: "monthly-market", title: "تقرير السوق", description: "مراجعة الأندية", priority: "normal" },

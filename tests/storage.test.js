@@ -32,6 +32,9 @@ test("creates a new save when storage is empty", () => {
   assert.equal(result.status, "new");
   assert.equal(result.save.meta.version, SAVE_VERSION);
   assert.equal(result.save.agency.clients.length, 0);
+  assert.ok(result.save.world.events.some((event) => event.type === "season-opening"));
+  assert.equal(result.save.world.inbox.length, 2);
+  assert.equal(result.save.world.tasks[0].category, "season-planning");
 });
 
 test("writes and reads a save without losing the agency data", () => {

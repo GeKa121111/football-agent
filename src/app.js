@@ -256,7 +256,33 @@ function renderCareerOperations(context) {
     historyPanel.append(eventList);
   }
 
-  section.append(tasksPanel, inboxPanel, historyPanel);
+  const calendarPanel = node("section", "career-operations-panel career-calendar-panel");
+  const calendarHeading = node("div", "career-operations-heading");
+  const upcoming = context.upcomingEvents ?? [];
+  calendarHeading.append(
+    node("h2", "", "تقويم الموسم القادم"),
+    actionButton("عرض تقويم السنة القادمة", "career-history-button", context.openSeasonCalendar)
+  );
+  calendarPanel.append(calendarHeading);
+  if (upcoming.length === 0) {
+    calendarPanel.append(node("p", "career-activity-empty", "لا توجد مواعيد مجدولة ضمن الفترة القادمة."));
+  } else {
+    const calendarList = node("div", "career-calendar-list");
+    upcoming.slice(0, 4).forEach((event) => {
+      const row = node("article", "career-calendar-row");
+      const copy = node("div", "career-activity-copy");
+      copy.append(
+        node("strong", "", event.title),
+        node("span", "", event.description),
+        node("small", "", formatHomeDate(event.date) + " · بعد " + formatHomeNumber(event.daysUntil) + " يوم")
+      );
+      row.append(copy);
+      calendarList.append(row);
+    });
+    calendarPanel.append(calendarList);
+  }
+
+  section.append(tasksPanel, inboxPanel, calendarPanel, historyPanel);
   return section;
 }
 
@@ -794,6 +820,40 @@ export function mountApp(root) {
     else state.save = previousSave;
   }
 
+  function openSeasonCalendar() {
+    const events = getUpcomingCareerEvents(state.save.world.currentDate, state.save.career.season, 365);
+    const content = node("div", "season-calendar-content");
+    const intro = node("p", "modal-copy", "مواعيد الوكالة المجدولة خلال الـ365 يومًا القادمة. المواعيد تنظيمية داخل اللعبة، وليست جداول مباريات أو نوافذ انتقالات رسمية.");
+    const list = node("div", "season-calendar-list");
+    const labels = {
+      "weekly-briefing": "إحاطة أسبوعية",
+      "monthly-market": "تقرير شهري",
+      "season-opening": "بداية الموسم",
+      "preseason-review": "مراجعة ما قبل الموسم",
+      "midseason-review": "مراجعة منتصف الموسم",
+      "season-review": "تقييم نهاية الموسم",
+      "season-closing": "ختام الموسم"
+    };
+    if (events.length === 0) {
+      list.append(node("p", "career-activity-empty", "لا توجد أحداث مستقبلية في هذه الفترة."));
+    } else {
+      events.forEach((event) => {
+        const row = node("article", "season-calendar-row");
+        const date = node("span", "season-calendar-date", formatHomeDate(event.date));
+        const copy = node("div", "career-activity-copy");
+        copy.append(
+          node("strong", "", event.title),
+          node("span", "", event.description),
+          node("small", "", (labels[event.type] ?? event.type) + " · الموسم " + formatHomeNumber(event.season) + " · بعد " + formatHomeNumber(event.daysUntil) + " يوم")
+        );
+        row.append(date, copy);
+        list.append(row);
+      });
+    }
+    content.append(intro, list);
+    openModal("تقويم الوكالة — السنة القادمة", [content], "إغلاق");
+  }
+
   function openEventHistory() {
     const events = state.save.world.events ?? [];
     const controls = node("div", "event-history-controls");
@@ -977,7 +1037,23 @@ export function mountApp(root) {
     sidebar.append(sideBottom);
 
     const main = node("main", "main-stage");
-    const context = { save: state.save, navigate, openPlayer, openModal, openInbox, openEventHistory, saveCareer, advanceDay, completeTask, markMessageRead, toast, watchlist: state.watchlist, addToWatchlist };
+    const context = {
+      save: state.save,
+      navigate,
+      openPlayer,
+      openModal,
+      openInbox,
+      openEventHistory,
+      openSeasonCalendar,
+      upcomingEvents: getUpcomingCareerEvents(state.save.world.currentDate, state.save.career.season, 365),
+      saveCareer,
+      advanceDay,
+      completeTask,
+      markMessageRead,
+      toast,
+      watchlist: state.watchlist,
+      addToWatchlist
+    };
     const views = {
       dashboard: renderDashboard,
       players: renderPlayers,

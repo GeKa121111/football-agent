@@ -851,3 +851,28 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   .career-event-list { grid-template-columns: minmax(0,1fr); }
   .event-history-controls { grid-template-columns: minmax(0,1fr); }
 }
+
+
+/* Phase 5 — annual agency season planner */
+.career-calendar-panel { grid-column: 1 / -1; }
+.career-calendar-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.career-calendar-row,.season-calendar-row {
+  min-width:0; display:flex; align-items:flex-start; gap:10px;
+  padding:9px; border:1px solid rgba(255,255,255,.07); border-radius:10px;
+  background:rgba(4,10,21,.28);
+}
+.career-calendar-row .career-activity-copy,.season-calendar-row .career-activity-copy { gap:4px; }
+.season-calendar-content { min-width:0; }
+.season-calendar-list { display:flex; flex-direction:column; gap:7px; max-height:58vh; overflow-y:auto; padding-right:2px; }
+.season-calendar-date {
+  flex:0 0 112px; color:#c8b7ff; font-size:9px; font-weight:900; line-height:1.6;
+}
+.season-calendar-row { align-items:center; }
+@media (max-width:760px) {
+  .career-calendar-list { grid-template-columns:minmax(0,1fr); }
+  .season-calendar-date { flex-basis:94px; }
+}
+@media (max-width:360px) {
+  .season-calendar-row { flex-direction:column; gap:4px; }
+  .season-calendar-date { flex-basis:auto; }
+}

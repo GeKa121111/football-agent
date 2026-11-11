@@ -336,3 +336,37 @@ test.describe("Career operations follow-up", () => {
     await expect(dialog.locator(".event-history-row")).toHaveCount(1);
   });
 });
+
+
+test.describe("Annual career calendar", () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test("starts a new career with season-opening information", async ({ page }) => {
+    await page.goto("/");
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.world.currentDate).toBe("2026-07-01");
+    expect(saved.world.events.some((event) => event.type === "season-opening")).toBe(true);
+    await expect(page.locator(".career-calendar-panel")).toBeVisible();
+    await expect(page.getByText("انطلاق موسم جديد").first()).toBeVisible();
+  });
+
+  test("opens the next-year calendar and displays the season milestones", async ({ page }) => {
+    await page.goto("/");
+    await page.locator(".home-save-button").click();
+    await page.evaluate(() => {
+      const save = JSON.parse(localStorage.getItem("football-agent.save"));
+      save.world.currentDate = "2026-07-01";
+      localStorage.setItem("football-agent.save", JSON.stringify(save));
+    });
+    await page.reload();
+
+    await page.getByRole("button", { name: "عرض تقويم السنة القادمة" }).click();
+    const dialog = page.getByRole("dialog", { name: "تقويم الوكالة — السنة القادمة" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText("مراجعة جاهزية الموسم").first()).toBeVisible();
+    await expect(dialog.getByText("مراجعة منتصف الموسم").first()).toBeVisible();
+    await expect(dialog.getByText("تقييم نهاية الموسم").first()).toBeVisible();
+    await expect(dialog.getByText("ختام الموسم").first()).toBeVisible();
+    await hasNoHorizontalOverflow(page);
+  });
+});
