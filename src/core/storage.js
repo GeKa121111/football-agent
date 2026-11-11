@@ -55,6 +55,11 @@ function hasUniqueIds(items) {
   return ids.every((id) => typeof id === "string" && id.trim()) && new Set(ids).size === ids.length;
 }
 
+function hasUniqueStringIds(items) {
+  return items.every((id) => typeof id === "string" && id.trim()) &&
+    new Set(items).size === items.length;
+}
+
 function isValidActivityCollections(world) {
   const { events, inbox, tasks, currentDate } = world;
   if (![events, inbox, tasks].every(Array.isArray)) return false;
@@ -134,18 +139,20 @@ export function isValidSave(value) {
   if (!isValidTimestamp(value.meta.createdAt) || !isValidTimestamp(value.meta.updatedAt)) return false;
 
   const { day, week, season } = value.career;
-  if (![day, week, season].every((item) => Number.isInteger(item) && item >= 1)) return false;
+  if (![day, week, season].every((item) => Number.isSafeInteger(item) && item >= 1)) return false;
+  if (week !== Math.ceil(day / 7)) return false;
 
   const { id, name, balance, reputation, clients } = value.agency;
   if (typeof id !== "string" || !id.trim()) return false;
   if (typeof name !== "string" || !name.trim()) return false;
   if (typeof balance !== "number" || !Number.isFinite(balance) || balance < 0) return false;
   if (!Number.isInteger(reputation) || reputation < 0 || reputation > 100) return false;
-  if (!Array.isArray(clients)) return false;
+  if (!Array.isArray(clients) || !hasUniqueStringIds(clients)) return false;
 
   const { currentDate, players, clubs, competitions, activeOffers } = value.world;
   if (!isValidCalendarDate(currentDate)) return false;
   if (![players, clubs, competitions, activeOffers].every(Array.isArray)) return false;
+  if (![players, clubs, competitions, activeOffers].every(hasUniqueIds)) return false;
   return isValidActivityCollections(value.world);
 }
 
