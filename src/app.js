@@ -675,7 +675,7 @@ function renderScouting(context) {
       const copy = node("div", "scout-report-copy");
       copy.append(
         node("strong", "", report.missionName),
-        node("span", "", formatHomeDate(report.completedDate) + " · " + report.candidateCount + " موهبة · دقة " + Math.round(report.accuracy * 100) + "%")
+        node("span", "", formatHomeDate(report.completedDate) + " · " + report.candidateCount + " موهبة · دقة " + Math.round(report.accuracy * 100) + "%" + (report.scoutName ? " · " + report.scoutName : ""))
       );
       row.append(copy, actionButton("عرض التقرير", "button-outline scout-report-button", () => context.openScoutingReport(report)));
       reportList.append(row);
