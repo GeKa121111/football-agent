@@ -363,7 +363,12 @@ test("treats the contract expiry date as inactive for new assignments and allows
   const signed = signScoutingContract(initial, "scout-iberian-network");
   assert.equal(signed.changed, true);
 
-  const expiryDay = advanceCareerDays(signed.save, 365);
+  let expiryDay = signed.save;
+  for (let elapsed = 0; elapsed < 365;) {
+    const step = Math.min(31, 365 - elapsed);
+    expiryDay = advanceCareerDays(expiryDay, step);
+    elapsed += step;
+  }
   assert.equal(expiryDay.world.currentDate, "2027-07-01");
   const scout = getScoutingRoster(expiryDay.world.scouting, expiryDay.world.currentDate)
     .find((item) => item.id === "scout-iberian-network");
