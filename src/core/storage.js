@@ -360,7 +360,7 @@ function migrateSave(value) {
       events: Array.isArray(value.world.events) ? value.world.events : [],
       inbox: Array.isArray(value.world.inbox) ? value.world.inbox : [],
       tasks: Array.isArray(value.world.tasks) ? value.world.tasks : [],
-      scouting: isRecord(value.world.scouting) ? value.world.scouting : createInitialScoutingState()
+      scouting: isRecord(value.world.scouting) ? value.world.scouting : { nextMissionSequence: 1, activeMissions: [], reports: [] }
     }
   };
 }
