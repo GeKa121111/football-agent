@@ -33,6 +33,11 @@ import {
   getPlayerRepresentationProfile,
   getRepresentationContractExpiry,
   getRepresentationContractCommission,
+  getRepresentationContractType,
+  getRepresentationRelationshipLabel,
+  getAgencyReputationScore,
+  createRepresentationInteraction as createRepresentationInteractionInEngine,
+  completeRepresentationMeeting as completeRepresentationMeetingInEngine,
   advanceRepresentationState
 } from "./engines/representation.js";
 import {
@@ -843,13 +848,15 @@ function renderAgency(context) {
   page.append(
     node("p", "eyebrow", "إدارة أعمالك"),
     node("h1", "page-title", "الوكالة"),
-    node("p", "page-subtitle", "ابنِ قائمة عملائك، تفاوض على شروط التمثيل، وجدّد العقود قبل انتهائها.")
+    node("p", "page-subtitle", "ابنِ قائمة عملائك، تفاوض على شروط التمثيل، واهتم بالثقة والتواصل والمواعيد.")
   );
 
   const agency = context.save.agency;
   const representation = agency.representation;
   const activeContracts = representation.contracts.filter((contract) => contract.status === "active");
   const openOffers = representation.offers.filter((offer) => ["pending", "countered"].includes(offer.status));
+  const interactions = Array.isArray(representation.interactions) ? representation.interactions : [];
+  const openInteractions = interactions.filter((item) => ["pending_response", "scheduled"].includes(item.status));
   const prospects = context.players
     .filter((player) => !agency.clients.includes(player.id) &&
       !openOffers.some((offer) => offer.playerId === player.id))
@@ -877,7 +884,8 @@ function renderAgency(context) {
   cards.append(
     metricCard("الرصيد", formatMoney(agency.balance), "الأموال المتاحة", "◈", "purple"),
     metricCard("العملاء", agency.clients.length, "لاعبون ممثلون", "◎", "cyan"),
-    metricCard("العقود النشطة", activeContracts.length, "عقود تمثيل سارية", "▤", "gold")
+    metricCard("العقود النشطة", activeContracts.length, "عقود تمثيل سارية", "▤", "gold"),
+    metricCard("سمعة الوكالة", getAgencyReputationScore(representation) + "/100", "سمعة الوكالة بين اللاعبين", "★", "cyan")
   );
 
   const contractsPanel = node("section", "surface-card representation-panel");
@@ -896,6 +904,8 @@ function renderAgency(context) {
       const copy = node("div", "representation-copy");
       const effectiveExpiry = getRepresentationContractExpiry(contract);
       const commissionRate = getRepresentationContractCommission(contract, context.save.world.currentDate);
+      const representationType = getRepresentationContractType(contract, context.save.world.currentDate);
+      const relationshipLabel = getRepresentationRelationshipLabel(contract.relationshipScore);
       const remainingDays = Math.round((Date.parse(effectiveExpiry + "T00:00:00.000Z") -
         Date.parse(context.save.world.currentDate + "T00:00:00.000Z")) / 86400000);
       const hasOpenRenewal = openOffers.some((offer) =>
@@ -904,7 +914,9 @@ function renderAgency(context) {
       copy.append(
         node("strong", "", contract.playerName),
         node("span", "", contract.position + " · " + contract.club + " · " + contract.age + " سنة"),
-        node("small", "", "عمولتك " + commissionRate + "% · حتى " + formatHomeDate(effectiveExpiry)),
+        node("small", "", (representationType === "exclusive" ? "تمثيل حصري" : "تمثيل غير حصري") +
+          " · عمولتك " + commissionRate + "% · حتى " + formatHomeDate(effectiveExpiry)),
+        node("small", "", "الثقة " + contract.relationshipScore + "/100 · العلاقة " + relationshipLabel),
         node("small", "", hasOpenRenewal
           ? "يوجد تفاوض تجديد مفتوح"
           : remainingDays <= 90
@@ -912,6 +924,9 @@ function renderAgency(context) {
             : "متبقي " + remainingDays + " يومًا على العقد")
       );
       const actions = node("div", "representation-actions");
+      actions.append(actionButton("رسالة", "button-outline representation-message-button", () => context.sendRepresentationInteraction(contract.id, "message")));
+      actions.append(actionButton("اتصال", "button-outline representation-call-button", () => context.sendRepresentationInteraction(contract.id, "call")));
+      actions.append(actionButton("اجتماع", "button-outline representation-meeting-button", () => context.openRepresentationMeeting(contract.id)));
       if (remainingDays >= 1 && remainingDays <= 90 && !hasOpenRenewal) {
         actions.append(actionButton("تجديد العقد", "button-primary representation-renew-button", () => context.openRepresentationRenewal(contract.id)));
       }
@@ -921,6 +936,59 @@ function renderAgency(context) {
     });
   }
   contractsPanel.append(contractList);
+
+  const interactionsPanel = node("section", "surface-card representation-panel representation-interactions-panel");
+  const interactionsHeading = node("div", "representation-heading");
+  interactionsHeading.append(
+    node("h2", "", "الرسائل والمواعيد"),
+    node("span", "representation-count", openInteractions.length + " متابعة مفتوحة")
+  );
+  interactionsPanel.append(interactionsHeading);
+  if (openInteractions.length === 0) {
+    interactionsPanel.append(node("p", "representation-empty", "مفيش رسائل مستنية رد أو اجتماعات مجدولة. ابعت رسالة أو حدد اجتماع من بطاقة العميل."));
+  } else {
+    const followupList = node("div", "representation-list");
+    openInteractions.forEach((interaction) => {
+      const row = node("article", "representation-row representation-interaction-row");
+      const copy = node("div", "representation-copy");
+      const kindLabel = interaction.kind === "meeting" ? "اجتماع" : interaction.kind === "call" ? "مكالمة" : "رسالة";
+      const stateLabel = interaction.kind === "meeting"
+        ? "موعد الاجتماع " + formatHomeDate(interaction.dueDate)
+        : "موعد الرد المتوقع " + formatHomeDate(interaction.dueDate);
+      copy.append(
+        node("strong", "", interaction.playerName + " · " + kindLabel),
+        node("span", "", stateLabel),
+        node("small", "", interaction.status === "scheduled"
+          ? "الاجتماع متحدد؛ سجل نتيجته من يوم الموعد وحتى 7 أيام بعده."
+          : "بانتظار رد اللاعب. الرد هيتسجل تلقائيًا عند تقدم التاريخ.")
+      );
+      row.append(copy);
+      if (interaction.kind === "meeting" && context.save.world.currentDate >= interaction.dueDate) {
+        row.append(actionButton("تسجيل نتيجة الاجتماع", "button-primary representation-meeting-complete-button", () => context.openRepresentationMeetingOutcome(interaction.id)));
+      }
+      followupList.append(row);
+    });
+    interactionsPanel.append(followupList);
+  }
+  const recentInteractions = interactions.filter((item) => item.status === "resolved" || item.status === "missed").slice(0, 5);
+  if (recentInteractions.length > 0) {
+    interactionsPanel.append(node("p", "representation-intro", "آخر التفاعلات"));
+    const recentList = node("div", "representation-history-list");
+    recentInteractions.forEach((interaction) => {
+      const outcomeLabel = interaction.status === "missed"
+        ? "اجتماع فائت"
+        : interaction.kind === "meeting"
+          ? interaction.outcome === "positive" ? "اجتماع ناجح" : interaction.outcome === "neutral" ? "اجتماع محايد" : "اجتماع سلبي"
+          : interaction.outcome === "positive" ? "رد إيجابي" : interaction.outcome === "neutral" ? "رد محايد" : "رد سلبي";
+      const row = node("div", "representation-history-row");
+      row.append(
+        node("strong", "", outcomeLabel),
+        node("span", "", interaction.playerName + " · " + formatHomeDate(interaction.resolvedDate))
+      );
+      recentList.append(row);
+    });
+    interactionsPanel.append(recentList);
+  }
 
   const offersPanel = node("section", "surface-card representation-panel");
   const offersHeading = node("div", "representation-heading");
@@ -1018,6 +1086,11 @@ function renderAgency(context) {
         "contract-signed": "توقيع عقد",
         "contract-renewed": "تجديد عقد",
         "renewal-offer-sent": "إرسال عرض تجديد",
+        "message-sent": "إرسال رسالة",
+        "message-replied": "رد اللاعب",
+        "meeting-scheduled": "تحديد اجتماع",
+        "meeting-completed": "إنهاء اجتماع",
+        "meeting-missed": "اجتماع فائت",
         "contract-terminated": "إنهاء عقد",
         "contract-expired": "انتهاء عقد"
       };
@@ -1038,7 +1111,7 @@ function renderAgency(context) {
     roadmapRow("عقود التمثيل", "المرحلة الحالية", true),
     roadmapRow("سوق الانتقالات والتفاوض مع الأندية", "المرحلة الثامنة", false)
   );
-  page.append(overview, cards, contractsPanel, offersPanel, prospectsPanel, historyPanel, roadmap);
+  page.append(overview, cards, contractsPanel, interactionsPanel, offersPanel, prospectsPanel, historyPanel, roadmap);
   return page;
 }
 
