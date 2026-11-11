@@ -181,7 +181,8 @@ test.describe("Desktop experience", () => {
     expect(renewed.expiresOn).toBe(original.expiresOn);
     expect(renewed.renewals).toHaveLength(1);
     expect(renewed.renewals[0].startsOn).toBe(original.expiresOn);
-    expect(renewed.renewals[0].expiresOn).toBeGreaterThan(original.expiresOn);
+    expect(Date.parse(renewed.renewals[0].expiresOn + "T00:00:00.000Z"))
+      .toBeGreaterThan(Date.parse(original.expiresOn + "T00:00:00.000Z"));
     expect(saved.agency.clients).toContain(renewed.playerId);
     expect(saved.agency.representation.history.some((entry) => entry.type === "contract-renewed")).toBe(true);
   });
