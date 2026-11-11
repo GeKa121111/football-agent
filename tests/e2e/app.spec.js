@@ -57,7 +57,7 @@ test.describe("Desktop experience", () => {
     await navigateTo(page, "اللاعبون");
 
     const portraits = page.locator(".player-card .player-portrait");
-    await expect(portraits).toHaveCount(16);
+    await expect(portraits).toHaveCount(32);
 
     const profiles = await portraits.evaluateAll((elements) => elements.map((element) => ({
       hair: element.dataset.hairStyle,
@@ -151,7 +151,7 @@ test.describe("Mobile experience", () => {
     await expect(page.getByText("مفيش لاعبين مطابقين للبحث")).toBeVisible();
 
     await page.getByRole("button", { name: "مسح البحث" }).click();
-    await expect(page.locator(".player-card")).toHaveCount(16);
+    await expect(page.locator(".player-card")).toHaveCount(32);
     await hasNoHorizontalOverflow(page);
   });
 
@@ -160,9 +160,9 @@ test.describe("Mobile experience", () => {
     await navigateTo(page, "الكشافون");
     const roleFilter = page.getByLabel("تصفية حسب المركز");
     await roleFilter.selectOption("هجوم");
-    await expect(page.locator(".player-card")).toHaveCount(2);
+    await expect(page.locator(".player-card")).toHaveCount(8);
     await roleFilter.selectOption("حراسة");
-    await expect(page.locator(".player-card")).toHaveCount(2);
+    await expect(page.locator(".player-card")).toHaveCount(8);
     await roleFilter.selectOption("all");
 
     await page.getByRole("searchbox", { name: "البحث في المواهب" }).fill("ياسين");
@@ -190,7 +190,7 @@ test.describe("Mobile experience", () => {
     await page.getByLabel("مستوى البعثة").selectOption("local");
     await page.getByLabel("الدولة المستهدفة").selectOption("country-eg");
     await page.getByLabel("المركز المستهدف").selectOption("all");
-    await expect(page.getByText(/2 لاعب ضمن نطاق البحث/)).toBeVisible();
+    await expect(page.getByText(/4 لاعب ضمن نطاق البحث/)).toBeVisible();
     await page.getByRole("button", { name: "تأكيد إطلاق البعثة" }).click();
 
     const started = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
