@@ -345,13 +345,13 @@ function renderDashboard(context) {
   intro.append(introCopy, introActions);
 
   const overview = node("section", "dashboard-overview");
-  const agencyCard = node("article", "dashboard-agency-card");
+  const agencyCard = node("article", "dashboard-agency-card agent-profile-card");
   const agencyTop = node("div", "dashboard-agency-top");
   const monogram = node("span", "dashboard-agency-monogram", "FA");
   const identity = node("div", "dashboard-agency-identity");
   identity.append(
     node("small", "", "ملف الوكالة · المستوى 1"),
-    node("strong", "", agency.name)
+    node("strong", "agent-name", agency.name)
   );
   agencyTop.append(monogram, identity, node("span", "dashboard-agency-status", "وكالتك نشطة"));
 
@@ -373,7 +373,7 @@ function renderDashboard(context) {
   reputationTrack.append(reputationFill);
   agencyCard.append(agencyTop, agencyStats, reputationHead, reputationTrack);
 
-  const dayCard = node("article", "dashboard-day-card");
+  const dayCard = node("article", "dashboard-day-card career-day-panel");
   const dayHead = node("div", "dashboard-day-head");
   dayHead.append(
     node("span", "", formatHomeDate(context.save.world.currentDate)),
