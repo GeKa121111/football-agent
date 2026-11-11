@@ -1153,12 +1153,12 @@ function renderAgencyStaffAssignments(context) {
     } else {
       card.append(node("p", "talent-staff-empty", "لا توجد ملفات مواهب مكلف بها حاليًا."));
     }
-    panel.appendChild(rosterGrid);
     rosterGrid.append(card);
   });
   if (roster.length === 0) {
     rosterGrid.append(node("p", "representation-empty", "لا يوجد كشافون في طاقم الوكالة حاليًا."));
   }
+  panel.append(rosterGrid);
   return panel;
 }
 
@@ -1956,6 +1956,8 @@ export function mountApp(root) {
       negative: "رد سلبي",
       no_response: "لم يرد"
     };
+    const staffRoster = getScoutingRoster(state.save.world.scouting, state.save.world.currentDate);
+    const staffName = (staffId) => staffRoster.find((scout) => scout.id === staffId)?.name ?? "عضو سابق";
     const body = node("div", "talent-activity-history");
     if (!entry || activity.length === 0) {
       body.append(node("p", "representation-empty", "لا يوجد نشاط مسجل لهذا اللاعب حتى الآن."));
@@ -1964,7 +1966,12 @@ export function mountApp(root) {
         const row = node("article", "talent-activity-row");
         const title = event.type === "stage"
           ? "تغيير المرحلة: " + (stageLabels[event.fromStage] ?? "بداية الملف") + " ← " + stageLabels[event.toStage]
-          : "تواصل " + kindLabels[event.kind] + " · " + outcomeLabels[event.outcome];
+          : event.type === "assignment"
+            ? "تغيير مسؤول الملف: " + (event.fromScoutId ? staffName(event.fromScoutId) : "بدون مسؤول") +
+              " ← " + (event.toScoutId ? staffName(event.toScoutId) : "بدون مسؤول")
+            : event.type === "follow-up-reviewed"
+              ? "إتمام مراجعة المتابعة"
+              : "تواصل " + kindLabels[event.kind] + " · " + outcomeLabels[event.outcome];
         row.append(
           node("strong", "", title),
           node("small", "", formatHomeDate(event.date))
@@ -2397,12 +2404,23 @@ export function mountApp(root) {
     openModal("نتيجة اجتماع اللاعب", [form], "إغلاق");
   }
 
+  function handoffProspectToClientManagement(save, result) {
+    if (result.status !== "signed" || !result.contract?.playerId) return result.save;
+    const handoff = assignTalentProspectStaff(
+      result.save,
+      result.contract.playerId,
+      null,
+      "contract-signed"
+    );
+    return handoff.changed ? handoff.save : result.save;
+  }
+
   function evaluateRepresentationOffer(offerId) {
     if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم نتابع التفاوض."); return; }
     const previousSave = state.save;
     const result = evaluateRepresentationOfferInEngine(state.save, offerId);
     if (!result.changed) { toast(result.error); return; }
-    state.save = result.save;
+    state.save = handoffProspectToClientManagement(result.save, result);
     if (saveCareer()) {
       render();
       toast(result.status === "countered"
@@ -2420,7 +2438,7 @@ export function mountApp(root) {
     const previousSave = state.save;
     const result = acceptRepresentationCounterOfferInEngine(state.save, offerId);
     if (!result.changed) { toast(result.error); return; }
-    state.save = result.save;
+    state.save = handoffProspectToClientManagement(result.save, result);
     if (saveCareer()) {
       render();
       toast(result.status === "renewed"
