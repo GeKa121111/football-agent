@@ -673,12 +673,19 @@ test.describe("Mobile experience", () => {
     await expect(historyDialog).toContainText("تحدثنا مع اللاعب وينتظر مراجعة العرض.");
     await historyDialog.getByRole("button", { name: "إغلاق" }).last().click();
 
-    // The same discovered player can now move into representation outreach.
-    await navigateTo(page, "الكشافون");
-    await page.getByRole("button", { name: "عرض التقرير" }).click();
-    const reopenedReport = page.getByRole("dialog", { name: "تقرير الكشافين" });
-    await expect(reopenedReport).toBeVisible();
-    await reopenedReport.getByRole("button", { name: "بدء عرض تمثيل" }).click();
+    // A positive follow-up response now exposes a direct path into negotiation.
+    await page.locator(".talent-pipeline-contact-button").click();
+    const followupDialog = page.getByRole("dialog", { name: "تواصل أولي مع ياسين عادل" });
+    await followupDialog.getByLabel("طريقة التواصل").selectOption("meeting");
+    await followupDialog.getByLabel("نتيجة التواصل").selectOption("positive");
+    await followupDialog.getByLabel("موعد المتابعة القادمة").fill("2026-07-12");
+    await followupDialog.getByLabel("ملخص التواصل").fill("اللاعب أبدى اهتمامه بمناقشة التمثيل.");
+    await followupDialog.getByRole("button", { name: "حفظ التواصل في سجل اللاعب" }).click();
+    await expect(page.locator(".talent-pipeline-offer-button")).toBeVisible();
+    const positiveSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(positiveSave.agency.talentPipeline.entries[0].activity.filter((event) => event.type === "contact")).toHaveLength(2);
+    expect(positiveSave.agency.talentPipeline.entries[0].activity.at(-1).outcome).toBe("positive");
+    await page.locator(".talent-pipeline-offer-button").click();
     const offerDialog = page.getByRole("dialog", { name: "عرض تمثيل جديد" });
     await expect(offerDialog).toBeVisible();
     await offerDialog.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
