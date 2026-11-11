@@ -343,9 +343,23 @@ export function isValidTransferState(state, currentDate, clients = [], represent
         !isTransferCalendarDate(offer.createdDate) || !isTransferCalendarDate(offer.expiresDate) ||
         offer.createdDate > currentDate || offer.expiresDate !== addDays(offer.createdDate, TRANSFER_OFFER_VALIDITY_DAYS) ||
         (offer.counterOffer !== null && !validTerms(offer.type, offer.counterOffer))) return false;
+    const createdWindow = getTransferWindow(offer.createdDate).window;
+    if (!createdWindow || offer.createdDate < createdWindow.startDate || offer.createdDate > createdWindow.endDate) return false;
     if (offer.status === "countered" && !offer.counterOffer) return false;
-    if (["agreed", "completed"].includes(offer.status) && (!validTerms(offer.type, offer.agreedTerms) || !isTransferCalendarDate(offer.agreedDate))) return false;
-    if (offer.status === "completed" && (!validId(offer.moveId) || !isTransferCalendarDate(offer.completedDate))) return false;
+    if ((offer.status === "countered") !== (offer.counterOffer !== null)) return false;
+    if (["agreed", "completed"].includes(offer.status)) {
+      const agreedWindow = isTransferCalendarDate(offer.agreedDate) ? getTransferWindow(offer.agreedDate).window : null;
+      if (!validTerms(offer.type, offer.agreedTerms) || !agreedWindow ||
+          offer.agreedDate < offer.createdDate || offer.agreedDate > currentDate ||
+          agreedWindow.id !== createdWindow.id || currentDate > agreedWindow.endDate) return false;
+    }
+    if (["pending", "countered"].includes(offer.status) &&
+        (currentDate > offer.expiresDate || currentDate > createdWindow.endDate)) return false;
+    if (offer.status === "completed" &&
+        (!validId(offer.moveId) || !isTransferCalendarDate(offer.completedDate) ||
+         offer.completedDate < offer.agreedDate || offer.completedDate > currentDate ||
+         !getTransferWindow(offer.completedDate).active ||
+         getTransferWindow(offer.completedDate).window.id !== createdWindow.id)) return false;
     if (offer.status !== "completed" && offer.moveId !== null) return false;
     if (["pending", "countered", "agreed"].includes(offer.status) && !clients.includes(offer.playerId)) return false;
     offers.set(offer.id, offer);
@@ -362,19 +376,29 @@ export function isValidTransferState(state, currentDate, clients = [], represent
         offer.moveId !== move.id || offer.playerId !== move.playerId || offer.type !== move.type ||
         !validId(move.playerId) || !validId(move.playerName) || !["permanent", "loan"].includes(move.type) ||
         !validId(move.fromClubId) || !validId(move.toClubId) || move.fromClubId === move.toClubId ||
+        move.fromClubId !== offer.fromClubId || move.toClubId !== offer.toClubId ||
         !isTransferCalendarDate(move.effectiveDate) || move.effectiveDate > currentDate ||
+        move.effectiveDate !== offer.completedDate || move.effectiveDate < offer.agreedDate ||
         !["active", "returned"].includes(move.status) || !validMoney(move.feeEur) ||
         !validMoney(move.loanFeeEur) || !validMoney(move.optionToBuyEur) || !validMoney(move.weeklyWageEur)) return false;
     if (move.type === "loan") {
+      const terms = offer.agreedTerms;
       if (move.feeEur !== 0 || move.contractYears !== null || !isTransferCalendarDate(move.returnDate) ||
-          move.returnDate <= move.effectiveDate ||
+          move.returnDate !== addMonths(move.effectiveDate, terms.loanMonths) ||
+          move.loanFeeEur !== terms.loanFeeEur || move.optionToBuyEur !== terms.optionToBuyEur ||
+          move.weeklyWageEur !== terms.weeklyWageEur ||
+          (move.status === "active" && (currentDate >= move.returnDate || move.returnedDate !== undefined)) ||
           (move.status === "returned" && (!isTransferCalendarDate(move.returnedDate) || move.returnedDate < move.returnDate || move.returnedDate > currentDate))) return false;
       if (move.status === "active") {
         if (activeLoans.has(move.playerId)) return false;
         activeLoans.add(move.playerId);
       }
-    } else if (move.returnDate !== null || move.loanFeeEur !== 0 || move.optionToBuyEur !== 0 ||
-        !Number.isInteger(move.contractYears) || move.contractYears < 1 || move.contractYears > 5) return false;
+    } else if (move.status !== "active" || move.returnDate !== null ||
+        move.loanFeeEur !== 0 || move.optionToBuyEur !== 0 ||
+        move.feeEur !== offer.agreedTerms.feeEur ||
+        move.weeklyWageEur !== offer.agreedTerms.weeklyWageEur ||
+        !Number.isInteger(move.contractYears) || move.contractYears !== offer.agreedTerms.contractYears ||
+        move.contractYears < 1 || move.contractYears > 5) return false;
     moves.set(move.id, move);
     highestMove = Math.max(highestMove, sequenceOf(move.id, "transfer-move"));
   }
@@ -386,7 +410,9 @@ export function isValidTransferState(state, currentDate, clients = [], represent
   for (const entry of state.ledger) {
     const offer = offers.get(entry.offerId);
     const move = moves.get(entry.moveId);
-    if (!sequenceOf(entry.id, "transfer-ledger") || !offer || !move || entry.playerId !== move.playerId ||
+    if (!sequenceOf(entry.id, "transfer-ledger") || !offer || offer.status !== "completed" ||
+        !move || move.offerId !== entry.offerId || move.id !== offer.moveId ||
+        entry.playerId !== move.playerId || entry.date !== move.effectiveDate ||
         entry.type !== "agent-commission" || !isTransferCalendarDate(entry.date) || entry.date > currentDate ||
         entry.currency !== "EUR" || !validMoney(entry.amountEur) ||
         !Number.isInteger(entry.commissionRate) || entry.commissionRate < 5 || entry.commissionRate > 15 ||
@@ -400,10 +426,13 @@ export function isValidTransferState(state, currentDate, clients = [], represent
 
   let highestHistory = 0;
   for (const item of state.history) {
+    const offer = offers.get(item.offerId);
+    const move = item.moveId === undefined ? null : moves.get(item.moveId);
     if (!sequenceOf(item.id, "transfer-history") || !HISTORY_TYPES.has(item.type) ||
-        !offers.has(item.offerId) || !validId(item.playerId) || !validId(item.playerName) ||
+        !offer || item.playerId !== offer.playerId || item.playerName !== offer.playerName ||
         !isTransferCalendarDate(item.date) || item.date > currentDate || typeof item.note !== "string" || !item.note.trim() ||
-        (item.moveId !== undefined && !moves.has(item.moveId))) return false;
+        (item.moveId !== undefined && (!move || move.offerId !== item.offerId)) ||
+        (["transfer-completed", "loan-returned"].includes(item.type) && !move)) return false;
     highestHistory = Math.max(highestHistory, sequenceOf(item.id, "transfer-history"));
   }
   return state.nextHistorySequence > highestHistory;
