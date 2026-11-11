@@ -680,7 +680,7 @@ export function mountApp(root) {
   }
 
   function render() {
-    const shell = node("div", "app-shell");
+    const shell = node("div", state.view === "dashboard" ? "app-shell dashboard-shell" : "app-shell");
     const header = node("header", "topbar");
     const brand = node("div", "brand-lockup");
     brand.append(node("span", "brand-mark", "FA"), node("span", "brand-name", "FOOTBALL AGENT"));
