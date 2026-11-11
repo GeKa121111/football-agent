@@ -8,7 +8,7 @@ const VALID_CONTACT_OUTCOMES = new Set(["pending", "positive", "neutral", "negat
 import { SCOUTING_SCOUTS, getScoutingRoster } from "./scouting.js";
 
 const FOLLOW_UP_TASK_CATEGORY = "talent-follow-up";
-const MAX_PROSPECTS_PER_SCOUT = 6;
+export const MAX_PROSPECTS_PER_SCOUT = 6;
 const VALID_ASSIGNMENT_REASONS = new Set(["manual", "contract-signed"]);
 const VALID_SCOUT_IDS = new Set(SCOUTING_SCOUTS.map((scout) => scout.id));
 
@@ -363,7 +363,7 @@ export function assignTalentProspectStaff(save, playerId, scoutId, reason = "man
       return { changed: false, save, error: "وصل الكشاف إلى الحد الأقصى: 6 ملفات مواهب نشطة." };
     }
   }
-  if ((entry.activity?.length ?? 0) >= MAX_ACTIVITY_EVENTS) {
+  if ((entry.activity?.length ?? 0) >= MAX_ACTIVITY_EVENTS && reason !== "contract-signed") {
     return { changed: false, save, error: "وصل سجل نشاط اللاعب إلى الحد الأقصى." };
   }
 
@@ -384,7 +384,7 @@ export function assignTalentProspectStaff(save, playerId, scoutId, reason = "man
     ...entry,
     ...(scoutId ? { assignedScoutId: scoutId } : { assignedScoutId: undefined }),
     updatedOn: currentDate,
-    activity: [...(entry.activity ?? []), event]
+    activity: [...(entry.activity ?? []), event].slice(-MAX_ACTIVITY_EVENTS)
   };
   const entries = pipeline.entries.map((item) =>
     item.id === entry.id ? updatedEntry : item
