@@ -160,3 +160,13 @@ test("merges newly added squad players without resetting existing development pr
   assert.equal(new Set(merged.players.map((player) => player.playerId)).size, 432);
   assert.equal(mergePlayerDevelopmentRoster(merged, getWorldSquadPlayers()), merged);
 });
+
+test("records a complete weekly training session for every member of the expanded roster", () => {
+  const players = getWorldSquadPlayers();
+  const initial = createInitialPlayerDevelopmentState(players);
+  const trained = advancePlayerDevelopmentDay(initial, "2026-07-06", 1);
+  assert.equal(players.length, 432);
+  assert.equal(trained.trainingHistory.length, 432);
+  assert.equal(new Set(trained.trainingHistory.map((session) => session.playerId)).size, 432);
+  assert.equal(isValidPlayerDevelopmentState(trained, 1), true);
+});
