@@ -1,4 +1,14 @@
 const MATCH_MINUTES = 90;
+
+export const MATCH_SIMULATION_BALANCE = Object.freeze({
+  attackChancePerMinute: 0.33,
+  shotChancePerAttack: 0.60,
+  targetShotBaseChance: 0.43,
+  goalConversionBaseChance: 0.34,
+  foulChancePerAttack: 0.48,
+  yellowCardChancePerAttack: 0.05,
+  injuryChancePerMinute: 0.0026
+});
 const REQUIRED_LINEUP_SIZE = 11;
 const MATCH_ROLES = new Set(["هجوم", "وسط", "دفاع", "حراسة"]);
 
@@ -98,10 +108,10 @@ function weightedPick(players, weightFor, random) {
 }
 
 function scorerWeight(player) {
-  return player.role === "هجوم" ? 4.5
-    : player.role === "وسط" ? 2.4
-      : player.role === "دفاع" ? 0.9
-        : 0.05;
+  return player.role === "هجوم" ? 4.2
+    : player.role === "وسط" ? 2.5
+      : player.role === "دفاع" ? 1.0
+        : 0.03;
 }
 
 function assistWeight(player) {
@@ -220,7 +230,7 @@ export function simulateMatch(fixture) {
   );
 
   for (let minute = 1; minute <= durationMinutes; minute += 1) {
-    if (random() < 0.24) {
+    if (random() < MATCH_SIMULATION_BALANCE.attackChancePerMinute) {
       const attacking = random() < homePossessionShare ? home : away;
       const defending = attacking === home ? away : home;
       attacking.stats.attacks += 1;
@@ -240,9 +250,9 @@ export function simulateMatch(fixture) {
             scorer.shotsOnTarget += 1;
             attacking.stats.shotsOnTarget += 1;
             const goalChance = clamp(
-              0.23 + (scorer.rating - defending.goalkeeper.rating) * 0.006,
-              0.12,
-              0.39
+              MATCH_SIMULATION_BALANCE.goalConversionBaseChance + (scorer.rating - defending.goalkeeper.rating) * 0.005,
+              0.18,
+              0.48
             );
 
             if (random() < goalChance) {
@@ -267,11 +277,13 @@ export function simulateMatch(fixture) {
             }
           }
         }
-      } else if (random() < 0.13) {
-        attacking.stats.fouls += 1;
       }
 
-      if (random() < 0.012) {
+      if (random() < MATCH_SIMULATION_BALANCE.foulChancePerAttack) {
+        defending.stats.fouls += 1;
+      }
+
+      if (random() < MATCH_SIMULATION_BALANCE.yellowCardChancePerAttack) {
         const carded = weightedPick(
           attacking.players.filter((player) => player.role !== "حراسة"),
           (player) => player.role === "دفاع" ? 2.2 : player.role === "وسط" ? 1.8 : 1,
@@ -291,7 +303,7 @@ export function simulateMatch(fixture) {
       }
     }
 
-    if (random() < 0.0035) {
+    if (random() < MATCH_SIMULATION_BALANCE.injuryChancePerMinute) {
       const injuredTeam = random() < homePossessionShare ? home : away;
       const injured = weightedPick(
         injuredTeam.players.filter((player) => player.role !== "حراسة"),
@@ -355,7 +367,7 @@ export function simulateMatch(fixture) {
     id: fixture.id,
     date: fixture.date ?? null,
     competitionId: fixture.competitionId ?? null,
-    simulationVersion: 1,
+    simulationVersion: 2,
     status: "played",
     durationMinutes,
     home: toTeamSummary(home, homePossession),
