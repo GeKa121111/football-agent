@@ -3,6 +3,11 @@ const OFFER_VALIDITY_DAYS = 30;
 const MAX_OFFERS = 50;
 const MAX_CONTRACTS = 100;
 const MAX_HISTORY = 300;
+const MAX_INTERACTIONS = 300;
+const INTERACTION_KINDS = new Set(["message", "call", "meeting"]);
+const INTERACTION_STATUSES = new Set(["pending_response", "scheduled", "resolved", "missed"]);
+const INTERACTION_OUTCOMES = new Set(["positive", "neutral", "negative"]);
+const REPRESENTATION_TYPES = new Set(["exclusive", "non-exclusive"]);
 
 const OFFER_STATUSES = new Set(["pending", "countered", "accepted", "rejected", "expired"]);
 const CONTRACT_STATUSES = new Set(["active", "terminated", "expired"]);
@@ -16,6 +21,11 @@ const HISTORY_TYPES = new Set([
   "contract-signed",
   "contract-renewed",
   "renewal-offer-sent",
+  "message-sent",
+  "message-replied",
+  "meeting-scheduled",
+  "meeting-completed",
+  "meeting-missed",
   "contract-terminated",
   "contract-expired"
 ]);
@@ -75,7 +85,8 @@ function isValidPlayerPreferences(value) {
     Number.isInteger(value.loyalty) && value.loyalty >= 1 && value.loyalty <= 5 &&
     Number.isInteger(value.professionalism) && value.professionalism >= 1 && value.professionalism <= 5 &&
     Number.isInteger(value.preferredCommissionRate) && value.preferredCommissionRate >= 5 && value.preferredCommissionRate <= 15 &&
-    CONTRACT_TERMS.includes(value.preferredTermDays);
+    CONTRACT_TERMS.includes(value.preferredTermDays) &&
+    (value.prefersExclusive === undefined || typeof value.prefersExclusive === "boolean");
 }
 
 /**
@@ -108,7 +119,8 @@ export function getPlayerRepresentationProfile(player) {
     loyalty,
     professionalism,
     preferredCommissionRate,
-    preferredTermDays
+    preferredTermDays,
+    prefersExclusive: loyalty >= 4
   };
 }
 
@@ -154,6 +166,63 @@ function buildPlayerCounterOffer(offer) {
   };
 }
 
+
+function normalizeRepresentationType(value) {
+  return value === "non-exclusive" ? "non-exclusive" : "exclusive";
+}
+
+function isValidRepresentationType(value) {
+  return REPRESENTATION_TYPES.has(value);
+}
+
+function currentAgencyReputation(representation) {
+  return Number.isInteger(representation?.reputationScore)
+    ? clamp(representation.reputationScore, 0, 100)
+    : 50;
+}
+
+function adjustAgencyReputation(representation, delta) {
+  return {
+    ...representation,
+    reputationScore: clamp(currentAgencyReputation(representation) + delta, 0, 100)
+  };
+}
+
+function interactionList(representation) {
+  return Array.isArray(representation?.interactions) ? representation.interactions : [];
+}
+
+function interactionSequence(representation) {
+  return Number.isSafeInteger(representation?.nextInteractionSequence) &&
+    representation.nextInteractionSequence > 0
+    ? representation.nextInteractionSequence
+    : 1;
+}
+
+function replaceInteraction(representation, interactionId, patch) {
+  return {
+    ...representation,
+    interactions: interactionList(representation).map((interaction) =>
+      interaction.id === interactionId ? { ...interaction, ...patch } : interaction
+    )
+  };
+}
+
+function relationshipLabel(score) {
+  if (score >= 80) return "ممتازة";
+  if (score >= 60) return "جيدة";
+  if (score >= 40) return "متوسطة";
+  return "متوترة";
+}
+
+export function getRepresentationRelationshipLabel(score) {
+  return Number.isInteger(score) ? relationshipLabel(clamp(score, 0, 100)) : "غير محددة";
+}
+
+export function getAgencyReputationScore(representation) {
+  return currentAgencyReputation(representation);
+}
+
 function nextHistory(representation, type, player, date, note, references = {}) {
   const entry = {
     id: "representation-history-" + representation.nextHistorySequence,
@@ -194,12 +263,18 @@ function createContract(save, offer, terms, currentDate, resolution) {
     rating: offer.rating,
     potential: offer.potential,
     playerPreferences: getOfferPreferences(offer),
+    representationType: normalizeRepresentationType(terms.representationType ?? offer.representationType),
     signedOn: currentDate,
     expiresOn: addDays(currentDate, terms.termDays),
     termDays: terms.termDays,
     commissionRate: terms.commissionRate,
     renewals: [],
-    relationshipScore: resolution === "counter-accepted" ? 68 : resolution === "agency-countered" ? 74 : 70,
+    relationshipScore: clamp(
+      (resolution === "counter-accepted" ? 68 : resolution === "agency-countered" ? 74 : 70) -
+      (normalizeRepresentationType(terms.representationType ?? offer.representationType) === "non-exclusive" ? 8 : 0),
+      0,
+      100
+    ),
     status: "active"
   };
   let updated = {
@@ -293,8 +368,11 @@ export function createInitialRepresentationState() {
     nextOfferSequence: 1,
     nextContractSequence: 1,
     nextHistorySequence: 1,
+    nextInteractionSequence: 1,
+    reputationScore: 50,
     offers: [],
     contracts: [],
+    interactions: [],
     history: []
   };
 }
