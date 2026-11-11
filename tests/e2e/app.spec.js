@@ -524,7 +524,7 @@ test.describe("Inbox archive", () => {
     const dialog = page.getByRole("dialog", { name: "صندوق الوارد" });
     await expect(dialog).toBeVisible();
     await expect(dialog.locator(".inbox-modal-item")).toHaveCount(15);
-    await expect(dialog.locator(".event-history-count")).toHaveText("15 رسالة");
+    await expect(dialog.locator(".event-history-count")).toHaveText("١٥ رسالة");
 
     const search = dialog.getByRole("searchbox", { name: "البحث في صندوق الوارد" });
     await search.fill("رسالة رقم 14");
