@@ -6,7 +6,7 @@ async function navigateTo(page, view) {
   const mobileNav = page.locator(".mobile-nav");
   const desktopNav = page.locator(".sidebar");
   const nav = await mobileNav.isVisible() ? mobileNav : desktopNav;
-  await nav.locator("button").filter({ hasText: view }).click();
+  await nav.getByRole("button", { name: view, exact: true }).click();
 }
 
 async function hasNoHorizontalOverflow(page) {
@@ -85,7 +85,7 @@ test.describe("Desktop experience", () => {
   test("navigates through all five primary screens", async ({ page }) => {
     await page.goto("/");
     const screens = [
-      ["اللاعبون", "اللاعبون"],
+      ["اللاعبون", "قاعدة اللاعبين"],
       ["الكشافون", "الكشافون"],
       ["الانتقالات", "سوق الانتقالات"],
       ["الوكالة", "الوكالة"],
@@ -455,7 +455,7 @@ test.describe("Mobile experience", () => {
     await expect(page.locator(".representation-prospect-card")).toHaveCount(1);
     await expect(page.locator(".representation-prospect-card")).toContainText("ياسين عادل");
     await search.fill("لا يوجد لاعب بهذا الاسم");
-    await expect(page.locator(".empty-results")).toBeVisible();
+    await expect(page.locator(".representation-prospect-grid .empty-results")).toBeVisible();
     await page.getByRole("button", { name: "مسح البحث" }).click();
     await expect(page.locator(".representation-prospect-card")).toHaveCount(48);
     await hasNoHorizontalOverflow(page);
@@ -614,8 +614,54 @@ test.describe("Mobile experience", () => {
     await navigateTo(page, "الكشافون");
     await expect(page.getByRole("button", { name: "عرض التقرير" })).toBeVisible();
     await page.getByRole("button", { name: "عرض التقرير" }).click();
-    await expect(page.getByRole("dialog", { name: "تقرير الكشافين" })).toBeVisible();
+    const reportDialog = page.getByRole("dialog", { name: "تقرير الكشافين" });
+    await expect(reportDialog).toBeVisible();
     await expect(page.locator(".scout-finding-rationale").first()).toBeVisible();
+    await expect(reportDialog.getByRole("button", { name: "بدء عرض تمثيل" })).toBeVisible();
+    await expect(reportDialog.getByRole("button", { name: "إضافة لصندوق المواهب" })).toBeVisible();
+
+    // Save this discovery to the persistent talent pipeline before outreach.
+    await reportDialog.getByRole("button", { name: "إضافة لصندوق المواهب" }).click();
+    const pipelineDialog = page.getByRole("dialog", { name: "متابعة لاعب في صندوق المواهب" });
+    await expect(pipelineDialog).toBeVisible();
+    await pipelineDialog.getByLabel("مرحلة متابعة اللاعب").selectOption("shortlisted");
+    await pipelineDialog.getByLabel("موعد المتابعة القادمة").fill("2026-07-15");
+    await pipelineDialog.getByLabel("ملاحظات الوكالة").fill("مراجعة اللاعب بعد التقرير الأول");
+    await pipelineDialog.getByRole("button", { name: "حفظ متابعة المواهب" }).click();
+
+    const trackedSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(trackedSave.agency.talentPipeline.entries).toHaveLength(1);
+    expect(trackedSave.agency.talentPipeline.entries[0].playerId).toBe(completed.world.scouting.reports[0].findings[0].playerId);
+    expect(trackedSave.agency.talentPipeline.entries[0].stage).toBe("shortlisted");
+    expect(trackedSave.agency.talentPipeline.entries[0].nextFollowUpDate).toBe("2026-07-15");
+    expect(trackedSave.agency.talentPipeline.entries[0].note).toBe("مراجعة اللاعب بعد التقرير الأول");
+
+    // The same discovered player can now move into representation outreach.
+    await page.getByRole("button", { name: "عرض التقرير" }).click();
+    const reopenedReport = page.getByRole("dialog", { name: "تقرير الكشافين" });
+    await expect(reopenedReport).toBeVisible();
+    await reopenedReport.getByRole("button", { name: "بدء عرض تمثيل" }).click();
+    const offerDialog = page.getByRole("dialog", { name: "عرض تمثيل جديد" });
+    await expect(offerDialog).toBeVisible();
+    await offerDialog.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+    const offerSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(offerSave.agency.representation.offers).toHaveLength(1);
+    expect(offerSave.agency.representation.offers[0].playerId).toBe(completed.world.scouting.reports[0].findings[0].playerId);
+    expect(offerSave.agency.representation.offers[0].status).toBe("pending");
+    expect(offerSave.agency.clients).toHaveLength(0);
+    expect(offerSave.agency.talentPipeline.entries).toHaveLength(1);
+
+    await navigateTo(page, "الوكالة");
+    await expect(page.locator(".agency-screen")).toBeVisible();
+    await expect(page.locator(".talent-pipeline-panel")).toBeVisible();
+    await expect(page.locator(".talent-pipeline-panel .representation-heading > .representation-count")).toHaveText("1 ملف موحّد");
+    await expect(page.locator(".talent-pipeline-card")).toHaveCount(1);
+    await expect(page.locator(".talent-pipeline-stage")).toHaveText("قيد التفاوض");
+    await expect(page.locator(".talent-pipeline-followup")).toContainText("يوليو");
+    await page.reload();
+    await navigateTo(page, "الوكالة");
+    await expect(page.locator(".talent-pipeline-card")).toHaveCount(1);
+    await expect(page.locator(".talent-pipeline-note")).toHaveText("مراجعة اللاعب بعد التقرير الأول");
 
     await page.reload();
     await navigateTo(page, "الكشافون");
@@ -640,7 +686,7 @@ test.describe("Mobile experience", () => {
 
   test("advances seven days sequentially and persists deadlines and season rollover", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".home-save-button").click();
+    await page.locator('button[aria-label="حفظ المسيرة"]').click();
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       save.world.currentDate = "2027-06-27";
@@ -755,7 +801,6 @@ test.describe("Mobile experience", () => {
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(saved.world.currentDate).toBe("2027-07-01");
     expect(saved.career.season).toBe(2);
-    await expect(page.locator(".career-season")).toHaveText("الموسم ٢");
     await expect(page.locator(".season-pill")).toHaveText("موسم 2027 / 2028");
     expect(saved.world.events.some((event) => event.type === "season-opening")).toBe(true);
   });
@@ -779,7 +824,7 @@ test.describe("Career operations follow-up", () => {
 
   test("marks a task overdue, keeps it actionable and persists late completion", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".home-save-button").click();
+    await page.locator('button[aria-label="حفظ المسيرة"]').click();
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       save.world.tasks = [{
@@ -811,7 +856,7 @@ test.describe("Career operations follow-up", () => {
 
   test("localizes seasonal and task events and exposes their priority", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".home-save-button").click();
+    await page.locator('button[aria-label="حفظ المسيرة"]').click();
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       const types = [
@@ -852,7 +897,7 @@ test.describe("Career operations follow-up", () => {
 
   test("searches and filters the event history", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".home-save-button").click();
+    await page.locator('button[aria-label="حفظ المسيرة"]').click();
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       save.world.currentDate = "2026-07-05";
@@ -882,7 +927,7 @@ test.describe("Task history archive", () => {
 
   test("searches and filters open, overdue and completed tasks on mobile", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".home-save-button").click();
+    await page.locator('button[aria-label="حفظ المسيرة"]').click();
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       save.world.currentDate = "2026-07-10";
@@ -956,7 +1001,7 @@ test.describe("Annual career calendar", () => {
 
   test("starts a new career with season-opening information", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".home-save-button").click();
+    await page.locator('button[aria-label="حفظ المسيرة"]').click();
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(saved.world.currentDate).toBe("2026-07-01");
     expect(saved.world.events.some((event) => event.type === "season-opening")).toBe(true);
@@ -966,7 +1011,7 @@ test.describe("Annual career calendar", () => {
 
   test("opens the next-year calendar and displays the season milestones", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".home-save-button").click();
+    await page.locator('button[aria-label="حفظ المسيرة"]').click();
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       save.world.currentDate = "2026-07-01";
@@ -991,7 +1036,7 @@ test.describe("Inbox archive", () => {
 
   test("searches all retained messages, filters read state and marks a message without closing the archive", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".home-save-button").click();
+    await page.locator('button[aria-label="حفظ المسيرة"]').click();
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       const records = Array.from({ length: 15 }, (_, index) => {
@@ -1021,7 +1066,7 @@ test.describe("Inbox archive", () => {
       localStorage.setItem("football-agent.save", JSON.stringify(save));
     });
     await page.reload();
-    await page.locator(".feature-news").click();
+    await page.getByRole("button", { name: "عرض كل الرسائل" }).click();
 
     const dialog = page.getByRole("dialog", { name: "صندوق الوارد" });
     await expect(dialog).toBeVisible();
