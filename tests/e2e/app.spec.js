@@ -468,6 +468,7 @@ test.describe("Task history archive", () => {
           description: "تم إنجازه بعد الموعد.",
           createdDate: "2026-07-01",
           dueDate: "2026-07-08",
+          overdueDate: "2026-07-09",
           completedDate: "2026-07-09",
           completedLate: true,
           category: "season-review",
@@ -492,6 +493,11 @@ test.describe("Task history archive", () => {
     await dialog.getByLabel("تصفية حالة المهمة").selectOption("overdue");
     await expect(dialog.locator(".task-history-row")).toHaveCount(1);
     await expect(dialog.locator(".task-history-status")).toHaveText("متأخرة");
+    const expectedOverdueDate = await page.evaluate(() => new Intl.DateTimeFormat("ar-EG", {
+      day: "numeric", month: "long", year: "numeric"
+    }).format(new Date("2026-07-04T12:00:00")));
+    await expect(dialog.locator(".task-history-row .career-activity-copy small"))
+      .toContainText("متأخرة منذ: " + expectedOverdueDate);
 
     await dialog.getByLabel("تصفية حالة المهمة").selectOption("completed");
     await expect(dialog.locator(".task-history-row")).toHaveCount(1);
