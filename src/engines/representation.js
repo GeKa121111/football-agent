@@ -141,19 +141,16 @@ export function getRepresentationContractCommission(contract, currentDate) {
 function playerAcceptsTerms(offer, terms) {
   const preferences = getOfferPreferences(offer);
   const commissionAllowance = preferences.preferredCommissionRate + (offer.round >= 2 ? 1 : 0);
-  const minimumTerm = offer.round >= 3
-    ? Math.max(365, preferences.preferredTermDays - 365)
-    : preferences.preferredTermDays;
-  return terms.commissionRate <= commissionAllowance && terms.termDays >= minimumTerm;
+  return terms.commissionRate <= commissionAllowance &&
+    terms.termDays === preferences.preferredTermDays;
 }
 
 function buildPlayerCounterOffer(offer) {
   const preferences = getOfferPreferences(offer);
   const concession = offer.round >= 2 ? 1 : 0;
-  const termConcession = offer.round >= 3 ? 365 : 0;
   return {
     commissionRate: clamp(preferences.preferredCommissionRate + concession, 5, 15),
-    termDays: Math.max(365, preferences.preferredTermDays - termConcession)
+    termDays: preferences.preferredTermDays
   };
 }
 
