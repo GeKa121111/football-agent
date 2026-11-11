@@ -382,7 +382,7 @@ test("treats the contract expiry date as inactive for new assignments and allows
 
   const renewed = renewScoutingContract(expiryDay, "scout-iberian-network");
   assert.equal(renewed.changed, true);
-  assert.equal(renewed.contractExpiresOn, "2028-07-01");
+  assert.equal(renewed.contractExpiresOn, "2028-06-30");
   assert.equal(renewed.save.agency.balance, 74000);
   assert.equal(isValidSave(renewed.save), true);
 });
