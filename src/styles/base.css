@@ -698,3 +698,126 @@ button:focus-visible, input:focus-visible, select:focus-visible {
     transform: none !important;
   }
 }
+
+
+/* Phase 5: persistent career calendar, tasks and inbox */
+.career-operations {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 5px 14px;
+}
+.career-operations-panel {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(143,163,197,.17);
+  border-radius: 14px;
+  background: linear-gradient(145deg,rgba(20,29,48,.96),rgba(10,16,29,.97));
+}
+.career-operations-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+.career-operations-heading h2 {
+  margin: 0;
+  color: #f0efff;
+  font-size: 12px;
+  font-weight: 900;
+}
+.career-count {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border: 1px solid rgba(85,217,232,.18);
+  border-radius: 999px;
+  color: #92dce5;
+  background: rgba(85,217,232,.07);
+  font-size: 8px;
+  font-weight: 800;
+}
+.career-task-list, .career-message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.career-task-row, .career-message-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 10px;
+  background: rgba(4,10,21,.28);
+}
+.career-message-row.is-unread { border-color: rgba(245,197,107,.22); background: rgba(245,197,107,.045); }
+.career-activity-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.career-activity-copy strong {
+  color: #eeeaff;
+  font-size: 10px;
+  font-weight: 900;
+}
+.career-activity-copy span {
+  color: #9aa6bd;
+  font-size: 8px;
+  line-height: 1.7;
+}
+.career-activity-copy small {
+  color: #73829d;
+  font-size: 7px;
+}
+.task-complete-button, .message-read-button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid rgba(104,217,160,.28);
+  border-radius: 8px;
+  color: #a9ebc4;
+  background: rgba(65,173,113,.1);
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 900;
+}
+.message-read-button {
+  border-color: rgba(245,197,107,.24);
+  color: #f1d18f;
+  background: rgba(245,197,107,.08);
+}
+.message-read-state {
+  flex: 0 0 auto;
+  color: #73c99b;
+  font-size: 7px;
+}
+.career-activity-empty {
+  margin: 0;
+  padding: 15px 8px;
+  border: 1px dashed rgba(143,163,197,.16);
+  border-radius: 9px;
+  color: #8492ac;
+  font-size: 9px;
+  line-height: 1.8;
+  text-align: center;
+}
+.inbox-modal-item {
+  padding: 11px 0;
+  border-bottom: 1px solid rgba(143,163,197,.14);
+}
+.inbox-modal-item:last-child { border-bottom: 0; }
+.inbox-modal-item > strong { color: #eeeaff; font-size: 12px; }
+.inbox-modal-item .message-read-button { margin-top: 5px; }
+@media (max-width: 760px) {
+  .career-operations { grid-template-columns: minmax(0,1fr); margin-inline: 2px; }
+  .career-operations-panel { padding: 10px; }
+}
+@media (max-width: 360px) {
+  .career-task-row, .career-message-row { gap: 5px; padding: 7px; }
+  .task-complete-button, .message-read-button { padding-inline: 6px; }
+}
