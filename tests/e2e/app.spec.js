@@ -649,7 +649,7 @@ test.describe("Inbox archive", () => {
   test("assigns a specialist scout and persists experience after the report", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الكشافون");
-    await expect(page.locator(".scout-staff-card")).toHaveCount(4);
+    await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)")).toHaveCount(4);
 
     await page.getByRole("button", { name: /إطلاق بعثة كشف/ }).click();
     await page.getByLabel("مستوى البعثة").selectOption("local");
