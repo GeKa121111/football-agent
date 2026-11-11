@@ -99,6 +99,9 @@ export function createAppShell({
     bottomNav.append(button);
   });
 
-  shell.append(header, layout, bottomNav);
+  const skipLink = node("a", "rebuild-skip-link", "تخطي إلى المحتوى");
+  skipLink.href = "#main-content";
+
+  shell.append(skipLink, header, layout, bottomNav);
   return shell;
 }
