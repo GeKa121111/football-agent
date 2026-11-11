@@ -147,6 +147,18 @@ test("expires stale offers as career time advances", () => {
   assert.equal(isValidTransferState(advanced.save.world.transfers, "2026-07-16", advanced.save.agency.clients, advanced.save.agency.representation), true);
 });
 
+test("expires an agreed deal that misses the end of its registration window", () => {
+  const save = makeSave();
+  const sent = createTransferOffer(save, "player-1", "club-target", "permanent",
+    { ...permanentTerms, feeEur: 2_000_000 }, "2026-08-31", database);
+  const agreed = evaluateTransferOffer(sent.save, sent.offer.id, "2026-08-31", database);
+  assert.equal(agreed.status, "agreed");
+  const advanced = advanceTransferState(agreed.save, "2026-09-01");
+  assert.deepEqual(advanced.expiredOffers, [sent.offer.id]);
+  assert.equal(advanced.save.world.transfers.offers[0].status, "expired");
+  assert.equal(isValidTransferState(advanced.save.world.transfers, "2026-09-01", advanced.save.agency.clients, advanced.save.agency.representation), true);
+});
+
 test("rejects malformed, duplicated or financially inconsistent transfer state", () => {
   const sent = send();
   const duplicate = structuredClone(sent.save.world.transfers);
