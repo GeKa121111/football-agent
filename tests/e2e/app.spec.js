@@ -636,8 +636,19 @@ test.describe("Mobile experience", () => {
     expect(trackedSave.agency.talentPipeline.entries[0].nextFollowUpDate).toBe("2026-07-15");
     expect(trackedSave.agency.talentPipeline.entries[0].note).toBe("مراجعة اللاعب بعد التقرير الأول");
 
-    // Record a first contact before making a representation offer.
+    // Assign an active scout and verify the agency workload panel.
     await navigateTo(page, "الوكالة");
+    await expect(page.locator(".talent-staff-panel")).toBeVisible();
+    await expect(page.locator(".talent-staff-card")).toHaveCount(4);
+    await page.locator(".talent-pipeline-manage-button").click();
+    const assignmentDialog = page.getByRole("dialog", { name: "متابعة لاعب في صندوق المواهب" });
+    await assignmentDialog.getByLabel("مسؤول ملف اللاعب").selectOption("scout-north-africa");
+    await assignmentDialog.getByRole("button", { name: "حفظ متابعة المواهب" }).click();
+    let assignedSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(assignedSave.agency.talentPipeline.entries[0].assignedScoutId).toBe("scout-north-africa");
+    expect(page.locator(".talent-staff-card").filter({ hasText: "عمر شريف" })).toBeTruthy();
+
+    // Record a first contact before making a representation offer.
     await page.locator(".talent-pipeline-contact-button").click();
     const contactDialog = page.getByRole("dialog", { name: "تواصل أولي مع ياسين عادل" });
     await expect(contactDialog).toBeVisible();
@@ -700,7 +711,9 @@ test.describe("Mobile experience", () => {
     await page.locator(".talent-pipeline-offer-button").click();
     const offerDialog = page.getByRole("dialog", { name: "عرض تمثيل جديد" });
     await expect(offerDialog).toBeVisible();
-    await offerDialog.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+    await offerDialog.getByLabel("نسبة العمولة").selectOption("15");
+    await offerDialog.getByLabel("مدة العقد").selectOption("1095");
+    await offerDialog.getRoleByRole?.("button", { name: "إرسال عرض التمثيل" }).click();
     const offerSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(offerSave.agency.representation.offers).toHaveLength(1);
     expect(offerSave.agency.representation.offers[0].playerId).toBe(completed.world.scouting.reports[0].findings[0].playerId);
@@ -708,13 +721,35 @@ test.describe("Mobile experience", () => {
     expect(offerSave.agency.clients).toHaveLength(0);
     expect(offerSave.agency.talentPipeline.entries).toHaveLength(1);
 
+    await page.locator(".representation-evaluate-button").click();
+    await expect(page.locator(".representation-offer-row.is-countered")).toBeVisible();
+    await page.locator(".representation-accept-button").click();
+    const signedSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const signedEntry = signedSave.agency.talentPipeline.entries[0];
+    expect(signedSave.agency.clients).toContain(signedEntry.playerId);
+    expect(signedSave.agency.representation.contracts[0].status).toBe("active");
+    expect(signedEntry.assignedScoutId).toBeUndefined();
+    expect(signedEntry.nextFollowUpDate).toBeNull();
+    expect(signedEntry.activity.at(-1)).toMatchObject({ type: "assignment", reason: "contract-signed" });
+    const closedProspectTask = signedSave.world.tasks.find((task) => task.id === pendingFollowUpTaskId);
+    expect(closedProspectTask.status).toBe("completed");
+    expect(closedProspectTask.completionReason).toBe("contract-signed");
+
     await navigateTo(page, "الوكالة");
     await expect(page.locator(".agency-screen")).toBeVisible();
     await expect(page.locator(".talent-pipeline-panel")).toBeVisible();
     await expect(page.locator(".talent-pipeline-panel .representation-heading > .representation-count")).toHaveText("1 ملف موحّد");
     await expect(page.locator(".talent-pipeline-card")).toHaveCount(1);
-    await expect(page.locator(".talent-pipeline-stage")).toHaveText("قيد التفاوض");
-    await expect(page.locator(".talent-pipeline-followup")).toContainText("يوليو");
+    await expect(page.locator(".talent-pipeline-stage")).toHaveText("عميل حالي");
+    await expect(page.locator(".talent-pipeline-followup")).toHaveCount(0);
+    await page.locator(".representation-message-button").click();
+    const clientSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(clientSave.agency.representation.interactions[0].kind).toBe("message");
+    await page.locator(".representation-client-dossier-button").click();
+    const signedClientDossier = page.getByRole("dialog", { name: "ملف العميل" });
+    await expect(signedClientDossier.locator(".representation-dossier-hero h3")).toHaveText(signedEntry.playerName);
+    await expect(signedClientDossier.getByRole("heading", { name: "الرسائل والاجتماعات" })).toBeVisible();
+    await page.keyboard.press("Escape");
     await page.reload();
     await navigateTo(page, "الوكالة");
     await expect(page.locator(".talent-pipeline-card")).toHaveCount(1);
