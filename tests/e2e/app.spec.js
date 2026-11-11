@@ -636,7 +636,45 @@ test.describe("Mobile experience", () => {
     expect(trackedSave.agency.talentPipeline.entries[0].nextFollowUpDate).toBe("2026-07-15");
     expect(trackedSave.agency.talentPipeline.entries[0].note).toBe("مراجعة اللاعب بعد التقرير الأول");
 
+    // Record a first contact before making a representation offer.
+    await navigateTo(page, "الوكالة");
+    await page.locator(".talent-pipeline-contact-button").click();
+    const contactDialog = page.getByRole("dialog", { name: "تواصل أولي مع ياسين عادل" });
+    await expect(contactDialog).toBeVisible();
+    await contactDialog.getByLabel("طريقة التواصل").selectOption("call");
+    await contactDialog.getByLabel("نتيجة التواصل").selectOption("pending");
+    await contactDialog.getByLabel("موعد المتابعة القادمة").fill("2026-07-10");
+    await contactDialog.getByLabel("ملخص التواصل").fill("تحدثنا مع اللاعب وينتظر مراجعة العرض.");
+    await contactDialog.getByRole("button", { name: "حفظ التواصل في سجل اللاعب" }).click();
+
+    const contactedSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const contactedEntry = contactedSave.agency.talentPipeline.entries[0];
+    expect(contactedEntry.stage).toBe("contacted");
+    expect(contactedEntry.note).toBe("مراجعة اللاعب بعد التقرير الأول");
+    expect(contactedEntry.lastContactDate).toBe("2026-07-08");
+    expect(contactedEntry.nextFollowUpDate).toBe("2026-07-10");
+    expect(contactedEntry.activity.filter((event) => event.type === "stage")).toHaveLength(2);
+    expect(contactedEntry.activity.filter((event) => event.type === "contact")).toHaveLength(1);
+    expect(contactedEntry.activity.at(-1)).toMatchObject({
+      type: "contact",
+      kind: "call",
+      outcome: "pending",
+      followUpDate: "2026-07-10",
+      note: "تحدثنا مع اللاعب وينتظر مراجعة العرض."
+    });
+    expect(contactedSave.agency.clients).toHaveLength(0);
+    expect(contactedSave.agency.representation.offers).toHaveLength(0);
+    expect(contactedSave.agency.representation.contracts).toHaveLength(0);
+    expect(contactedSave.agency.representation.interactions).toHaveLength(0);
+
+    await page.locator(".talent-pipeline-history-button").click();
+    const historyDialog = page.getByRole("dialog", { name: "سجل نشاط ياسين عادل" });
+    await expect(historyDialog).toContainText("تواصل مكالمة · بانتظار الرد");
+    await expect(historyDialog).toContainText("تحدثنا مع اللاعب وينتظر مراجعة العرض.");
+    await historyDialog.getByRole("button", { name: "إغلاق" }).last().click();
+
     // The same discovered player can now move into representation outreach.
+    await navigateTo(page, "الكشافون");
     await page.getByRole("button", { name: "عرض التقرير" }).click();
     const reopenedReport = page.getByRole("dialog", { name: "تقرير الكشافين" });
     await expect(reopenedReport).toBeVisible();
