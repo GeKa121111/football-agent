@@ -1203,6 +1203,14 @@ export function mountApp(root) {
       duration.append(option);
     });
     duration.value = player.age <= 20 ? "365" : "730";
+    const representationType = node("select", "filter-select");
+    representationType.setAttribute("aria-label", "نوع التمثيل");
+    [["exclusive", "تمثيل حصري"], ["non-exclusive", "تمثيل غير حصري"]].forEach(([value, label]) => {
+      const option = node("option", "", label);
+      option.value = value;
+      representationType.append(option);
+    });
+    representationType.value = getPlayerRepresentationProfile(player).prefersExclusive ? "exclusive" : "non-exclusive";
     const addField = (label, control) => {
       const wrapper = node("label", "scout-form-field representation-form-field");
       wrapper.append(node("span", "", label), control);
@@ -1210,6 +1218,7 @@ export function mountApp(root) {
     };
     addField("نسبة عمولة الوكالة", commission);
     addField("مدة التمثيل", duration);
+    addField("نوع التمثيل", representationType);
     form.append(
       intro,
       node("p", "representation-form-note", "سيتم تسجيل العرض، وبعدها تقدر تراجع رد اللاعب أو شروطه المضادة. لا توجد عمولة محصلة قبل وجود دخل فعلي للاعب.")
@@ -1218,7 +1227,8 @@ export function mountApp(root) {
       const previousSave = state.save;
       const result = createRepresentationOfferInEngine(state.save, player, {
         commissionRate: Number(commission.value),
-        termDays: Number(duration.value)
+        termDays: Number(duration.value),
+        representationType: representationType.value
       });
       if (!result.changed) { toast(result.error); return; }
       state.save = result.save;
@@ -1251,7 +1261,15 @@ export function mountApp(root) {
       option.value = String(days);
       duration.append(option);
     });
-    duration.value = String(offer.termDays);
+    duration.value = String(offer.counterOffer.termDays);
+    const representationType = node("select", "filter-select");
+    representationType.setAttribute("aria-label", "نوع التمثيل في العرض المضاد");
+    [["exclusive", "تمثيل حصري"], ["non-exclusive", "تمثيل غير حصري"]].forEach(([value, label]) => {
+      const option = node("option", "", label);
+      option.value = value;
+      representationType.append(option);
+    });
+    representationType.value = offer.counterOffer.representationType ?? offer.representationType ?? "exclusive";
     const addField = (label, control) => {
       const wrapper = node("label", "scout-form-field representation-form-field");
       wrapper.append(node("span", "", label), control);
@@ -1259,6 +1277,7 @@ export function mountApp(root) {
     };
     addField("العمولة المقترحة من الوكالة", commission);
     addField("مدة العقد المقترحة", duration);
+    addField("نوع التمثيل المقترح", representationType);
     form.append(
       node("p", "representation-form-note", "دي الجولة " + offer.round + " من 3. اللاعب ممكن يقبل أو يرد بعرض أخير أو يرفض التفاوض.")
     );
@@ -1266,7 +1285,8 @@ export function mountApp(root) {
       const previousSave = state.save;
       const result = submitRepresentationCounterOfferInEngine(state.save, offer.id, {
         commissionRate: Number(commission.value),
-        termDays: Number(duration.value)
+        termDays: Number(duration.value),
+        representationType: representationType.value
       });
       if (!result.changed) { toast(result.error); return; }
       state.save = result.save;
@@ -1305,6 +1325,14 @@ export function mountApp(root) {
       duration.append(option);
     });
     duration.value = "730";
+    const representationType = node("select", "filter-select");
+    representationType.setAttribute("aria-label", "نوع التمثيل بعد التجديد");
+    [["exclusive", "تمثيل حصري"], ["non-exclusive", "تمثيل غير حصري"]].forEach(([value, label]) => {
+      const option = node("option", "", label);
+      option.value = value;
+      representationType.append(option);
+    });
+    representationType.value = getRepresentationContractType(contract, state.save.world.currentDate);
     form.append(
       node("p", "modal-copy", "تجديد عقد " + contract.playerName + ". مدة التجديد تبدأ بعد نهاية المدة الحالية ولا تلغي تاريخ العقد الأصلي."),
     );
@@ -1315,11 +1343,13 @@ export function mountApp(root) {
     };
     addField("عمولة التجديد", commission);
     addField("مدة التجديد", duration);
+    addField("نوع التمثيل بعد التجديد", representationType);
     form.append(actionButton("إرسال عرض التجديد", "scout-confirm-button representation-send-button", () => {
       const previousSave = state.save;
       const result = createRepresentationRenewalOfferInEngine(state.save, contract.id, {
         commissionRate: Number(commission.value),
-        termDays: Number(duration.value)
+        termDays: Number(duration.value),
+        representationType: representationType.value
       });
       if (!result.changed) { toast(result.error); return; }
       state.save = result.save;
@@ -1329,6 +1359,84 @@ export function mountApp(root) {
       } else state.save = previousSave;
     }));
     openModal("تجديد عقد التمثيل", [form], "إغلاق");
+  }
+
+  function sendRepresentationInteraction(contractId, kind) {
+    if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم نسجل التواصل."); return; }
+    const previousSave = state.save;
+    const result = createRepresentationInteractionInEngine(state.save, contractId, kind);
+    if (!result.changed) { toast(result.error); return; }
+    state.save = result.save;
+    if (saveCareer()) {
+      render();
+      toast(kind === "message" ? "تم إرسال رسالة للاعب." : "تم تسجيل المكالمة، والرد هيوصل مع تقدم الأيام.");
+    } else state.save = previousSave;
+  }
+
+  function openRepresentationMeeting(contractId) {
+    if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لا يمكن تحديد اجتماع."); return; }
+    const currentDate = state.save.world.currentDate;
+    const start = new Date(currentDate + "T00:00:00.000Z");
+    const addDays = (days) => {
+      const value = new Date(start);
+      value.setUTCDate(value.getUTCDate() + days);
+      return value.toISOString().slice(0, 10);
+    };
+    const meetingDate = node("input", "filter-select");
+    meetingDate.type = "date";
+    meetingDate.setAttribute("aria-label", "موعد الاجتماع");
+    meetingDate.min = addDays(1);
+    meetingDate.max = addDays(30);
+    meetingDate.value = addDays(3);
+    const form = node("div", "representation-offer-form");
+    const wrapper = node("label", "scout-form-field representation-form-field");
+    wrapper.append(node("span", "", "تاريخ الاجتماع"), meetingDate);
+    form.append(
+      node("p", "modal-copy", "اختار موعد خلال 30 يومًا. لو الاجتماع اتفوت بأكثر من أسبوع، ثقة اللاعب وسمعة الوكالة هيتأثروا."),
+      wrapper,
+      actionButton("تأكيد الموعد", "scout-confirm-button representation-send-button", () => {
+        const previousSave = state.save;
+        const result = createRepresentationInteractionInEngine(state.save, contractId, "meeting", meetingDate.value);
+        if (!result.changed) { toast(result.error); return; }
+        state.save = result.save;
+        if (saveCareer()) {
+          render();
+          toast("تم تحديد الاجتماع يوم " + formatHomeDate(meetingDate.value) + ".");
+        } else state.save = previousSave;
+      })
+    );
+    openModal("تحديد اجتماع مع اللاعب", [form], "إغلاق");
+  }
+
+  function openRepresentationMeetingOutcome(interactionId) {
+    if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لا يمكن تسجيل نتيجة الاجتماع."); return; }
+    const interaction = (state.save.agency.representation.interactions ?? []).find((item) => item.id === interactionId);
+    if (!interaction || interaction.status !== "scheduled") { toast("الاجتماع لم يعد مجدولًا."); return; }
+    const outcome = node("select", "filter-select");
+    outcome.setAttribute("aria-label", "نتيجة الاجتماع");
+    [["positive", "اجتماع ناجح — زادت الثقة"], ["neutral", "اجتماع عادي — تحسن بسيط"], ["negative", "اجتماع سيئ — تراجعت الثقة"]].forEach(([value, label]) => {
+      const option = node("option", "", label);
+      option.value = value;
+      outcome.append(option);
+    });
+    const form = node("div", "representation-offer-form");
+    const wrapper = node("label", "scout-form-field representation-form-field");
+    wrapper.append(node("span", "", "نتيجة اللقاء"), outcome);
+    form.append(
+      node("p", "modal-copy", "سجل نتيجة اجتماع " + interaction.playerName + ". الاختيار هيؤثر على مستوى الثقة وسمعة الوكالة."),
+      wrapper,
+      actionButton("حفظ نتيجة الاجتماع", "scout-confirm-button representation-send-button", () => {
+        const previousSave = state.save;
+        const result = completeRepresentationMeetingInEngine(state.save, interactionId, outcome.value);
+        if (!result.changed) { toast(result.error); return; }
+        state.save = result.save;
+        if (saveCareer()) {
+          render();
+          toast("تم تسجيل نتيجة الاجتماع وتحديث العلاقة مع اللاعب.");
+        } else state.save = previousSave;
+      })
+    );
+    openModal("نتيجة اجتماع اللاعب", [form], "إغلاق");
   }
 
   function evaluateRepresentationOffer(offerId) {
@@ -2086,6 +2194,9 @@ export function mountApp(root) {
       openRepresentationOffer,
       openRepresentationCounter,
       openRepresentationRenewal,
+      sendRepresentationInteraction,
+      openRepresentationMeeting,
+      openRepresentationMeetingOutcome,
       evaluateRepresentationOffer,
       acceptRepresentationCounter,
       submitRepresentationCounterOffer: (offerId, terms) => {
