@@ -208,6 +208,29 @@ test("creates and reschedules one agency task per prospect while keeping task ID
   assert.equal(isValidSave(secondProspect.save), true);
 });
 
+test("avoids task ID collisions when an older v4 pipeline has no task sequence", () => {
+  const first = upsertTalentProspect(createInitialSave(), player(), {
+    nextFollowUpDate: "2026-07-04"
+  });
+  const completed = completeCareerTask(
+    first.save,
+    first.save.world.tasks.find((task) => task.category === "talent-follow-up").id
+  );
+  const legacy = structuredClone(completed.save);
+  delete legacy.agency.talentPipeline.nextFollowUpTaskSequence;
+  const secondPlayer = player({ id: "pipeline-player-legacy", name: "لاعب من حفظ قديم" });
+  const next = upsertTalentProspect(legacy, secondPlayer, {
+    nextFollowUpDate: "2026-07-05"
+  });
+  const ids = next.save.world.tasks
+    .filter((task) => task.category === "talent-follow-up")
+    .map((task) => task.id);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.ok(ids.includes("talent-follow-up-task-1"));
+  assert.ok(ids.includes("talent-follow-up-task-2"));
+  assert.equal(isValidSave(next.save), true);
+});
+
 test("completes a due prospect review without contacting the player or changing client status", () => {
   const contacted = recordTalentProspectContact(createInitialSave(), player(), {
     kind: "message",
