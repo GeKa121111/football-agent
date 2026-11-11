@@ -235,7 +235,7 @@ export function advancePlayerDevelopmentDay(state, dateKey, season) {
     player = {
       ...player,
       skills,
-      rating: roundTo(Math.min(player.potential, developmentRating({ ...player, skills })), 1),
+      rating: roundTo(Math.min(player.potential, developmentRating({ ...player, skills })), 2),
       fatigue: roundTo(Math.min(100, player.fatigue + (player.trainingIntensity === "intense" ? 9 : player.trainingIntensity === "light" ? 3 : 6)), 1),
       fitness: roundTo(Math.max(0, player.fitness - (player.trainingIntensity === "intense" ? 8 : player.trainingIntensity === "light" ? 2 : 5)), 1),
       lastTrainingDate: dateKey
