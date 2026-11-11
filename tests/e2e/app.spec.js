@@ -52,6 +52,43 @@ test.describe("Desktop experience", () => {
     }
   });
 
+  test("negotiates and signs a player representation contract", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    await expect(page.locator(".representation-prospect-card")).toHaveCount(32);
+
+    await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+    const modal = page.locator(".modal-overlay");
+    await modal.getByLabel("نسبة العمولة").selectOption("15");
+    await modal.getByLabel("مدة العقد").selectOption("1095");
+    await modal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+
+    let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.meta.version).toBe(4);
+    expect(saved.agency.representation.offers).toHaveLength(1);
+    expect(saved.agency.representation.offers[0].status).toBe("pending");
+    expect(saved.agency.clients).toHaveLength(0);
+
+    await page.locator(".representation-evaluate-button").click();
+    await expect(page.locator(".representation-offer-row.is-countered")).toBeVisible();
+    await expect(page.locator(".representation-accept-button")).toBeVisible();
+    await page.locator(".representation-accept-button").click();
+
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.agency.clients).toEqual([saved.agency.representation.contracts[0].playerId]);
+    expect(saved.agency.representation.contracts).toHaveLength(1);
+    expect(saved.agency.representation.contracts[0].status).toBe("active");
+    expect(saved.agency.representation.contracts[0].commissionRate).toBeLessThan(15);
+    expect(saved.agency.representation.history.map((entry) => entry.type)).toContain("contract-signed");
+    await expect(page.locator(".representation-contract-row")).toBeVisible();
+
+    await page.locator(".representation-terminate-button").click();
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.agency.clients).toHaveLength(0);
+    expect(saved.agency.representation.contracts[0].status).toBe("terminated");
+    expect(saved.agency.representation.history[0].type).toBe("contract-terminated");
+  });
+
   test("renders distinct SVG player portraits and reuses them in player details", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "اللاعبون");
@@ -113,6 +150,16 @@ test.describe("Desktop experience", () => {
 
 test.describe("Mobile experience", () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test("keeps the representation offer form usable on mobile", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    await expect(page.locator(".representation-prospect-grid")).toBeVisible();
+    await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+    await expect(page.getByLabel("نسبة العمولة")).toBeVisible();
+    await expect(page.getByLabel("مدة العقد")).toBeVisible();
+    await hasNoHorizontalOverflow(page);
+  });
 
   test("respects the operating system reduced-motion preference", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -196,7 +243,7 @@ test.describe("Mobile experience", () => {
     await page.getByRole("button", { name: "تأكيد إطلاق البعثة" }).click();
 
     const started = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(started.meta.version).toBe(3);
+    expect(started.meta.version).toBe(4);
     expect(started.agency.balance).toBe(95000);
     expect(started.world.scouting.activeMissions).toHaveLength(1);
     expect(started.world.scouting.activeMissions[0].sourceId).toBe("academy");
@@ -306,7 +353,7 @@ test.describe("Mobile experience", () => {
 
     await page.locator(".day-advance-button").click();
     let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(saved.meta.version).toBe(3);
+    expect(saved.meta.version).toBe(4);
     expect(saved.career.day).toBe(6);
     expect(saved.career.week).toBe(1);
     expect(saved.career.season).toBe(1);
