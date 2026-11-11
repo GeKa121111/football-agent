@@ -242,4 +242,12 @@ test("rejects malformed, duplicated or financially inconsistent transfer state",
   const badLedger = structuredClone(sent.save.world.transfers);
   badLedger.earnedCommissionEur = 1;
   assert.equal(isValidTransferState(badLedger, "2026-07-01", sent.save.agency.clients, sent.save.agency.representation), false);
+
+  const sentForLedger = send();
+  const countered = evaluateTransferOffer(sentForLedger.save, sentForLedger.offer.id, "2026-07-01", database);
+  const agreed = acceptTransferCounterOffer(countered.save, sentForLedger.offer.id, "2026-07-02");
+  const completed = completeTransfer(agreed.save, sentForLedger.offer.id, "2026-07-02");
+  const wrongBasis = structuredClone(completed.save.world.transfers);
+  wrongBasis.ledger[0].basisEur += 1;
+  assert.equal(isValidTransferState(wrongBasis, "2026-07-02", completed.save.agency.clients, completed.save.agency.representation), false);
 });
