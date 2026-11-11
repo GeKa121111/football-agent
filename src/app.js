@@ -22,7 +22,7 @@ import {
   startScoutingMission
 } from "./engines/scouting.js";
 import { createPlayerPortrait } from "./ui/player-portrait.js";
-import { getTalentProspect, upsertTalentProspect } from "./engines/talent-pipeline.js";
+import { getTalentProspect, upsertTalentProspect, recordTalentProspectContact } from "./engines/talent-pipeline.js";
 import {
   createRepresentationOffer as createRepresentationOfferInEngine,
   evaluateRepresentationOffer as evaluateRepresentationOfferInEngine,
@@ -234,6 +234,12 @@ function formatHomeDate(value) {
     month: "long",
     year: "numeric"
   }).format(date);
+}
+
+function shiftCalendarDate(value, days) {
+  const date = new Date(value + "T12:00:00.000Z");
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 
@@ -1064,6 +1070,8 @@ function getTalentPipelineRecords(context) {
       stage,
       sourceLabels: [...new Set(sourceLabels)],
       nextFollowUpDate: record.entry?.nextFollowUpDate ?? null,
+      lastContactDate: record.entry?.lastContactDate ?? null,
+      activity: record.entry?.activity ?? [],
       note: record.entry?.note ?? ""
     };
   }).sort((a, b) => {
@@ -1137,6 +1145,14 @@ function renderTalentPipeline(context) {
     client: "عميل حالي",
     archived: "مؤرشف"
   };
+  const contactKindLabels = { call: "مكالمة", message: "رسالة", meeting: "اجتماع" };
+  const contactOutcomeLabels = {
+    pending: "بانتظار الرد",
+    positive: "رد إيجابي",
+    neutral: "رد محايد",
+    negative: "رد سلبي",
+    no_response: "لا يوجد رد"
+  };
   const refresh = () => {
     const query = search.value.trim().toLocaleLowerCase("ar");
     const selectedStage = filter.value;
@@ -1178,6 +1194,12 @@ function renderTalentPipeline(context) {
         copy.append(node("small", overdue ? "talent-pipeline-followup is-overdue" : "talent-pipeline-followup",
           (overdue ? "متابعة متأخرة منذ " : "المتابعة القادمة ") + formatHomeDate(item.nextFollowUpDate)));
       }
+      const lastContact = [...item.activity].reverse().find((event) => event.type === "contact");
+      if (lastContact) {
+        copy.append(node("small", "talent-pipeline-last-contact",
+          "آخر تواصل: " + contactKindLabels[lastContact.kind] + " · " + contactOutcomeLabels[lastContact.outcome] +
+          " · " + formatHomeDate(lastContact.date)));
+      }
       if (item.note) copy.append(node("small", "talent-pipeline-note", item.note));
       const actions = node("div", "talent-pipeline-actions");
       actions.append(
@@ -1185,6 +1207,15 @@ function renderTalentPipeline(context) {
         actionButton(item.entry ? "إدارة المتابعة" : "إضافة لصندوق المواهب", "button-primary talent-pipeline-manage-button",
           () => context.manageTalentProspect(player))
       );
+      if (!item.isClient && !item.offer) {
+        actions.append(actionButton(lastContact ? "تسجيل تواصل" : "تواصل أولي",
+          "button-outline talent-pipeline-contact-button",
+          () => context.manageTalentContact(player, [...item.sourceIds])));
+      }
+      if (item.activity.length > 0) {
+        actions.append(actionButton("سجل النشاط", "button-outline talent-pipeline-history-button",
+          () => context.openTalentProspectHistory(player)));
+      }
       card.append(portrait, copy, state, actions);
       return card;
     }));
@@ -1682,6 +1713,129 @@ export function mountApp(root) {
     });
     form.append(intro, saveButton);
     openModal("متابعة لاعب في صندوق المواهب", [form], "إلغاء");
+  }
+
+
+  function manageTalentContact(player, sourceIds = []) {
+    if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم نسجل التواصل."); return; }
+    const existing = getTalentProspect(state.save.agency.talentPipeline, player.id);
+    const form = node("div", "talent-prospect-form talent-contact-form");
+    form.append(node("p", "modal-copy",
+      "سجّل مكالمة أو رسالة أو اجتماعًا أوليًا. ده نشاط متابعة فقط، ومش بيحوّل اللاعب لعميل أو ينشئ عقد تمثيل."));
+    const kind = node("select", "filter-select");
+    kind.setAttribute("aria-label", "طريقة التواصل");
+    [["message", "رسالة"], ["call", "مكالمة"], ["meeting", "اجتماع أولي"]].forEach(([value, label]) => {
+      const option = node("option", "", label);
+      option.value = value;
+      kind.append(option);
+    });
+    const outcome = node("select", "filter-select");
+    outcome.setAttribute("aria-label", "نتيجة التواصل");
+    [
+      ["pending", "بانتظار الرد"],
+      ["positive", "رد إيجابي"],
+      ["neutral", "رد محايد"],
+      ["negative", "رد سلبي"],
+      ["no_response", "لم يرد"]
+    ].forEach(([value, label]) => {
+      const option = node("option", "", label);
+      option.value = value;
+      outcome.append(option);
+    });
+    const followUp = node("input", "search-input");
+    followUp.type = "date";
+    followUp.setAttribute("aria-label", "موعد المتابعة القادمة");
+    followUp.min = state.save.world.currentDate;
+    followUp.value = shiftCalendarDate(state.save.world.currentDate, 3);
+    const note = node("textarea", "search-input");
+    note.setAttribute("aria-label", "ملخص التواصل");
+    note.maxLength = 500;
+    note.rows = 3;
+    note.value = existing?.note ?? "";
+    note.placeholder = "اكتب رد اللاعب أو ملخص المكالمة والخطوة التالية...";
+    const addField = (label, control) => {
+      const wrapper = node("label", "scout-form-field representation-form-field");
+      wrapper.append(node("span", "", label), control);
+      form.append(wrapper);
+    };
+    addField("طريقة التواصل", kind);
+    addField("نتيجة التواصل", outcome);
+    addField("موعد المتابعة القادمة", followUp);
+    addField("ملخص التواصل", note);
+    const updateFollowUpRequirement = () => {
+      followUp.required = outcome.value === "pending";
+      followUp.disabled = outcome.value === "no_response" && !followUp.value;
+      if (outcome.value === "pending" && !followUp.value) {
+        followUp.value = shiftCalendarDate(state.save.world.currentDate, 3);
+      }
+    };
+    outcome.addEventListener("change", updateFollowUpRequirement);
+    updateFollowUpRequirement();
+    const saveButton = actionButton("حفظ التواصل في سجل اللاعب", "button-primary talent-prospect-save-button", () => {
+      const previousSave = state.save;
+      const inferredSources = [...(existing?.sourceIds ?? []), ...sourceIds];
+      const hasScoutingRecord = (state.save.world.scouting?.reports ?? [])
+        .some((report) => (report.findings ?? []).some((finding) => finding.playerId === player.id)) ||
+        (state.save.world.scouting?.observations ?? []).some((item) => item.playerId === player.id);
+      if (hasScoutingRecord) inferredSources.push("scouting");
+      if (state.watchlist.has(player.id)) inferredSources.push("watchlist");
+      const result = recordTalentProspectContact(state.save, player, {
+        sourceIds: [...new Set(inferredSources.length ? inferredSources : ["manual"])],
+        kind: kind.value,
+        outcome: outcome.value,
+        followUpDate: followUp.value || null,
+        note: note.value
+      });
+      if (!result.changed) { toast(result.error); return; }
+      state.save = result.save;
+      if (saveCareer()) {
+        root.querySelector(".modal-overlay .icon-button")?.click();
+        render();
+        toast("تم تسجيل " + (kind.value === "call" ? "المكالمة" : kind.value === "meeting" ? "الاجتماع" : "الرسالة") + " مع " + player.name + ".");
+      } else state.save = previousSave;
+    });
+    form.append(saveButton);
+    openModal("تواصل أولي مع " + player.name, [form], "إلغاء");
+  }
+
+  function openTalentProspectHistory(player) {
+    const entry = getTalentProspect(state.save.agency.talentPipeline, player.id);
+    const activity = [...(entry?.activity ?? [])].reverse();
+    const stageLabels = {
+      discovered: "مكتشف",
+      shortlisted: "قائمة المتابعة",
+      contacted: "تم التواصل",
+      archived: "مؤرشف"
+    };
+    const kindLabels = { call: "مكالمة", message: "رسالة", meeting: "اجتماع أولي" };
+    const outcomeLabels = {
+      pending: "بانتظار الرد",
+      positive: "رد إيجابي",
+      neutral: "رد محايد",
+      negative: "رد سلبي",
+      no_response: "لم يرد"
+    };
+    const body = node("div", "talent-activity-history");
+    if (!entry || activity.length === 0) {
+      body.append(node("p", "representation-empty", "لا يوجد نشاط مسجل لهذا اللاعب حتى الآن."));
+    } else {
+      activity.forEach((event) => {
+        const row = node("article", "talent-activity-row");
+        const title = event.type === "stage"
+          ? "تغيير المرحلة: " + (stageLabels[event.fromStage] ?? "بداية الملف") + " ← " + stageLabels[event.toStage]
+          : "تواصل " + kindLabels[event.kind] + " · " + outcomeLabels[event.outcome];
+        row.append(
+          node("strong", "", title),
+          node("small", "", formatHomeDate(event.date))
+        );
+        if (event.note) row.append(node("p", "", event.note));
+        if (event.type === "contact" && event.followUpDate) {
+          row.append(node("small", "talent-pipeline-followup", "المتابعة القادمة " + formatHomeDate(event.followUpDate)));
+        }
+        body.append(row);
+      });
+    }
+    openModal("سجل نشاط " + player.name, [body], "إغلاق");
   }
 
   function openRepresentationOffer(player) {
@@ -2940,6 +3094,8 @@ export function mountApp(root) {
       players: WORLD_PLAYERS,
       openRepresentationOffer,
       manageTalentProspect,
+      manageTalentContact,
+      openTalentProspectHistory,
       openRepresentationCounter,
       openRepresentationRenewal,
       openRepresentationClientDossier,
