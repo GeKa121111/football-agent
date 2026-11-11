@@ -389,6 +389,7 @@ test.describe("Task history archive", () => {
     await page.locator(".home-save-button").click();
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
+      save.world.currentDate = "2026-07-10";
       save.world.tasks = [
         {
           id: "task-history-open",
