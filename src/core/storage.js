@@ -56,7 +56,7 @@ function hasUniqueIds(items) {
 }
 
 function isValidActivityCollections(world) {
-  const { events, inbox, tasks } = world;
+  const { events, inbox, tasks, currentDate } = world;
   if (![events, inbox, tasks].every(Array.isArray)) return false;
   if (!hasUniqueIds(events) || !hasUniqueIds(inbox) || !hasUniqueIds(tasks)) return false;
 
@@ -69,28 +69,62 @@ function isValidActivityCollections(world) {
     ["low", "normal", "high"].includes(event.priority)
   )) return false;
 
-  const eventIds = new Set(events.map((event) => event.id));
-  if (!inbox.every((message) =>
-    isRecord(message) &&
-    typeof message.eventId === "string" && eventIds.has(message.eventId) &&
-    isValidCalendarDate(message.date) &&
-    typeof message.title === "string" && message.title.trim() &&
-    typeof message.body === "string" &&
-    typeof message.read === "boolean"
-  )) return false;
+  const eventsById = new Map(events.map((event) => [event.id, event]));
+  if (!inbox.every((message) => {
+    if (!isRecord(message) ||
+      typeof message.eventId !== "string" ||
+      !isValidCalendarDate(message.date) ||
+      typeof message.title !== "string" || !message.title.trim() ||
+      typeof message.body !== "string" ||
+      typeof message.read !== "boolean") return false;
+    const linkedEvent = eventsById.get(message.eventId);
+    return Boolean(linkedEvent) && linkedEvent.date === message.date;
+  })) return false;
 
-  return tasks.every((task) =>
-    isRecord(task) &&
-    typeof task.title === "string" && task.title.trim() &&
-    typeof task.description === "string" &&
-    isValidCalendarDate(task.createdDate) &&
-    isValidCalendarDate(task.dueDate) &&
-    typeof task.category === "string" && task.category.trim() &&
-    ["open", "overdue", "completed"].includes(task.status) &&
-    (task.status !== "overdue" || isValidCalendarDate(task.overdueDate)) &&
-    (task.status !== "completed" || isValidCalendarDate(task.completedDate)) &&
-    (task.completedLate === undefined || typeof task.completedLate === "boolean")
-  );
+  return tasks.every((task) => {
+    if (!isRecord(task) ||
+      typeof task.title !== "string" || !task.title.trim() ||
+      typeof task.description !== "string" ||
+      !isValidCalendarDate(task.createdDate) ||
+      !isValidCalendarDate(task.dueDate) ||
+      typeof task.category !== "string" || !task.category.trim() ||
+      !["open", "overdue", "completed"].includes(task.status) ||
+      (task.completedLate !== undefined && typeof task.completedLate !== "boolean")) {
+      return false;
+    }
+
+    if (task.createdDate > currentDate || task.createdDate > task.dueDate) return false;
+
+    if (task.status === "open") {
+      return task.dueDate >= currentDate &&
+        task.overdueDate === undefined &&
+        task.completedDate === undefined &&
+        task.completedLate === undefined;
+    }
+
+    if (task.status === "overdue") {
+      return task.dueDate < currentDate &&
+        isValidCalendarDate(task.overdueDate) &&
+        task.overdueDate > task.dueDate &&
+        task.overdueDate <= currentDate &&
+        task.completedDate === undefined &&
+        task.completedLate === undefined;
+    }
+
+    if (!isValidCalendarDate(task.completedDate) ||
+      task.completedDate < task.createdDate ||
+      task.completedDate > currentDate) return false;
+
+    if (task.completedLate === true && task.completedDate <= task.dueDate) return false;
+    if (task.completedLate === false && task.completedDate > task.dueDate) return false;
+
+    if (task.overdueDate !== undefined) {
+      return isValidCalendarDate(task.overdueDate) &&
+        task.overdueDate > task.dueDate &&
+        task.overdueDate <= task.completedDate;
+    }
+    return true;
+  });
 }
 
 export function isValidSave(value) {
