@@ -39,11 +39,11 @@ test("creates a clean scouting state and defines transparent mission trade-offs"
 
 test("filters candidates through distinct discovery channels without changing the world seed", () => {
   assert.equal(SCOUTING_SOURCES.length, 5);
-  assert.equal(getScoutingCandidates(PLAYERS).length, 32);
-  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "academy" }).length, 17);
-  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "club-network" }).length, 15);
-  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "youth-tournament" }).length, 17);
-  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "agent-referral" }).length, 15);
+  assert.equal(getScoutingCandidates(PLAYERS).length, 48);
+  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "academy" }).length, 25);
+  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "club-network" }).length, 23);
+  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "youth-tournament" }).length, 25);
+  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "agent-referral" }).length, 23);
   assert.deepEqual(
     getScoutingCandidates(PLAYERS, { countryId: "country-eg", role: "هجوم", sourceId: "academy" }).map((player) => player.id),
     ["demo-yassin-adel"]
@@ -53,7 +53,7 @@ test("filters candidates through distinct discovery channels without changing th
 
 
 test("can launch a valid scouting scope for every country and general role", () => {
-  const countries = ["country-eg", "country-ma", "country-tn", "country-gb", "country-es", "country-de", "country-fr", "country-it"];
+  const countries = ["country-eg", "country-ma", "country-tn", "country-gb", "country-es", "country-de", "country-fr", "country-it", "country-nl", "country-pt", "country-br", "country-ar"];
   const roles = ["هجوم", "وسط", "دفاع", "حراسة"];
 
   for (const countryId of countries) {
@@ -426,7 +426,7 @@ test("simulates scouting contracts and paid missions across two season boundarie
   let save = createInitialSave(); const hired = signScoutingContract(save, "scout-iberian-network"); assert.equal(hired.changed, true); save = hired.save;
   const schedule = new Map([[0,"local"],[100,"regional"],[200,"local"],[300,"elite"],[400,"local"],[500,"regional"],[600,"local"]]);
   let completedReportCount = 0; const completedReports = []; let lowestObservedBalance = save.agency.balance;
-  assert.equal(PLAYERS.length, 32, "long-run balance test must use the expanded 32-player pool");
+  assert.equal(PLAYERS.length, 48, "long-run balance test must use the expanded 48-player pool");
   for (let day = 0; day < 732; day += 1) {
     if (day === 340) { const renewal = renewScoutingContract(save, "scout-iberian-network"); assert.equal(renewal.changed, true); assert.equal(renewal.fee, 8000); save = renewal.save; }
     const missionType = schedule.get(day);
@@ -435,7 +435,7 @@ test("simulates scouting contracts and paid missions across two season boundarie
     completedReportCount += result.completedReports.length; completedReports.push(...result.completedReports); lowestObservedBalance = Math.min(lowestObservedBalance, save.agency.balance); assert.ok(save.agency.balance >= 0);
   }
   assert.equal(completedReportCount, 7); assert.equal(completedReports.length, 7); assert.equal(save.career.season, 3); assert.equal(save.world.currentDate, "2028-07-02");
-  assert.ok(completedReports.every((report) => report.candidateCount === PLAYERS.length), "each long-run report must cover all 32 players");
+  assert.ok(completedReports.every((report) => report.candidateCount === PLAYERS.length), "each long-run report must cover all 48 players");
   assert.ok(completedReports.every((report) => report.findings.length === 6), "each report must retain the six best findings");
   assert.equal(save.agency.balance, 5000); assert.equal(lowestObservedBalance, 5000); assert.equal(save.world.scouting.reports.length, 7);
   assert.equal(save.world.scouting.observations.length, 42, "seven reports should retain six player observations each"); assert.equal(isValidSave(save), true);
