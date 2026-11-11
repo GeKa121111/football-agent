@@ -48,7 +48,7 @@ test.describe("Desktop experience", () => {
     await hasNoHorizontalOverflow(page);
   });
   
-  test("keeps all five workspaces within every supported viewport width", async ({ page }) => {
+  test("keeps all six workspaces within every supported viewport width", async ({ page }) => {
     await page.goto("/");
     const viewports = [
       { width: 320, height: 800 },
@@ -56,7 +56,7 @@ test.describe("Desktop experience", () => {
       { width: 768, height: 900 },
       { width: 1440, height: 960 }
     ];
-    const screens = ["اللاعبون", "الكشافون", "الانتقالات", "الوكالة", "الرئيسية"];
+    const screens = ["اللاعبون", "الكشافون", "المباريات", "الانتقالات", "الوكالة", "الرئيسية"];
 
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
@@ -82,11 +82,12 @@ test.describe("Desktop experience", () => {
     await expect(page.locator(".main-stage")).toBeFocused();
   });
 
-  test("navigates through all five primary screens", async ({ page }) => {
+  test("navigates through all six primary screens", async ({ page }) => {
     await page.goto("/");
     const screens = [
       ["اللاعبون", "قاعدة اللاعبين"],
       ["الكشافون", "الكشافون"],
+      ["المباريات", "المباريات وتطور اللاعبين"],
       ["الانتقالات", "سوق الانتقالات"],
       ["الوكالة", "الوكالة"],
       ["الرئيسية", "وكالتك الجديدة"]
@@ -103,6 +104,50 @@ test.describe("Desktop experience", () => {
     }
   });
 
+
+  test("plays scheduled matchdays and persists player training plans", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator(".football-screen")).toHaveCount(0);
+    await page.getByRole("button", { name: "حفظ المسيرة" }).click();
+    const firstSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(firstSave.meta.version).toBe(6);
+    expect(firstSave.world.football.fixtures.length).toBeGreaterThan(0);
+
+    await navigateTo(page, "المباريات");
+    await expect(page.locator(".football-screen")).toBeVisible();
+    await expect(page.locator(".football-fixture-card")).toHaveCount(12);
+    await page.getByLabel("اختيار المسابقة للترتيب").selectOption("competition-eg-premier");
+    await expect(page.locator(".football-standings-table .football-standings-row")).toHaveCount(3);
+    await expect(page.getByLabel("اختيار المسابقة للترتيب")).toBeVisible();
+    await expect(page.getByLabel("لاعب خطة التدريب")).toBeVisible();
+
+    await page.getByLabel("لاعب خطة التدريب").selectOption("demo-yassin-adel");
+    await page.getByLabel("تركيز التدريب").selectOption("attacking");
+    await page.getByLabel("شدة التدريب").selectOption("intense");
+    await page.getByRole("button", { name: "حفظ خطة التدريب" }).click();
+
+    const trainedPlanSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const yassin = trainedPlanSave.world.football.playerDevelopment.players.find((player) => player.playerId === "demo-yassin-adel");
+    expect(yassin.trainingFocus).toBe("attacking");
+    expect(yassin.trainingIntensity).toBe("intense");
+
+    await navigateTo(page, "الرئيسية");
+    for (let day = 0; day < 3; day += 1) {
+      await page.locator(".day-advance-button").click();
+    }
+    await navigateTo(page, "المباريات");
+    await expect(page.locator(".football-result-row").first()).toBeVisible();
+    // Re-select the Egyptian league because the workspace is rebuilt on navigation.
+    await page.getByLabel("اختيار المسابقة للترتيب").selectOption("competition-eg-premier");
+    const playedSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(playedSave.world.football.results.length).toBeGreaterThan(0);
+    expect(playedSave.world.events.some((event) => event.type === "football-match-played")).toBe(true);
+    const standingsTable = page.locator(".football-standings-table");
+    await expect(standingsTable).toContainText("الأهلي");
+    await expect(standingsTable).toContainText("الزمالك");
+    await hasNoHorizontalOverflow(page);
+  });
+
   test("negotiates and signs a player representation contract", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الوكالة");
@@ -115,7 +160,7 @@ test.describe("Desktop experience", () => {
     await modal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
 
     let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(saved.meta.version).toBe(4);
+    expect(saved.meta.version).toBe(6);
     expect(saved.agency.representation.offers).toHaveLength(1);
     expect(saved.agency.representation.offers[0].status).toBe("pending");
     expect(saved.agency.clients).toHaveLength(0);
@@ -339,9 +384,10 @@ test.describe("Desktop experience", () => {
     await navigateTo(page, "اللاعبون");
 
     const metrics = page.locator(".players-screen .world-metrics .metric-card");
-    await expect(metrics).toHaveCount(6);
+    await expect(metrics).toHaveCount(7);
     await expect(metrics.filter({ hasText: "المسابقات" }).locator(".metric-value")).toHaveText("15");
     await expect(metrics.filter({ hasText: "أصول الصور" }).locator(".metric-value")).toHaveText("48");
+    await expect(metrics.filter({ hasText: "قوائم الأندية" }).locator(".metric-value")).toHaveText("432");
     await expect(page.locator(".player-card .club-crest")).toHaveCount(48);
 
     const crests = await page.locator(".player-card .club-crest").evaluateAll((items) => items.map((item) => ({
@@ -590,7 +636,7 @@ test.describe("Mobile experience", () => {
     await page.getByRole("button", { name: "تأكيد إطلاق البعثة" }).click();
 
     const started = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(started.meta.version).toBe(4);
+    expect(started.meta.version).toBe(6);
     expect(started.agency.balance).toBe(95000);
     expect(started.world.scouting.activeMissions).toHaveLength(1);
     expect(started.world.scouting.activeMissions[0].sourceId).toBe("academy");
@@ -843,7 +889,7 @@ test.describe("Mobile experience", () => {
 
     await page.locator(".day-advance-button").click();
     let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(saved.meta.version).toBe(4);
+    expect(saved.meta.version).toBe(6);
     expect(saved.career.day).toBe(6);
     expect(saved.career.week).toBe(1);
     expect(saved.career.season).toBe(1);

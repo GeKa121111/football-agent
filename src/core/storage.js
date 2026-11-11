@@ -2,9 +2,12 @@ import { createInitialCareerCalendar } from "../engines/career-calendar.js";
 import { createInitialScoutingState, SCOUTING_MISSION_TYPES, SCOUTING_SCOUTS, SCOUTING_SOURCES } from "../engines/scouting.js";
 import { createInitialRepresentationState, isValidRepresentationState } from "../engines/representation.js";
 import { createInitialTalentPipelineState, isValidTalentPipelineState } from "../engines/talent-pipeline.js";
+import { createInitialFootballState, isValidFootballState } from "../engines/football-season.js";
+import { mergePlayerDevelopmentRoster } from "../engines/player-development.js";
+import { getWorldSquadPlayers } from "../data/world-database.js";
 
 export const STORAGE_KEY = "football-agent.save";
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 6;
 export const WATCHLIST_KEY = "football-agent.watchlist";
 
 export function createInitialSave(now = new Date().toISOString()) {
@@ -36,7 +39,8 @@ export function createInitialSave(now = new Date().toISOString()) {
       competitions: [],
       activeOffers: [],
       ...initialCalendar,
-      scouting: createInitialScoutingState()
+      scouting: createInitialScoutingState(),
+      football: createInitialFootballState(1, "2026-07-01")
     }
   };
 }
@@ -347,6 +351,7 @@ export function isValidSave(value) {
   if (![players, clubs, competitions, activeOffers].every(hasUniqueIds)) return false;
   return isValidActivityCollections(value.world) &&
     isValidScoutingState(value.world.scouting, currentDate) &&
+    isValidFootballState(value.world.football, currentDate, season) &&
     isValidRepresentationState(value.agency.representation, currentDate, clients) &&
     isValidTalentPipelineState(value.agency.talentPipeline, currentDate);
 }
@@ -394,7 +399,7 @@ function resolveStorage(storage) {
 
 function migrateSave(value) {
   if (!isRecord(value) || !isRecord(value.meta) || !isRecord(value.world)) return value;
-  if (![1, 2, 3].includes(value.meta.version)) return value;
+  if (![1, 2, 3, 4, 5].includes(value.meta.version)) return value;
 
   return {
     ...value,
@@ -416,7 +421,16 @@ function migrateSave(value) {
       events: Array.isArray(value.world.events) ? value.world.events : [],
       inbox: Array.isArray(value.world.inbox) ? value.world.inbox : [],
       tasks: Array.isArray(value.world.tasks) ? value.world.tasks : [],
-      scouting: isRecord(value.world.scouting) ? value.world.scouting : { nextMissionSequence: 1, activeMissions: [], reports: [] }
+      scouting: isRecord(value.world.scouting) ? value.world.scouting : { nextMissionSequence: 1, activeMissions: [], reports: [] },
+      football: isRecord(value.world.football)
+        ? {
+            ...value.world.football,
+            playerDevelopment: mergePlayerDevelopmentRoster(
+              value.world.football.playerDevelopment,
+              getWorldSquadPlayers()
+            )
+          }
+        : createInitialFootballState(value.career?.season ?? 1, value.world.currentDate)
     }
   };
 }
@@ -447,7 +461,7 @@ export function readSave(storage) {
       return { status: "unsupported", save: null, error: null };
     }
 
-    const migrated = [1, 2, 3].includes(parsed?.meta?.version);
+    const migrated = [1, 2, 3, 4, 5].includes(parsed?.meta?.version);
     if (migrated) parsed = migrateSave(parsed);
 
     if (!isValidSave(parsed)) {

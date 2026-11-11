@@ -1,3 +1,5 @@
+import { createInitialFootballState, advanceFootballSeasonDay } from "./football-season.js";
+
 const MAX_EVENTS = 90;
 const MAX_MESSAGES = 90;
 const MAX_COMPLETED_TASK_HISTORY = 60;
@@ -224,6 +226,11 @@ export function advanceCareerDay(save) {
   const seasonStarted = nextDate.getUTCMonth() === 6 && nextDate.getUTCDate() === 1;
   const season = save.career.season + (seasonStarted ? 1 : 0);
   const scheduled = scheduledItems(nextDate, season);
+  const footballTransition = advanceFootballSeasonDay(
+    save.world.football ?? createInitialFootballState(save.career.season, save.world.currentDate),
+    dateKey,
+    season
+  );
 
   const overdueTasks = [];
   const currentTasks = (save.world.tasks ?? []).map((task) => {
@@ -272,9 +279,21 @@ export function advanceCareerDay(save) {
     read: false
   }));
 
-  const events = [...(save.world.events ?? []), ...scheduled.events, ...followUpEvents, ...overdueEvents].slice(-MAX_EVENTS);
+  const events = [
+    ...(save.world.events ?? []),
+    ...scheduled.events,
+    ...followUpEvents,
+    ...overdueEvents,
+    ...footballTransition.events
+  ].slice(-MAX_EVENTS);
   const retainedEventIds = new Set(events.map((event) => event.id));
-  const inbox = [...(save.world.inbox ?? []), ...scheduled.messages, ...followUpMessages, ...overdueMessages]
+  const inbox = [
+    ...(save.world.inbox ?? []),
+    ...scheduled.messages,
+    ...followUpMessages,
+    ...overdueMessages,
+    ...footballTransition.messages
+  ]
     .filter((message) => retainedEventIds.has(message.eventId))
     .slice(-MAX_MESSAGES);
   const tasks = mergeCareerTasks(currentTasks, scheduled.tasks);
@@ -292,7 +311,8 @@ export function advanceCareerDay(save) {
       currentDate: dateKey,
       events,
       inbox,
-      tasks
+      tasks,
+      football: footballTransition.football
     }
   };
 }
@@ -397,7 +417,8 @@ const CAREER_EVENT_TYPE_LABELS = Object.freeze({
   "season-closing": "ختام الموسم",
   "task-overdue": "تأخر مهمة",
   "talent-follow-up-due": "موعد متابعة لاعب",
-  "task-completed": "إنجاز مهمة"
+  "task-completed": "إنجاز مهمة",
+  "football-match-played": "مباراة مكتملة"
 });
 
 const CAREER_EVENT_PRIORITY_LABELS = Object.freeze({

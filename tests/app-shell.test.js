@@ -64,20 +64,20 @@ test("skip link targets a focusable main workspace", () => {
   assert.equal(main.attributes.tabindex, "-1");
 });
 
-test("desktop and mobile navigation expose five named routes and one active route", () => {
+test("desktop and mobile navigation expose six named routes and one active route", () => {
   const shell = buildShell("scouting");
   const desktop = byClass(shell, "rebuild-nav");
   const mobile = byClass(shell, "rebuild-mobile-nav");
 
   for (const nav of [desktop, mobile]) {
-    assert.equal(nav.children.length, 5);
+    assert.equal(nav.children.length, 6);
     const active = nav.children.filter((button) => button.attributes["aria-current"] === "page");
     assert.equal(active.length, 1);
     assert.equal(active[0].dataset.view, "scouting");
     assert.equal(active[0].attributes["aria-label"], "الكشافون");
     assert.deepEqual(
       nav.children.map((button) => button.dataset.view),
-      ["dashboard", "players", "scouting", "market", "agency"]
+      ["dashboard", "players", "scouting", "football", "market", "agency"]
     );
   }
 

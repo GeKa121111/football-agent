@@ -15,6 +15,7 @@ import {
   createInitialCareerCalendar,
   getUpcomingCareerEvents
 } from "../src/engines/career-calendar.js";
+import { getUpcomingFootballFixtures } from "../src/engines/football-season.js";
 import { isValidSave } from "../src/core/storage.js";
 
 function makeTask(overrides = {}) {
@@ -622,4 +623,30 @@ test("uses UTC calendar transitions independently of the host timezone", () => {
     assert.equal(result.status, 0, timezone + ": " + result.stderr);
     assert.deepEqual(JSON.parse(result.stdout), expected, "calendar result changed in " + timezone);
   }
+});
+
+
+test("plays due football fixtures through the career calendar and keeps results after save validation", () => {
+  const initial = createInitialSave();
+  const fixture = getUpcomingFootballFixtures(initial.world.football, initial.world.currentDate, 1)[0];
+  const daysToMatch = Math.round((
+    Date.parse(fixture.date + "T00:00:00.000Z") -
+    Date.parse(initial.world.currentDate + "T00:00:00.000Z")
+  ) / 86400000);
+  const advanced = advanceCareerDays(initial, daysToMatch);
+  const expectedToday = initial.world.football.fixtures.filter((item) => item.date === fixture.date);
+
+  assert.equal(advanced.world.currentDate, fixture.date);
+  assert.equal(advanced.world.football.results.length, expectedToday.length);
+  assert.ok(advanced.world.events.some((event) =>
+    event.type === "football-match-played" && event.date === fixture.date
+  ));
+  assert.ok(advanced.world.inbox.some((message) =>
+    message.title.startsWith("نتيجة مباراة:") && message.date === fixture.date
+  ));
+  assert.equal(isValidSave(advanced), true);
+
+  const next = advanceCareerDay(advanced);
+  assert.equal(next.world.football.results.length, advanced.world.football.results.length);
+  assert.equal(isValidSave(next), true);
 });
