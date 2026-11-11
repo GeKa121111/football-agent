@@ -5,9 +5,12 @@ import { advanceCareerDays } from "../src/engines/career-calendar.js";
 import { getWorldPlayerProfiles } from "../src/data/world-database.js";
 import {
   SCOUTING_MISSION_TYPES,
+  SCOUTING_SOURCES,
   advanceScoutingMissions,
   createInitialScoutingState,
   getScoutingDaysRemaining,
+  getPlayerScoutingHistory,
+  getScoutingCandidates,
   getScoutingRoster,
   getScoutingScoutFit,
   SCOUTING_SCOUTS,
@@ -26,6 +29,20 @@ test("creates a clean scouting state and defines transparent mission trade-offs"
   assert.equal(SCOUTING_MISSION_TYPES.local.cost, 5000);
   assert.equal(SCOUTING_MISSION_TYPES.regional.durationDays, 14);
   assert.ok(SCOUTING_MISSION_TYPES.elite.accuracy > SCOUTING_MISSION_TYPES.local.accuracy);
+});
+
+test("filters candidates through distinct discovery channels without changing the world seed", () => {
+  assert.equal(SCOUTING_SOURCES.length, 5);
+  assert.equal(getScoutingCandidates(PLAYERS).length, 16);
+  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "academy" }).length, 9);
+  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "club-network" }).length, 7);
+  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "youth-tournament" }).length, 9);
+  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "agent-referral" }).length, 7);
+  assert.deepEqual(
+    getScoutingCandidates(PLAYERS, { countryId: "country-eg", role: "هجوم", sourceId: "academy" }).map((player) => player.id),
+    ["demo-yassin-adel"]
+  );
+  assert.deepEqual(getScoutingCandidates(PLAYERS, { sourceId: "unknown-channel" }), []);
 });
 
 test("starts a scoped mission, charges its exact cost and does not mutate the source save", () => {
@@ -50,6 +67,7 @@ test("starts a scoped mission, charges its exact cost and does not mutate the so
 test("rejects invalid scopes, empty targets, insufficient funds and excess active missions", () => {
   const save = createInitialSave();
   assert.equal(startScoutingMission(save, { type: "unknown" }, PLAYERS).changed, false);
+  assert.equal(startScoutingMission(save, { type: "local", sourceId: "unknown-channel" }, PLAYERS).changed, false);
   assert.match(
     startScoutingMission(save, { type: "local", countryId: "country-eg", role: "حراسة" }, PLAYERS).error,
     /مفيش لاعبين/
@@ -201,9 +219,60 @@ test("rewards scout experience once when a mission completes and keeps the save 
   assert.equal(repeated.save.world.scouting.scouts.find((scout) => scout.id === "scout-north-africa").experience, after.experience);
 });
 
+test("stores repeat observations by stable player ID and preserves an auditable history", () => {
+  const initial = createInitialSave();
+  const first = startScoutingMission(initial, {
+    type: "local",
+    countryId: "country-eg",
+    role: "هجوم",
+    sourceId: "academy",
+    scoutId: "scout-north-africa"
+  }, PLAYERS);
+  assert.equal(first.changed, true);
+  assert.equal(first.mission.sourceLabel, "أكاديميات الشباب");
+  assert.equal(first.mission.targetCount, 1);
+
+  const firstDue = advanceCareerDays(first.save, first.mission.durationDays);
+  const firstCompleted = advanceScoutingMissions(firstDue, PLAYERS);
+  const playerId = "demo-yassin-adel";
+  const firstHistory = getPlayerScoutingHistory(firstCompleted.save.world.scouting, playerId);
+  assert.equal(firstHistory.totalObservations, 1);
+  assert.equal(firstHistory.observations[0].sourceLabels[0], "أكاديميات الشباب");
+  assert.equal(firstHistory.observations[0].ratingDelta, null);
+
+  const second = startScoutingMission(firstCompleted.save, {
+    type: "local",
+    countryId: "country-eg",
+    role: "هجوم",
+    sourceId: "academy",
+    scoutId: "scout-north-africa"
+  }, PLAYERS);
+  assert.equal(second.changed, true);
+  const secondDue = advanceCareerDays(second.save, second.mission.durationDays);
+  const secondCompleted = advanceScoutingMissions(secondDue, PLAYERS);
+  const history = getPlayerScoutingHistory(secondCompleted.save.world.scouting, playerId);
+  assert.equal(history.totalObservations, 2);
+  assert.equal(history.firstObservedAt, first.mission.dueDate);
+  assert.equal(history.lastObservedAt, second.mission.dueDate);
+  assert.equal(history.observations[1].ratingDelta,
+    history.observations[1].estimatedRating - history.observations[0].estimatedRating);
+  assert.equal(history.observations[1].potentialDelta,
+    history.observations[1].estimatedPotential - history.observations[0].estimatedPotential);
+  assert.equal(new Set(secondCompleted.save.world.scouting.observations.map((item) => item.id)).size, 2);
+  assert.equal(isValidSave(secondCompleted.save), true);
+
+  const malformed = structuredClone(secondCompleted.save);
+  malformed.world.scouting.observations[0].confidence = 100;
+  assert.equal(isValidSave(malformed), false);
+  const repeated = advanceScoutingMissions(secondCompleted.save, PLAYERS);
+  assert.equal(repeated.changed, false);
+  assert.equal(repeated.save.world.scouting.observations.length, 2);
+});
+
 test("accepts legacy schema-v3 scouting records without crew fields and rejects invalid crew progress", () => {
   const legacy = createInitialSave();
   delete legacy.world.scouting.scouts;
+  delete legacy.world.scouting.observations;
   assert.equal(isValidSave(legacy), true);
 
   const started = startScoutingMission(legacy, {

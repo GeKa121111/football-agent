@@ -8,7 +8,11 @@ import {
 import { WORLD_DATABASE, getWorldPlayerProfiles, getWorldSummary } from "./data/world-database.js";
 import {
   SCOUTING_MISSION_TYPES,
+  SCOUTING_SOURCES,
   advanceScoutingMissions,
+  getPlayerScoutingHistory,
+  getScoutingCandidates,
+  getScoutingSourceLabel,
   getScoutingDaysRemaining,
   getScoutingRoster,
   getScoutingScoutFit,
@@ -642,7 +646,7 @@ function renderScouting(context) {
       const scope = WORLD_DATABASE.countries.find((country) => country.id === mission.countryId)?.nameAr ?? "كل الدول";
       const roleLabel = mission.role === "all" ? "كل المراكز" : mission.role;
       const assignment = mission.scoutName ? " · الكشاف " + mission.scoutName + " (مستوى " + mission.scoutLevel + ")" : "";
-      const details = node("p", "scout-mission-details", scope + " · " + roleLabel + " · " + mission.targetCount + " لاعب محتمل" + assignment);
+      const details = node("p", "scout-mission-details", scope + " · " + roleLabel + " · " + getScoutingSourceLabel(mission.sourceId ?? "all") + " · " + mission.targetCount + " لاعب محتمل" + assignment);
       const track = node("div", "scout-progress-track");
       const bar = node("span", "scout-progress-bar");
       bar.style.width = progress + "%";
@@ -675,7 +679,7 @@ function renderScouting(context) {
       const copy = node("div", "scout-report-copy");
       copy.append(
         node("strong", "", report.missionName),
-        node("span", "", formatHomeDate(report.completedDate) + " · " + report.candidateCount + " موهبة · دقة " + Math.round(report.accuracy * 100) + "%" + (report.scoutName ? " · " + report.scoutName : ""))
+        node("span", "", formatHomeDate(report.completedDate) + " · " + getScoutingSourceLabel(report.sourceId ?? "all") + " · " + report.candidateCount + " موهبة · دقة " + Math.round(report.accuracy * 100) + "%" + (report.scoutName ? " · " + report.scoutName : ""))
       );
       row.append(copy, actionButton("عرض التقرير", "button-outline scout-report-button", () => context.openScoutingReport(report)));
       reportList.append(row);
@@ -897,6 +901,14 @@ export function mountApp(root) {
       typeSelect.append(option);
     });
 
+    const sourceSelect = node("select", "filter-select");
+    sourceSelect.setAttribute("aria-label", "مصدر المواهب");
+    SCOUTING_SOURCES.forEach((source) => {
+      const option = node("option", "", source.label);
+      option.value = source.id;
+      sourceSelect.append(option);
+    });
+
     const countrySelect = node("select", "filter-select");
     countrySelect.setAttribute("aria-label", "الدولة المستهدفة");
     const allCountries = node("option", "", "كل الدول");
@@ -935,6 +947,7 @@ export function mountApp(root) {
       form.append(wrapper);
     };
     addField("مستوى الاستثمار", typeSelect);
+    addField("مصدر المواهب", sourceSelect);
     addField("الدولة", countrySelect);
     addField("المركز", roleSelect);
     addField("الكشاف المكلف", scoutSelect);
@@ -943,10 +956,11 @@ export function mountApp(root) {
     let confirm = null;
     const refreshPreview = () => {
       const config = SCOUTING_MISSION_TYPES[typeSelect.value];
-      const targets = WORLD_PLAYERS.filter((player) =>
-        (countrySelect.value === "all" || player.countryId === countrySelect.value) &&
-        (roleSelect.value === "all" || player.role === roleSelect.value)
-      );
+      const targets = getScoutingCandidates(WORLD_PLAYERS, {
+        countryId: countrySelect.value,
+        role: roleSelect.value,
+        sourceId: sourceSelect.value
+      });
       const fit = getScoutingScoutFit(
         scoutSelect.value,
         state.save.world.scouting,
@@ -957,7 +971,8 @@ export function mountApp(root) {
       preview.replaceChildren(
         node("strong", "", "تكلفة " + formatMoney(config.cost)),
         node("span", "", "مدة " + config.durationDays + " أيام · الدقة الأساسية " + Math.round(config.accuracy * 100) + "%"),
-        node("span", "", targets.length + " لاعب ضمن نطاق البحث · رصيدك " + formatMoney(state.save.agency.balance))
+        node("span", "", targets.length + " لاعب ضمن نطاق البحث · رصيدك " + formatMoney(state.save.agency.balance)),
+        node("span", "", "قناة الاكتشاف: " + getScoutingSourceLabel(sourceSelect.value))
       );
       if (fit) {
         preview.append(
@@ -975,7 +990,7 @@ export function mountApp(root) {
       }
       if (confirm) confirm.disabled = !state.canWrite || !canLaunch;
     };
-    [typeSelect, countrySelect, roleSelect, scoutSelect].forEach((control) => control.addEventListener("change", refreshPreview));
+    [typeSelect, sourceSelect, countrySelect, roleSelect, scoutSelect].forEach((control) => control.addEventListener("change", refreshPreview));
     refreshPreview();
 
     confirm = actionButton("تأكيد إطلاق البعثة", "button-primary scout-confirm-button", () => {
@@ -988,6 +1003,7 @@ export function mountApp(root) {
         type: typeSelect.value,
         countryId: countrySelect.value,
         role: roleSelect.value,
+        sourceId: sourceSelect.value,
         scoutId: scoutSelect.value
       }, WORLD_PLAYERS);
       if (!result.changed) {
@@ -1011,6 +1027,48 @@ export function mountApp(root) {
     ], "إلغاء");
   }
 
+  function openScoutingHistory(playerId) {
+    const history = getPlayerScoutingHistory(state.save.world.scouting, playerId);
+    const content = node("div", "scout-history-content");
+    const overview = node("div", "scout-report-overview");
+    overview.append(
+      node("strong", "", history.playerName || "ملف اللاعب"),
+      node("span", "", history.totalObservations + " مشاهدة محفوظة"),
+      node("span", "", history.firstObservedAt ? "أول مشاهدة: " + formatHomeDate(history.firstObservedAt) : "لا توجد مشاهدات سابقة")
+    );
+    content.append(overview);
+    const list = node("div", "scout-history-list");
+    if (history.observations.length === 0) {
+      list.append(node("p", "scout-empty", "لا يوجد سجل رصد محفوظ لهذا اللاعب حتى الآن."));
+    } else {
+      history.observations.forEach((observation, index) => {
+        const row = node("article", "scout-history-observation");
+        const heading = node("div", "scout-finding-heading");
+        heading.append(
+          node("strong", "", "مشاهدة " + (index + 1) + " · " + formatHomeDate(observation.observedAt)),
+          node("span", "scout-recommendation", observation.recommendation)
+        );
+        const sources = node("p", "scout-finding-sources", "قناة الاكتشاف: " + observation.sourceLabels.join(" · "));
+        const scout = node("p", "scout-history-scout", "الكشاف: " + (observation.scoutName ?? "غير مسجل"));
+        const stats = node("div", "scout-finding-stats");
+        stats.append(
+          statMini("التقييم المقدر", observation.estimatedRating),
+          statMini("الإمكانيات المقدرة", observation.estimatedPotential),
+          statMini("الثقة", observation.confidence + "%")
+        );
+        const delta = observation.ratingDelta === null
+          ? "أول مشاهدة محفوظة."
+          : "فرق التقدير عن المشاهدة السابقة: التقييم " +
+            (observation.ratingDelta > 0 ? "+" : "") + observation.ratingDelta +
+            " · الإمكانيات " + (observation.potentialDelta > 0 ? "+" : "") + observation.potentialDelta;
+        row.append(heading, sources, scout, stats, node("p", "scout-history-delta", delta));
+        list.append(row);
+      });
+    }
+    content.append(list, node("p", "modal-note", "فروق الأرقام تقارن تقديرات الكشافين فقط؛ لا تعني أن مستوى اللاعب الحقيقي ارتفع أو انخفض."));
+    openModal("سجل رصد اللاعب", [content], "إغلاق السجل");
+  }
+
   function openScoutingReport(report) {
     const content = node("div", "scout-report-content");
     const overview = node("div", "scout-report-overview");
@@ -1018,7 +1076,8 @@ export function mountApp(root) {
       node("strong", "", report.missionName),
       node("span", "", "تاريخ الإكمال: " + formatHomeDate(report.completedDate)),
       node("span", "", "التكلفة: " + formatMoney(report.cost) + " · المدة: " + report.durationDays + " أيام"),
-      node("span", "", "دقة البعثة: " + Math.round(report.accuracy * 100) + "% · ملفات في النطاق: " + report.candidateCount)
+      node("span", "", "دقة البعثة: " + Math.round(report.accuracy * 100) + "% · ملفات في النطاق: " + report.candidateCount),
+      node("span", "", "مصدر المواهب: " + getScoutingSourceLabel(report.sourceId ?? "all"))
     );
     if (report.scoutName) {
       overview.append(node("span", "", "الكشاف المسؤول: " + report.scoutName + " · المستوى " + report.scoutLevel));
@@ -1039,13 +1098,23 @@ export function mountApp(root) {
           node("span", "scout-recommendation", finding.recommendation)
         );
         const subline = node("p", "scout-finding-subline", finding.position + " · " + finding.club + " · " + finding.country + " · " + finding.age + " سنة");
+        const sourceLabels = (finding.discoverySourceIds ?? []).map(getScoutingSourceLabel);
+        const sources = node("p", "scout-finding-sources", "قنوات متاحة: " + (sourceLabels.join(" · ") || "غير محددة"));
         const stats = node("div", "scout-finding-stats");
         stats.append(
           statMini("التقييم المقدر", finding.estimatedRating),
           statMini("الإمكانيات المقدرة", finding.estimatedPotential),
           statMini("الثقة", finding.confidence + "%")
         );
-        row.append(heading, subline, stats, node("p", "scout-finding-rationale", finding.rationale));
+        const history = getPlayerScoutingHistory(state.save.world.scouting, finding.playerId);
+        row.append(
+          heading,
+          subline,
+          sources,
+          stats,
+          node("p", "scout-finding-rationale", finding.rationale),
+          actionButton("سجل الرصد (" + history.totalObservations + ")", "button-outline scout-history-button", () => openScoutingHistory(finding.playerId))
+        );
         list.append(row);
       });
     }

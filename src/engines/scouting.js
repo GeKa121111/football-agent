@@ -51,6 +51,24 @@ export const SCOUTING_SCOUTS = Object.freeze([
   })
 ]);
 
+export const SCOUTING_SOURCES = Object.freeze([
+  Object.freeze({ id: "all", label: "كل المصادر", description: "دمج كل قنوات اكتشاف المواهب المتاحة." }),
+  Object.freeze({ id: "academy", label: "أكاديميات الشباب", description: "متابعة ملفات المواهب داخل الأكاديميات." }),
+  Object.freeze({ id: "club-network", label: "شبكة الأندية", description: "ترشيحات ومتابعة من شبكات الأندية." }),
+  Object.freeze({ id: "youth-tournament", label: "بطولات الشباب", description: "مواهب ظهرت في مسابقات الفئات السنية." }),
+  Object.freeze({ id: "agent-referral", label: "ترشيحات الوسطاء", description: "ملفات وصلت عبر شبكة الوسطاء." })
+]);
+const DISCOVERY_SOURCE_IDS = new Set(SCOUTING_SOURCES.filter((source) => source.id !== "all").map((source) => source.id));
+export function getScoutingSourceLabel(sourceId = "all") {
+  return SCOUTING_SOURCES.find((source) => source.id === sourceId)?.label ?? "مصدر غير معروف";
+}
+function getPlayerDiscoverySourceIds(player) {
+  const ids = Array.isArray(player?.discoverySourceIds)
+    ? player.discoverySourceIds.filter((sourceId) => DISCOVERY_SOURCE_IDS.has(sourceId))
+    : [];
+  return ids.length > 0 ? [...new Set(ids)] : ["club-network"];
+}
+
 function initialScoutProgress() {
   return SCOUTING_SCOUTS.map((scout) => ({
     id: scout.id,
@@ -82,6 +100,7 @@ export function createInitialScoutingState() {
     nextMissionSequence: 1,
     activeMissions: [],
     reports: [],
+    observations: [],
     scouts: initialScoutProgress()
   };
 }
@@ -158,15 +177,19 @@ function clamp(value, min, max) {
 
 function matchesMissionScope(player, mission) {
   return (mission.countryId === "all" || player.countryId === mission.countryId) &&
-    (mission.role === "all" || player.role === mission.role);
+    (mission.role === "all" || player.role === mission.role) &&
+    (mission.sourceId === undefined || mission.sourceId === "all" || getPlayerDiscoverySourceIds(player).includes(mission.sourceId));
 }
-
-function getMissionTargets(players, countryId, role) {
-  if (!Array.isArray(players)) return [];
+export function getScoutingCandidates(players, options = {}) {
+  const countryId = options.countryId ?? "all";
+  const role = options.role ?? "all";
+  const sourceId = options.sourceId ?? "all";
+  if (!Array.isArray(players) || (sourceId !== "all" && !DISCOVERY_SOURCE_IDS.has(sourceId))) return [];
   return players.filter((player) =>
     player && typeof player.id === "string" &&
     (countryId === "all" || player.countryId === countryId) &&
-    (role === "all" || player.role === role)
+    (role === "all" || player.role === role) &&
+    (sourceId === "all" || getPlayerDiscoverySourceIds(player).includes(sourceId))
   );
 }
 
@@ -223,11 +246,13 @@ function createFinding(player, mission) {
     confidence,
     upside,
     recommendation,
-    rationale
+    rationale,
+    discoverySourceIds: getPlayerDiscoverySourceIds(player)
   };
 }
 
 function createReport(mission, players) {
+  const sourceId = mission.sourceId ?? "all";
   const targets = players
     .filter((player) => matchesMissionScope(player, mission))
     .sort((a, b) => scorePlayer(b) - scorePlayer(a) || a.id.localeCompare(b.id));
@@ -239,6 +264,8 @@ function createReport(mission, players) {
     missionName: mission.name,
     countryId: mission.countryId,
     role: mission.role,
+    sourceId,
+    sourceLabel: getScoutingSourceLabel(sourceId),
     scoutId: mission.scoutId,
     scoutName: mission.scoutName,
     scoutLevel: mission.scoutLevel,
@@ -269,12 +296,16 @@ export function startScoutingMission(save, options, players) {
 
   const countryId = options?.countryId ?? "all";
   const role = options?.role ?? "all";
-  if (typeof countryId !== "string" || !countryId.trim() || !VALID_ROLES.includes(role)) {
-    return { changed: false, save, mission: null, error: "نطاق البحث المحدد غير صالح." };
+  const sourceId = options?.sourceId ?? "all";
+  if (typeof countryId !== "string" || !countryId.trim() || !VALID_ROLES.includes(role) ||
+      (sourceId !== "all" && !DISCOVERY_SOURCE_IDS.has(sourceId))) {
+    return { changed: false, save, mission: null, error: "نطاق البحث أو مصدر المواهب المحدد غير صالح." };
   }
 
   const currentScouting = save.world.scouting ?? createInitialScoutingState();
   if (!Array.isArray(currentScouting.activeMissions) || !Array.isArray(currentScouting.reports) ||
+      (currentScouting.observations !== undefined && !Array.isArray(currentScouting.observations)) ||
+      (Array.isArray(currentScouting.observations) && currentScouting.observations.length > 300) ||
       !Number.isSafeInteger(currentScouting.nextMissionSequence) || currentScouting.nextMissionSequence < 1) {
     return { changed: false, save, mission: null, error: "سجل الكشافين غير صالح؛ لم يتم تغييره." };
   }
@@ -305,7 +336,7 @@ export function startScoutingMission(save, options, players) {
   }
 
   const fit = getScoutingScoutFit(chosenScout.id, scouting, countryId, role, config.accuracy);
-  const targets = getMissionTargets(players, countryId, role);
+  const targets = getScoutingCandidates(players, { countryId, role, sourceId });
   if (targets.length === 0) {
     return { changed: false, save, mission: null, error: "مفيش لاعبين مطابقين لنطاق البحث ده." };
   }
@@ -321,6 +352,8 @@ export function startScoutingMission(save, options, players) {
     name: config.label,
     countryId,
     role,
+    sourceId,
+    sourceLabel: getScoutingSourceLabel(sourceId),
     scoutId: fit.id,
     scoutName: fit.name,
     scoutLevel: fit.level,
@@ -338,7 +371,8 @@ export function startScoutingMission(save, options, players) {
     ...scouting,
     nextMissionSequence: sequence + 1,
     activeMissions: [...scouting.activeMissions, mission],
-    reports: [...scouting.reports]
+    reports: [...scouting.reports],
+    observations: [...(Array.isArray(scouting.observations) ? scouting.observations : [])]
   };
   return {
     changed: true,
@@ -352,6 +386,25 @@ export function startScoutingMission(save, options, players) {
   };
 }
 
+function createObservation(report, finding) {
+  const sequence = Number(report.id.slice("scout-report-".length));
+  const sourceIds = report.sourceId && report.sourceId !== "all" ? [report.sourceId] : finding.discoverySourceIds;
+  return {
+    id: "scout-observation-" + sequence + "-" + finding.playerId,
+    playerId: finding.playerId,
+    playerName: finding.playerName,
+    missionId: report.missionId,
+    reportId: report.id,
+    observedAt: report.completedDate,
+    sourceIds: [...sourceIds],
+    ...(report.scoutId ? { scoutId: report.scoutId, scoutName: report.scoutName } : {}),
+    estimatedRating: finding.estimatedRating,
+    estimatedPotential: finding.estimatedPotential,
+    confidence: finding.confidence,
+    recommendation: finding.recommendation
+  };
+}
+
 /**
  * Completes every due mission, generates deterministic reports and rewards the assigned scouts.
  * Call after the career calendar has advanced to its new currentDate.
@@ -361,7 +414,9 @@ export function advanceScoutingMissions(save, players, currentDate = save?.world
     throw new TypeError("تاريخ إكمال بعثات الكشافين غير صالح.");
   }
   const currentScouting = save.world.scouting ?? createInitialScoutingState();
-  if (!Array.isArray(currentScouting.activeMissions) || !Array.isArray(currentScouting.reports)) {
+  if (!Array.isArray(currentScouting.activeMissions) || !Array.isArray(currentScouting.reports) ||
+      (currentScouting.observations !== undefined && !Array.isArray(currentScouting.observations)) ||
+      (Array.isArray(currentScouting.observations) && currentScouting.observations.length > 300)) {
     throw new TypeError("سجل بعثات الكشافين غير صالح.");
   }
 
@@ -385,17 +440,45 @@ export function advanceScoutingMissions(save, players, currentDate = save?.world
     });
   }
 
+  const completedObservations = completedReports.flatMap((report) => report.findings.map((finding) => createObservation(report, finding)));
   const nextScouting = {
     ...currentScouting,
     scouts: [...progress.values()],
     activeMissions: nextActiveMissions,
-    reports: [...completedReports, ...currentScouting.reports].slice(0, REPORT_LIMIT)
+    reports: [...completedReports, ...currentScouting.reports].slice(0, REPORT_LIMIT),
+    observations: [...completedObservations, ...(currentScouting.observations ?? [])].slice(0, 300)
   };
 
   return {
     changed: true,
     save: { ...save, world: { ...save.world, scouting: nextScouting } },
     completedReports
+  };
+}
+
+export function getPlayerScoutingHistory(scouting, playerId) {
+  if (typeof playerId !== "string" || !playerId.trim()) {
+    return { playerId: null, playerName: "", totalObservations: 0, firstObservedAt: null, lastObservedAt: null, observations: [] };
+  }
+  const observations = (Array.isArray(scouting?.observations) ? scouting.observations : [])
+    .filter((observation) => observation?.playerId === playerId)
+    .sort((a, b) => a.observedAt.localeCompare(b.observedAt) || a.id.localeCompare(b.id));
+  const history = observations.map((observation, index) => {
+    const previous = observations[index - 1];
+    return {
+      ...observation,
+      sourceLabels: observation.sourceIds.map(getScoutingSourceLabel),
+      ratingDelta: previous ? observation.estimatedRating - previous.estimatedRating : null,
+      potentialDelta: previous ? observation.estimatedPotential - previous.estimatedPotential : null
+    };
+  });
+  return {
+    playerId,
+    playerName: history.at(-1)?.playerName ?? history[0]?.playerName ?? "",
+    totalObservations: history.length,
+    firstObservedAt: history[0]?.observedAt ?? null,
+    lastObservedAt: history.at(-1)?.observedAt ?? null,
+    observations: history
   };
 }
 

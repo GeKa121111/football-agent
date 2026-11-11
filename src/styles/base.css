@@ -1000,3 +1000,37 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   .scout-team-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .scout-staff-card { padding: 9px; }
 }
+
+
+/* Phase 6 — discovery channels and repeat-observation history */
+.scout-finding-sources,
+.scout-history-scout,
+.scout-history-delta {
+  margin: 6px 0;
+  color: #9da9c2;
+  font-size: 9px;
+  line-height: 1.7;
+}
+.scout-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.scout-history-observation {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(166,145,216,.14);
+  border-radius: 12px;
+  background: rgba(17,24,44,.65);
+}
+.scout-history-observation .scout-finding-stats {
+  margin-top: 8px;
+}
+.scout-history-delta {
+  margin-bottom: 0;
+  color: #b8abd7;
+}
+.scout-history-button {
+  width: 100%;
+  margin-top: 10px;
+}

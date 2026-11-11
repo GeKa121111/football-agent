@@ -682,3 +682,57 @@ test.describe("Inbox archive", () => {
   });
 
 });
+
+
+test.describe("Scouting discovery channels and observation history", () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test("filters by a discovery channel and persists repeat observations across reloads", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الكشافون");
+
+    const launchMission = async () => {
+      await page.getByRole("button", { name: /إطلاق بعثة كشف/ }).click();
+      await page.getByLabel("مستوى البعثة").selectOption("local");
+      await page.getByLabel("مصدر المواهب").selectOption("academy");
+      await page.getByLabel("الدولة المستهدفة").selectOption("country-eg");
+      await page.getByLabel("المركز المستهدف").selectOption("هجوم");
+      await expect(page.getByText(/1 لاعب ضمن نطاق البحث/)).toBeVisible();
+      await page.getByRole("button", { name: "تأكيد إطلاق البعثة" }).click();
+    };
+
+    const advanceSevenDays = async () => {
+      await navigateTo(page, "الرئيسية");
+      for (let day = 0; day < 7; day += 1) {
+        await page.locator(".day-advance-button").click();
+      }
+      await navigateTo(page, "الكشافون");
+    };
+
+    await launchMission();
+    await advanceSevenDays();
+    await launchMission();
+    await advanceSevenDays();
+
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.world.scouting.observations).toHaveLength(2);
+    expect(saved.world.scouting.observations.every((item) => item.playerId === "demo-yassin-adel")).toBe(true);
+
+    await page.getByRole("button", { name: "عرض التقرير" }).first().click();
+    await expect(page.getByRole("dialog", { name: "تقرير الكشافين" })).toBeVisible();
+    await page.getByRole("button", { name: "سجل الرصد (2)" }).click();
+    const historyDialog = page.getByRole("dialog", { name: "سجل رصد اللاعب" });
+    await expect(historyDialog).toBeVisible();
+    await expect(historyDialog.locator(".scout-history-observation")).toHaveCount(2);
+    await expect(historyDialog.getByText("أكاديميات الشباب").first()).toBeVisible();
+
+    await historyDialog.getByRole("button", { name: "إغلاق السجل" }).click();
+    await page.getByRole("button", { name: "إغلاق التقرير" }).click();
+    await page.reload();
+    await navigateTo(page, "الكشافون");
+    await page.getByRole("button", { name: "عرض التقرير" }).first().click();
+    await page.getByRole("button", { name: "سجل الرصد (2)" }).click();
+    await expect(page.getByRole("dialog", { name: "سجل رصد اللاعب" }).locator(".scout-history-observation")).toHaveCount(2);
+    await hasNoHorizontalOverflow(page);
+  });
+});

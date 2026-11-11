@@ -66,22 +66,22 @@ const PORTRAIT_PRESETS = [
 ];
 
 const PLAYER_SEEDS = [
-  { id: "demo-yassin-adel", name: "ياسين عادل", age: 19, countryId: "country-eg", clubId: "club-al-ahly", position: "جناح أيسر", role: "هجوم", rating: 72, potential: 88, marketValueEur: 1200000, status: "موهبة صاعدة", shirtNumber: 11, contractUntil: "2028-06-30", foot: "right" },
-  { id: "demo-ziad-fawzy", name: "زياد فوزي", age: 20, countryId: "country-eg", clubId: "club-zamalek", position: "وسط هجومي", role: "وسط", rating: 75, potential: 90, marketValueEur: 2400000, status: "تحت المراقبة", shirtNumber: 10, contractUntil: "2029-06-30", foot: "left" },
-  { id: "demo-omar-nabil", name: "عمر نبيل", age: 18, countryId: "country-ma", clubId: "club-wydad", position: "مهاجم", role: "هجوم", rating: 69, potential: 87, marketValueEur: 850000, status: "متاح للكشف", shirtNumber: 9, contractUntil: "2028-06-30", foot: "right" },
-  { id: "demo-karim-tarek", name: "كريم طارق", age: 22, countryId: "country-tn", clubId: "club-etoile", position: "قلب دفاع", role: "دفاع", rating: 76, potential: 84, marketValueEur: 1900000, status: "جاهز للتفاوض", shirtNumber: 4, contractUntil: "2027-06-30", foot: "right" },
-  { id: "seed-liam-carter", name: "Liam Carter", age: 19, countryId: "country-gb", clubId: "club-arsenal", position: "وسط مركزي", role: "وسط", rating: 71, potential: 86, marketValueEur: 1600000, status: "موهبة صاعدة", shirtNumber: 8, contractUntil: "2029-06-30", foot: "right" },
-  { id: "seed-noah-bennett", name: "Noah Bennett", age: 21, countryId: "country-gb", clubId: "club-liverpool", position: "ظهير أيمن", role: "دفاع", rating: 74, potential: 85, marketValueEur: 2100000, status: "تحت المراقبة", shirtNumber: 2, contractUntil: "2028-06-30", foot: "right" },
-  { id: "seed-iker-navarro", name: "Iker Navarro", age: 20, countryId: "country-es", clubId: "club-real-madrid", position: "قلب دفاع", role: "دفاع", rating: 73, potential: 88, marketValueEur: 2500000, status: "موهبة صاعدة", shirtNumber: 5, contractUntil: "2029-06-30", foot: "right" },
-  { id: "seed-adrian-vega", name: "Adrián Vega", age: 18, countryId: "country-es", clubId: "club-barcelona", position: "وسط دفاعي", role: "وسط", rating: 70, potential: 89, marketValueEur: 1800000, status: "متاح للكشف", shirtNumber: 6, contractUntil: "2029-06-30", foot: "left" },
-  { id: "seed-leon-fischer", name: "Leon Fischer", age: 20, countryId: "country-de", clubId: "club-bayern", position: "حارس مرمى", role: "حراسة", rating: 72, potential: 86, marketValueEur: 1300000, status: "تحت المراقبة", shirtNumber: 1, contractUntil: "2028-06-30", foot: "right" },
-  { id: "seed-jonas-weber", name: "Jonas Weber", age: 19, countryId: "country-de", clubId: "club-dortmund", position: "قلب دفاع", role: "دفاع", rating: 71, potential: 87, marketValueEur: 1500000, status: "موهبة صاعدة", shirtNumber: 15, contractUntil: "2029-06-30", foot: "left" },
-  { id: "seed-lucas-moreau", name: "Lucas Moreau", age: 21, countryId: "country-fr", clubId: "club-psg", position: "ظهير أيسر", role: "دفاع", rating: 75, potential: 86, marketValueEur: 2800000, status: "جاهز للتطور", shirtNumber: 3, contractUntil: "2028-06-30", foot: "left" },
-  { id: "seed-hugo-laurent", name: "Hugo Laurent", age: 18, countryId: "country-fr", clubId: "club-marseille", position: "وسط مركزي", role: "وسط", rating: 68, potential: 85, marketValueEur: 950000, status: "متاح للكشف", shirtNumber: 14, contractUntil: "2029-06-30", foot: "right" },
-  { id: "seed-matteo-rinaldi", name: "Matteo Rinaldi", age: 20, countryId: "country-it", clubId: "club-inter", position: "ظهير أيمن", role: "دفاع", rating: 74, potential: 87, marketValueEur: 2200000, status: "تحت المراقبة", shirtNumber: 7, contractUntil: "2028-06-30", foot: "right" },
-  { id: "seed-luca-bianchi", name: "Luca Bianchi", age: 19, countryId: "country-it", clubId: "club-juventus", position: "حارس مرمى", role: "حراسة", rating: 70, potential: 84, marketValueEur: 1100000, status: "موهبة صاعدة", shirtNumber: 22, contractUntil: "2029-06-30", foot: "right" },
-  { id: "seed-anis-ben-salem", name: "أنيس بن سالم", age: 20, countryId: "country-tn", clubId: "club-es-tunis", position: "وسط هجومي", role: "وسط", rating: 73, potential: 86, marketValueEur: 1750000, status: "تحت المراقبة", shirtNumber: 18, contractUntil: "2028-06-30", foot: "left" },
-  { id: "seed-youssef-amrani", name: "يوسف العمراني", age: 19, countryId: "country-ma", clubId: "club-raja", position: "قلب دفاع", role: "دفاع", rating: 72, potential: 85, marketValueEur: 1400000, status: "موهبة صاعدة", shirtNumber: 13, contractUntil: "2029-06-30", foot: "right" }
+  { id: "demo-yassin-adel", name: "ياسين عادل", age: 19, countryId: "country-eg", clubId: "club-al-ahly", position: "جناح أيسر", role: "هجوم", rating: 72, potential: 88, marketValueEur: 1200000, status: "موهبة صاعدة", shirtNumber: 11, contractUntil: "2028-06-30", foot: "right" , discoverySourceIds: ["academy","youth-tournament"]},
+  { id: "demo-ziad-fawzy", name: "زياد فوزي", age: 20, countryId: "country-eg", clubId: "club-zamalek", position: "وسط هجومي", role: "وسط", rating: 75, potential: 90, marketValueEur: 2400000, status: "تحت المراقبة", shirtNumber: 10, contractUntil: "2029-06-30", foot: "left" , discoverySourceIds: ["club-network","agent-referral"]},
+  { id: "demo-omar-nabil", name: "عمر نبيل", age: 18, countryId: "country-ma", clubId: "club-wydad", position: "مهاجم", role: "هجوم", rating: 69, potential: 87, marketValueEur: 850000, status: "متاح للكشف", shirtNumber: 9, contractUntil: "2028-06-30", foot: "right" , discoverySourceIds: ["academy","youth-tournament"]},
+  { id: "demo-karim-tarek", name: "كريم طارق", age: 22, countryId: "country-tn", clubId: "club-etoile", position: "قلب دفاع", role: "دفاع", rating: 76, potential: 84, marketValueEur: 1900000, status: "جاهز للتفاوض", shirtNumber: 4, contractUntil: "2027-06-30", foot: "right" , discoverySourceIds: ["club-network","agent-referral"]},
+  { id: "seed-liam-carter", name: "Liam Carter", age: 19, countryId: "country-gb", clubId: "club-arsenal", position: "وسط مركزي", role: "وسط", rating: 71, potential: 86, marketValueEur: 1600000, status: "موهبة صاعدة", shirtNumber: 8, contractUntil: "2029-06-30", foot: "right" , discoverySourceIds: ["academy","youth-tournament"]},
+  { id: "seed-noah-bennett", name: "Noah Bennett", age: 21, countryId: "country-gb", clubId: "club-liverpool", position: "ظهير أيمن", role: "دفاع", rating: 74, potential: 85, marketValueEur: 2100000, status: "تحت المراقبة", shirtNumber: 2, contractUntil: "2028-06-30", foot: "right" , discoverySourceIds: ["club-network","agent-referral"]},
+  { id: "seed-iker-navarro", name: "Iker Navarro", age: 20, countryId: "country-es", clubId: "club-real-madrid", position: "قلب دفاع", role: "دفاع", rating: 73, potential: 88, marketValueEur: 2500000, status: "موهبة صاعدة", shirtNumber: 5, contractUntil: "2029-06-30", foot: "right" , discoverySourceIds: ["academy","youth-tournament"]},
+  { id: "seed-adrian-vega", name: "Adrián Vega", age: 18, countryId: "country-es", clubId: "club-barcelona", position: "وسط دفاعي", role: "وسط", rating: 70, potential: 89, marketValueEur: 1800000, status: "متاح للكشف", shirtNumber: 6, contractUntil: "2029-06-30", foot: "left" , discoverySourceIds: ["academy","youth-tournament"]},
+  { id: "seed-leon-fischer", name: "Leon Fischer", age: 20, countryId: "country-de", clubId: "club-bayern", position: "حارس مرمى", role: "حراسة", rating: 72, potential: 86, marketValueEur: 1300000, status: "تحت المراقبة", shirtNumber: 1, contractUntil: "2028-06-30", foot: "right" , discoverySourceIds: ["club-network","agent-referral"]},
+  { id: "seed-jonas-weber", name: "Jonas Weber", age: 19, countryId: "country-de", clubId: "club-dortmund", position: "قلب دفاع", role: "دفاع", rating: 71, potential: 87, marketValueEur: 1500000, status: "موهبة صاعدة", shirtNumber: 15, contractUntil: "2029-06-30", foot: "left" , discoverySourceIds: ["academy","youth-tournament"]},
+  { id: "seed-lucas-moreau", name: "Lucas Moreau", age: 21, countryId: "country-fr", clubId: "club-psg", position: "ظهير أيسر", role: "دفاع", rating: 75, potential: 86, marketValueEur: 2800000, status: "جاهز للتطور", shirtNumber: 3, contractUntil: "2028-06-30", foot: "left" , discoverySourceIds: ["club-network","agent-referral"]},
+  { id: "seed-hugo-laurent", name: "Hugo Laurent", age: 18, countryId: "country-fr", clubId: "club-marseille", position: "وسط مركزي", role: "وسط", rating: 68, potential: 85, marketValueEur: 950000, status: "متاح للكشف", shirtNumber: 14, contractUntil: "2029-06-30", foot: "right" , discoverySourceIds: ["academy","youth-tournament"]},
+  { id: "seed-matteo-rinaldi", name: "Matteo Rinaldi", age: 20, countryId: "country-it", clubId: "club-inter", position: "ظهير أيمن", role: "دفاع", rating: 74, potential: 87, marketValueEur: 2200000, status: "تحت المراقبة", shirtNumber: 7, contractUntil: "2028-06-30", foot: "right" , discoverySourceIds: ["club-network","agent-referral"]},
+  { id: "seed-luca-bianchi", name: "Luca Bianchi", age: 19, countryId: "country-it", clubId: "club-juventus", position: "حارس مرمى", role: "حراسة", rating: 70, potential: 84, marketValueEur: 1100000, status: "موهبة صاعدة", shirtNumber: 22, contractUntil: "2029-06-30", foot: "right" , discoverySourceIds: ["academy","youth-tournament"]},
+  { id: "seed-anis-ben-salem", name: "أنيس بن سالم", age: 20, countryId: "country-tn", clubId: "club-es-tunis", position: "وسط هجومي", role: "وسط", rating: 73, potential: 86, marketValueEur: 1750000, status: "تحت المراقبة", shirtNumber: 18, contractUntil: "2028-06-30", foot: "left" , discoverySourceIds: ["club-network","agent-referral"]},
+  { id: "seed-youssef-amrani", name: "يوسف العمراني", age: 19, countryId: "country-ma", clubId: "club-raja", position: "قلب دفاع", role: "دفاع", rating: 72, potential: 85, marketValueEur: 1400000, status: "موهبة صاعدة", shirtNumber: 13, contractUntil: "2029-06-30", foot: "right" , discoverySourceIds: ["academy","youth-tournament"]}
 ];
 
 const players = PLAYER_SEEDS.map((player, index) => ({
@@ -185,6 +185,7 @@ export function validateWorldDatabase(database = WORLD_DATABASE) {
   }
 
   const allowedRoles = new Set(["هجوم", "وسط", "دفاع", "حراسة"]);
+  const allowedDiscoverySources = new Set(["academy", "club-network", "youth-tournament", "agent-referral"]);
   for (const player of players) {
     if (!countryById.has(player.countryId)) errors.push("اللاعب " + player.id + " يشير إلى جنسية غير موجودة.");
     if (!clubById.has(player.clubId)) errors.push("اللاعب " + player.id + " يشير إلى نادٍ غير موجود.");
@@ -196,6 +197,11 @@ export function validateWorldDatabase(database = WORLD_DATABASE) {
     if (!allowedRoles.has(player.role)) errors.push("مركز اللاعب العام غير معروف: " + player.id);
     if (typeof player.position !== "string" || !player.position.trim()) errors.push("المركز التفصيلي مفقود: " + player.id);
     if (!isCalendarDate(player.contractUntil)) errors.push("تاريخ انتهاء العقد غير صالح: " + player.id);
+    if (!Array.isArray(player.discoverySourceIds) || player.discoverySourceIds.length === 0 ||
+        new Set(player.discoverySourceIds).size !== player.discoverySourceIds.length ||
+        !player.discoverySourceIds.every((sourceId) => allowedDiscoverySources.has(sourceId))) {
+      errors.push("قنوات اكتشاف المواهب غير صالحة: " + player.id);
+    }
   }
 
   return { valid: errors.length === 0, errors };
