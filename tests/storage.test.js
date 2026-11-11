@@ -263,8 +263,11 @@ test("migrates version 3 saves to representation schema v4 without rewriting on 
     nextOfferSequence: 1,
     nextContractSequence: 1,
     nextHistorySequence: 1,
+    nextInteractionSequence: 1,
+    reputationScore: 50,
     offers: [],
     contracts: [],
+    interactions: [],
     history: []
   });
   assert.equal(isValidSave(result.save), true);
