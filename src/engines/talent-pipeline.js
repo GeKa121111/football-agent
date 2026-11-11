@@ -140,7 +140,7 @@ export function isValidTalentPipelineState(state, currentDate) {
   return highestSequence < state.nextSequence;
 }
 
-function syncTalentFollowUpTask(save, entry) {
+function syncTalentFollowUpTask(save, entry, completionReason = "rescheduled") {
   const tasks = [...(save.world.tasks ?? [])];
   const pipeline = { ...(save.agency.talentPipeline ?? createInitialTalentPipelineState()) };
   const activeIndex = tasks.findIndex((task) =>
@@ -187,7 +187,7 @@ function syncTalentFollowUpTask(save, entry) {
       status: "completed",
       completedDate: save.world.currentDate,
       completedLate: save.world.currentDate > task.dueDate,
-      completionReason: entry.stage === "archived" ? "archived" : "rescheduled"
+      completionReason: entry.stage === "archived" ? "archived" : completionReason
     };
   }
 
@@ -309,7 +309,7 @@ export function upsertTalentProspect(save, player, options = {}) {
   return {
     changed: true,
     entry,
-    save: syncTalentFollowUpTask(nextSave, entry)
+    save: syncTalentFollowUpTask(nextSave, entry, options.taskCompletionReason ?? "rescheduled")
   };
 }
 
@@ -394,6 +394,48 @@ export function assignTalentProspectStaff(save, playerId, scoutId, reason = "man
     changed: true,
     entry: updatedEntry,
     save: { ...save, agency: { ...save.agency, talentPipeline: nextPipeline } }
+  };
+}
+
+/**
+ * Moves a signed prospect from acquisition into client management. Any
+ * pre-contract follow-up task is closed, and scouting ownership is released.
+ */
+export function handoffTalentProspectToClientManagement(save, playerId) {
+  const entry = getTalentProspect(save?.agency?.talentPipeline, playerId);
+  const hasActiveContract = save?.agency?.clients?.includes(playerId) ||
+    save?.agency?.representation?.contracts?.some((contract) =>
+      contract.playerId === playerId && contract.status === "active"
+    );
+  if (!entry || !hasActiveContract) {
+    return { changed: false, save, error: "لا يمكن تسليم الملف قبل توقيع عقد تمثيل نشط." };
+  }
+
+  let nextSave = save;
+  if (entry.nextFollowUpDate) {
+    const player = {
+      id: entry.playerId,
+      name: entry.playerName,
+      age: entry.age,
+      club: entry.club,
+      position: entry.position,
+      rating: entry.rating,
+      potential: entry.potential
+    };
+    const cleared = upsertTalentProspect(nextSave, player, {
+      nextFollowUpDate: null,
+      taskCompletionReason: "contract-signed"
+    });
+    if (!cleared.changed) return cleared;
+    nextSave = cleared.save;
+  }
+
+  const released = assignTalentProspectStaff(nextSave, playerId, null, "contract-signed");
+  if (released.error) return released;
+  return {
+    changed: Boolean(entry.nextFollowUpDate || released.changed),
+    entry: getTalentProspect(released.save.agency.talentPipeline, playerId),
+    save: released.save
   };
 }
 
