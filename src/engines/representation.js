@@ -623,8 +623,9 @@ export function createRepresentationOffer(save, player, terms, currentDate = sav
     return { changed: false, save, error: "ملف اللاعب غير مكتمل ولا يمكن تقديم عرض تمثيل." };
   }
   if (!isCalendarDate(currentDate)) return { changed: false, save, error: "تاريخ المسيرة غير صالح." };
-  if (!validTerms(terms?.commissionRate, terms?.termDays)) {
-    return { changed: false, save, error: "اختر عمولة من 5% إلى 15% ومدة سنة أو سنتين أو ثلاث سنوات." };
+  if (!validTerms(terms?.commissionRate, terms?.termDays) ||
+      (terms?.representationType !== undefined && !isValidRepresentationType(terms.representationType))) {
+    return { changed: false, save, error: "اختر عمولة من 5% إلى 15% ومدة سنة أو سنتين أو ثلاث سنوات ونوع تمثيل صالح." };
   }
   if (save.agency.clients.includes(player.id) ||
       representation.contracts.some((contract) => contract.playerId === player.id && contract.status === "active")) {
@@ -652,6 +653,8 @@ export function createRepresentationOffer(save, player, terms, currentDate = sav
     rating: player.rating,
     potential: player.potential,
     playerPreferences: getPlayerRepresentationProfile(player),
+    representationType: normalizeRepresentationType(terms.representationType),
+    agencyReputation: currentAgencyReputation(representation),
     commissionRate: terms.commissionRate,
     termDays: terms.termDays,
     createdDate: currentDate,
@@ -742,14 +745,19 @@ export function submitRepresentationCounterOffer(save, offerId, terms, currentDa
     return { changed: false, save, error: "سجل التفاوض ممتلئ ولا يمكن إضافة جولة جديدة." };
   }
 
+  if (terms.representationType !== undefined && !isValidRepresentationType(terms.representationType)) {
+    return { changed: false, save, error: "نوع التمثيل في العرض المضاد غير صالح." };
+  }
   const agencyOffer = {
     ...offer,
     commissionRate: terms.commissionRate,
-    termDays: terms.termDays
+    termDays: terms.termDays,
+    representationType: normalizeRepresentationType(terms.representationType ?? offer.representationType)
   };
   let updated = replaceOffer(representation, offer.id, {
     commissionRate: terms.commissionRate,
-    termDays: terms.termDays
+    termDays: terms.termDays,
+    representationType: normalizeRepresentationType(terms.representationType ?? offer.representationType)
   });
   updated = nextHistory(updated, "agency-countered", offer, currentDate,
     "ردت الوكالة بعمولة " + terms.commissionRate + "% لمدة " + Math.round(terms.termDays / 365) + " سنة.",
@@ -872,6 +880,8 @@ export function createRepresentationRenewalOffer(save, contractId, terms, curren
     rating,
     potential,
     playerPreferences,
+    representationType: normalizeRepresentationType(contract.representationType),
+    agencyReputation: currentAgencyReputation(representation),
     commissionRate: terms.commissionRate,
     termDays: terms.termDays,
     createdDate: currentDate,
