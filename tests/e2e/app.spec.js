@@ -654,7 +654,7 @@ test.describe("Mobile experience", () => {
     await navigateTo(page, "الوكالة");
     await expect(page.locator(".agency-screen")).toBeVisible();
     await expect(page.locator(".talent-pipeline-panel")).toBeVisible();
-    await expect(page.locator(".talent-pipeline-panel .representation-count")).toHaveText("1 ملف موحّد");
+    await expect(page.locator(".talent-pipeline-panel .representation-heading > .representation-count")).toHaveText("1 ملف موحّد");
     await expect(page.locator(".talent-pipeline-card")).toHaveCount(1);
     await expect(page.locator(".talent-pipeline-stage")).toHaveText("قيد التفاوض");
     await expect(page.locator(".talent-pipeline-followup")).toContainText("يوليو");
