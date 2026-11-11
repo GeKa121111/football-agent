@@ -22,7 +22,11 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Install Chromium for browser tests
-        run: npx playwright install --with-deps chromium
+        run: |
+          npx playwright install --with-deps chromium || {
+            echo "::warning::System package mirrors were unavailable; retrying Chromium installation with runner-provided libraries."
+            npx playwright install chromium
+          }
       - name: Run unit tests
         run: npm test
       - name: Run desktop and mobile browser tests
