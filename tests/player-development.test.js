@@ -7,9 +7,10 @@ import {
   recordPlayerMatchPerformances,
   isValidPlayerDevelopmentState,
   getPlayerDevelopmentRecord,
+  mergePlayerDevelopmentRoster,
   TRAINING_BALANCE
 } from "../src/engines/player-development.js";
-import { WORLD_DATABASE } from "../src/data/world-database.js";
+import { WORLD_DATABASE, getWorldSquadPlayers } from "../src/data/world-database.js";
 
 test("creates stable development records for the fictional world-player database", () => {
   const state = createInitialPlayerDevelopmentState(WORLD_DATABASE.players);
@@ -140,4 +141,22 @@ test("training injury risk scales with intensity under sustained high fatigue", 
   assert.ok(injuryCounts[1] > injuryCounts[0], "normal injuries must exceed light: " + injuryCounts);
   assert.ok(injuryCounts[2] >= 12 && injuryCounts[2] <= 48, "intense injury count: " + injuryCounts[2]);
   assert.deepEqual(Object.keys(TRAINING_BALANCE.injuryRiskByIntensity), ["light", "normal", "intense"]);
+});
+
+test("merges newly added squad players without resetting existing development progress", () => {
+  const initial = createInitialPlayerDevelopmentState(WORLD_DATABASE.players);
+  const first = initial.players[0];
+  const progressed = {
+    ...initial,
+    players: initial.players.map((player) => player.playerId === first.playerId
+      ? { ...player, rating: Math.min(player.potential, player.rating + 1), appearances: 6, minutesPlayed: 540 }
+      : player)
+  };
+  const merged = mergePlayerDevelopmentRoster(progressed, getWorldSquadPlayers());
+  assert.equal(merged.players.length, 432);
+  assert.equal(merged.players.find((player) => player.playerId === first.playerId).appearances, 6);
+  assert.equal(merged.players.find((player) => player.playerId === first.playerId).minutesPlayed, 540);
+  assert.ok(merged.players.some((player) => player.playerId.startsWith("squad-")));
+  assert.equal(new Set(merged.players.map((player) => player.playerId)).size, 432);
+  assert.equal(mergePlayerDevelopmentRoster(merged, getWorldSquadPlayers()), merged);
 });
