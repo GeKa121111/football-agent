@@ -371,7 +371,7 @@ function isValidMatchResult(result, fixture) {
 
 export function isValidFootballState(state, currentDate, season, database = WORLD_DATABASE) {
   if (!isRecord(state) || state.version !== 1 ||
-      !Number.isSafeInteger(state.season) || state.season !== season ||
+      !Number.isSafeInteger(state.season) || state.season < 1 || state.season > season ||
       !dateValue(currentDate) ||
       !Array.isArray(state.fixtures) || state.fixtures.length > MAX_RETAINED_FIXTURES ||
       !Array.isArray(state.results) || state.results.length > MAX_RETAINED_MATCH_RESULTS ||
