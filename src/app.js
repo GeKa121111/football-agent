@@ -6,6 +6,7 @@ import {
   writeWatchlist
 } from "./core/storage.js";
 import { DEMO_PLAYERS } from "./data/demo-players.js";
+import { createPlayerPortrait } from "./ui/player-portrait.js";
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "الرئيسية", icon: "⌂" },
@@ -47,25 +48,7 @@ function formatMoney(amount) {
 }
 
 function playerArt(player, featured = false) {
-  const art = node("div", featured ? "player-art player-art-featured" : "player-art");
-  art.style.setProperty("--skin", player.skin);
-  art.style.setProperty("--hair", player.hair);
-  art.style.setProperty("--kit", player.kit);
-  art.style.setProperty("--kit-light", player.kitLight);
-  art.style.setProperty("--art-glow", player.glow);
-  art.setAttribute("aria-label", "رسم توضيحي للاعب " + player.name);
-  art.setAttribute("role", "img");
-
-  const stadium = node("span", "art-stadium-lines");
-  const figure = node("span", "player-figure " + player.hairStyle);
-  const head = node("span", "figure-head");
-  const hair = node("span", "figure-hair");
-  const neck = node("span", "figure-neck");
-  const torso = node("span", "figure-torso");
-  const number = node("span", "figure-number", player.shirtNumber);
-  figure.append(head, hair, neck, torso, number);
-  art.append(stadium, figure);
-  return art;
+  return createPlayerPortrait(player, { featured });
 }
 
 function playerCard(player, onDetails) {
