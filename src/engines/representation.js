@@ -17,7 +17,8 @@ const HISTORY_TYPES = new Set([
   "contract-renewed",
   "renewal-offer-sent",
   "contract-terminated",
-  "contract-expired"
+  "contract-expired",
+  "relationship-event"
 ]);
 const PERSONALITIES = Object.freeze({
   ambitious: "طموح",
@@ -384,6 +385,13 @@ export function isValidRepresentationState(representation, currentDate, clients 
         (contract.potential !== undefined && (!Number.isInteger(contract.potential) || contract.potential < 1 || contract.potential > 99)) ||
         (contract.playerPreferences !== undefined && !isValidPlayerPreferences(contract.playerPreferences)) ||
         (contract.renewals !== undefined && (!Array.isArray(contract.renewals) || contract.renewals.length > 20)) ||
+        (contract.relationshipEvents !== undefined && (!Array.isArray(contract.relationshipEvents) || contract.relationshipEvents.length > 50 || contract.relationshipEvents.some((event, index, events) =>
+          !isRecord(event) || !["check-in", "career-guidance", "public-support"].includes(event.action) ||
+          !isCalendarDate(event.date) || event.date > currentDate ||
+          !Number.isInteger(event.delta) || event.delta < -10 || event.delta > 10 ||
+          typeof event.note !== "string" || !event.note.trim() ||
+          (index > 0 && events[index - 1].date > event.date)
+        ))) ||
         !Number.isInteger(contract.relationshipScore) || contract.relationshipScore < 0 || contract.relationshipScore > 100 ||
         !CONTRACT_STATUSES.has(contract.status)) return false;
     const sequence = sequenceOf(contract.id, "representation-contract");
@@ -917,6 +925,49 @@ export function advanceRepresentationState(save, currentDate = save?.world?.curr
     expiredOffers,
     expiredContracts
   };
+}
+
+const RELATIONSHIP_ACTIONS = Object.freeze({
+  "check-in": { delta: 2, note: "تواصلت مع اللاعب واطمأننت على أحواله." },
+  "career-guidance": { delta: 4, note: "قدمت للاعب نصيحة مهنية وخطة للخطوة القادمة." },
+  "public-support": { delta: 3, note: "دعمت اللاعب إعلاميًا وحافظت على صورته العامة." }
+});
+
+export function getRepresentationRelationshipLabel(score) {
+  if (!Number.isInteger(score)) return "غير معروف";
+  if (score >= 85) return "ثقة قوية";
+  if (score >= 70) return "علاقة جيدة";
+  if (score >= 50) return "علاقة مستقرة";
+  if (score >= 30) return "علاقة متوترة";
+  return "ثقة ضعيفة";
+}
+
+export function recordRepresentationInteraction(save, contractId, action, currentDate = save?.world?.currentDate) {
+  const representation = save?.agency?.representation;
+  const contract = representation?.contracts?.find((item) => item.id === contractId);
+  if (!contract || contract.status !== "active") return { changed: false, save, error: "لا يوجد عقد نشط لهذا اللاعب." };
+  if (!isCalendarDate(currentDate) || currentDate < contract.signedOn || currentDate >= getRepresentationContractExpiry(contract)) {
+    return { changed: false, save, error: "تاريخ التواصل غير صالح أو انتهى العقد." };
+  }
+  const config = RELATIONSHIP_ACTIONS[action];
+  if (!config) return { changed: false, save, error: "نوع التواصل غير معروف." };
+  const events = Array.isArray(contract.relationshipEvents) ? contract.relationshipEvents : [];
+  const lastEvent = events[events.length - 1];
+  if (lastEvent) {
+    const elapsed = Math.round((Date.parse(currentDate + "T00:00:00.000Z") - Date.parse(lastEvent.date + "T00:00:00.000Z")) / 86400000);
+    if (elapsed < 14) return { changed: false, save, error: "لازم يمر 14 يومًا على آخر تواصل مع اللاعب." };
+  }
+  if (events.length >= 50 || representation.history.length >= MAX_HISTORY) return { changed: false, save, error: "سجل العلاقة ممتلئ." };
+  const personality = contract.playerPreferences?.personality;
+  const bonus = action === "career-guidance" && personality === "ambitious" ? 1
+    : action === "public-support" && personality === "professional" ? 1
+    : action === "check-in" && personality === "loyal" ? 1 : 0;
+  const delta = Math.min(6, config.delta + bonus);
+  const event = { action, date: currentDate, delta, note: config.note };
+  const updatedContract = { ...contract, relationshipScore: clamp(contract.relationshipScore + delta, 0, 100), relationshipEvents: [...events, event] };
+  let updated = { ...representation, contracts: representation.contracts.map((item) => item.id === contractId ? updatedContract : item) };
+  updated = nextHistory(updated, "relationship-event", contract, currentDate, config.note + " تحسنت العلاقة " + delta + " نقاط.", { contractId });
+  return { changed: true, delta, relationshipScore: updatedContract.relationshipScore, relationshipLabel: getRepresentationRelationshipLabel(updatedContract.relationshipScore), save: { ...save, agency: { ...save.agency, representation: updated } } };
 }
 
 export function calculateRepresentationCommission(income, commissionRate) {
