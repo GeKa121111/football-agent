@@ -7,6 +7,22 @@
   padding: 22px 0 32px;
   color: var(--fa-text);
 }
+.rebuild-skip-link {
+  position: absolute;
+  z-index: 60;
+  top: 4px;
+  inset-inline-start: 12px;
+  padding: 8px 12px;
+  border: 1px solid rgba(169,243,107,.35);
+  border-radius: 10px;
+  color: var(--fa-accent-ink);
+  background: var(--fa-accent);
+  font-size: 10px;
+  font-weight: 900;
+  text-decoration: none;
+  transform: translateY(-150%);
+}
+.rebuild-skip-link:focus { transform: translateY(0); }
 .rebuild-shell .rebuild-topbar {
   min-height: 76px;
   display: flex;
