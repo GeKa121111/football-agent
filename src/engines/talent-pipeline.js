@@ -5,7 +5,12 @@ const MAX_NOTE_LENGTH = 500;
 const MAX_ACTIVITY_EVENTS = 200;
 const VALID_CONTACT_KINDS = new Set(["call", "message", "meeting"]);
 const VALID_CONTACT_OUTCOMES = new Set(["pending", "positive", "neutral", "negative", "no_response"]);
+import { SCOUTING_SCOUTS, getScoutingRoster } from "./scouting.js";
+
 const FOLLOW_UP_TASK_CATEGORY = "talent-follow-up";
+const MAX_PROSPECTS_PER_SCOUT = 6;
+const VALID_ASSIGNMENT_REASONS = new Set(["manual", "contract-signed"]);
+const VALID_SCOUT_IDS = new Set(SCOUTING_SCOUTS.map((scout) => scout.id));
 
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -65,6 +70,12 @@ function isValidActivityEvent(event, entry, currentDate) {
     return typeof event.taskId === "string" &&
       /^talent-follow-up-task-\d+$/.test(event.taskId);
   }
+  if (event.type === "assignment") {
+    return (event.fromScoutId === null || VALID_SCOUT_IDS.has(event.fromScoutId)) &&
+      (event.toScoutId === null || VALID_SCOUT_IDS.has(event.toScoutId)) &&
+      event.fromScoutId !== event.toScoutId &&
+      VALID_ASSIGNMENT_REASONS.has(event.reason);
+  }
   return false;
 }
 
@@ -110,6 +121,8 @@ export function isValidTalentPipelineState(state, currentDate) {
         (entry.lastContactDate !== null && entry.lastContactDate !== undefined &&
           (!isCalendarDate(entry.lastContactDate) || entry.lastContactDate < entry.addedOn || entry.lastContactDate > entry.updatedOn)) ||
         typeof entry.note !== "string" || entry.note.length > MAX_NOTE_LENGTH ||
+        (entry.assignedScoutId !== undefined && !VALID_SCOUT_IDS.has(entry.assignedScoutId)) ||
+        (entry.stage === "archived" && entry.assignedScoutId !== undefined) ||
         (entry.activity !== undefined &&
           (!Array.isArray(entry.activity) || entry.activity.length > MAX_ACTIVITY_EVENTS ||
             !entry.activity.every((event) => isValidActivityEvent(event, entry, currentDate)) ||
@@ -259,6 +272,7 @@ export function upsertTalentProspect(save, player, options = {}) {
     note,
     activity: existing?.activity ?? []
   };
+  entry.assignedScoutId = stage === "archived" ? undefined : existing?.assignedScoutId;
   const stageChanged = isNew || existing.stage !== stage;
   if (stageChanged) {
     entry.activity = appendStageActivity(
@@ -268,6 +282,17 @@ export function upsertTalentProspect(save, player, options = {}) {
       stage,
       typeof options.stageNote === "string" ? options.stageNote.slice(0, MAX_NOTE_LENGTH) : ""
     );
+  }
+  if (stage === "archived" && existing?.assignedScoutId) {
+    entry.activity = [...entry.activity, {
+      id: nextActivityId(entry.activity),
+      type: "assignment",
+      date: currentDate,
+      fromScoutId: existing.assignedScoutId,
+      toScoutId: null,
+      reason: "manual",
+      note: "تم إلغاء تكليف الكشاف بعد أرشفة الملف."
+    }].slice(-MAX_ACTIVITY_EVENTS);
   }
   const entries = isNew
     ? [entry, ...pipeline.entries]
@@ -288,6 +313,89 @@ export function upsertTalentProspect(save, player, options = {}) {
   };
 }
 
+
+/**
+ * Assigns one active scout to a prospect. Each scout can own up to six active
+ * prospect files; assignment changes are retained in the player's activity log.
+ * Pass null to release the current owner.
+ */
+export function assignTalentProspectStaff(save, playerId, scoutId, reason = "manual") {
+  const currentDate = save?.world?.currentDate;
+  const pipeline = save?.agency?.talentPipeline;
+  const entry = getTalentProspect(pipeline, playerId);
+  if (!isCalendarDate(currentDate) || !entry || !isValidTalentPipelineState(pipeline, currentDate)) {
+    return { changed: false, save, error: "ملف الموهبة أو بيانات المسيرة غير صالحة." };
+  }
+  if (scoutId !== null && !VALID_SCOUT_IDS.has(scoutId)) {
+    return { changed: false, save, error: "الكشاف المحدد غير موجود في طاقم الوكالة." };
+  }
+  if (!VALID_ASSIGNMENT_REASONS.has(reason) || (reason === "contract-signed" && scoutId !== null)) {
+    return { changed: false, save, error: "سبب تغيير المسؤول غير صالح." };
+  }
+  const currentScoutId = entry.assignedScoutId ?? null;
+  if (currentScoutId === scoutId) return { changed: false, save, entry };
+  if (entry.stage === "archived") {
+    return { changed: false, save, error: "لا يمكن تكليف كشاف بملف مؤرشف." };
+  }
+  if (scoutId !== null) {
+    if (reason !== "manual" ||
+        save.agency.clients?.includes(playerId) ||
+        save.agency.representation?.contracts?.some((contract) =>
+          contract.playerId === playerId && contract.status === "active"
+        )) {
+      return { changed: false, save, error: "ملفات العملاء النشطين تُدار من شاشة العلاقات، وليس من طاقم الاستقطاب." };
+    }
+    const roster = getScoutingRoster(save.world.scouting, currentDate);
+    const scout = roster.find((item) => item.id === scoutId);
+    if (!scout || scout.isContractExpired) {
+      return { changed: false, save, error: "الكشاف غير متاح؛ جدّد عقده أو اختر عضوًا نشطًا من الطاقم." };
+    }
+    const assignedCount = pipeline.entries.filter((item) =>
+      item.playerId !== playerId &&
+      item.assignedScoutId === scoutId &&
+      item.stage !== "archived" &&
+      !save.agency.clients?.includes(item.playerId) &&
+      !save.agency.representation?.contracts?.some((contract) =>
+        contract.playerId === item.playerId && contract.status === "active"
+      )
+    ).length;
+    if (assignedCount >= MAX_PROSPECTS_PER_SCOUT) {
+      return { changed: false, save, error: "وصل الكشاف إلى الحد الأقصى: 6 ملفات مواهب نشطة." };
+    }
+  }
+  if ((entry.activity?.length ?? 0) >= MAX_ACTIVITY_EVENTS) {
+    return { changed: false, save, error: "وصل سجل نشاط اللاعب إلى الحد الأقصى." };
+  }
+
+  const event = {
+    id: nextActivityId(entry.activity ?? []),
+    type: "assignment",
+    date: currentDate,
+    fromScoutId: currentScoutId,
+    toScoutId: scoutId,
+    reason,
+    note: reason === "contract-signed"
+      ? "تم تسليم الملف إلى إدارة العملاء بعد توقيع عقد التمثيل."
+      : scoutId
+        ? "تم تعيين مسؤول استقطاب لهذا الملف."
+        : "تم إلغاء تكليف مسؤول الاستقطاب."
+  };
+  const updatedEntry = {
+    ...entry,
+    ...(scoutId ? { assignedScoutId: scoutId } : { assignedScoutId: undefined }),
+    updatedOn: currentDate,
+    activity: [...(entry.activity ?? []), event]
+  };
+  const entries = pipeline.entries.map((item) =>
+    item.id === entry.id ? updatedEntry : item
+  );
+  const nextPipeline = { ...pipeline, entries };
+  return {
+    changed: true,
+    entry: updatedEntry,
+    save: { ...save, agency: { ...save.agency, talentPipeline: nextPipeline } }
+  };
+}
 
 /**
  * Records an initial contact with a prospect before any representation contract
