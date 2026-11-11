@@ -10,7 +10,8 @@ import { createPlayerPortrait } from "./ui/player-portrait.js";
 import {
   advanceCareerDay,
   completeCareerTask as completeTaskInEngine,
-  markCareerMessageRead
+  markCareerMessageRead,
+  filterCareerEvents
 } from "./engines/career-calendar.js";
 
 const WORLD_PLAYERS = getWorldPlayerProfiles();
@@ -165,12 +166,16 @@ function renderCareerOperations(context) {
   const section = node("section", "career-operations");
   const tasksPanel = node("section", "career-operations-panel");
   const openTasks = context.save.world.tasks
-    .filter((task) => task.status === "open")
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    .filter((task) => task.status === "open" || task.status === "overdue")
+    .sort((a, b) => {
+      if (a.status !== b.status) return a.status === "overdue" ? -1 : 1;
+      return a.dueDate.localeCompare(b.dueDate);
+    });
+  const overdueCount = openTasks.filter((task) => task.status === "overdue").length;
   const tasksHeading = node("div", "career-operations-heading");
   tasksHeading.append(
     node("h2", "", "مهام الوكالة"),
-    node("span", "career-count", formatHomeNumber(openTasks.length) + " معلقة")
+    node("span", "career-count", formatHomeNumber(openTasks.length - overdueCount) + " معلقة · " + formatHomeNumber(overdueCount) + " متأخرة")
   );
   tasksPanel.append(tasksHeading);
 
@@ -179,12 +184,12 @@ function renderCareerOperations(context) {
   } else {
     const taskList = node("div", "career-task-list");
     openTasks.slice(0, 4).forEach((task) => {
-      const row = node("article", "career-task-row");
+      const row = node("article", task.status === "overdue" ? "career-task-row is-overdue" : "career-task-row");
       const copy = node("div", "career-activity-copy");
       copy.append(
         node("strong", "", task.title),
         node("span", "", task.description),
-        node("small", "", "موعد التسليم: " + formatHomeDate(task.dueDate))
+        node("small", "", task.status === "overdue" ? "متأخرة منذ: " + formatHomeDate(task.dueDate) : "موعد التسليم: " + formatHomeDate(task.dueDate))
       );
       row.append(copy, actionButton("إنجاز", "task-complete-button", () => context.completeTask(task.id)));
       taskList.append(row);
@@ -225,7 +230,33 @@ function renderCareerOperations(context) {
     inboxPanel.append(messageList);
   }
 
-  section.append(tasksPanel, inboxPanel);
+  const historyPanel = node("section", "career-operations-panel career-history-panel");
+  const historyHeading = node("div", "career-operations-heading");
+  historyHeading.append(
+    node("h2", "", "سجل الأحداث"),
+    actionButton("عرض السجل الكامل", "career-history-button", context.openEventHistory)
+  );
+  historyPanel.append(historyHeading);
+  const recentEvents = [...context.save.world.events].slice(-5).reverse();
+  if (recentEvents.length === 0) {
+    historyPanel.append(node("p", "career-activity-empty", "لسه مفيش أحداث مسجلة. هتظهر هنا الإحاطات والتقارير وتغييرات المسيرة."));
+  } else {
+    const eventList = node("div", "career-event-list");
+    recentEvents.forEach((event) => {
+      const row = node("article", "career-event-row");
+      const copy = node("div", "career-activity-copy");
+      copy.append(
+        node("strong", "", event.title),
+        node("span", "", event.description),
+        node("small", "", formatHomeDate(event.date))
+      );
+      row.append(copy);
+      eventList.append(row);
+    });
+    historyPanel.append(eventList);
+  }
+
+  section.append(tasksPanel, inboxPanel, historyPanel);
   return section;
 }
 
@@ -763,6 +794,62 @@ export function mountApp(root) {
     else state.save = previousSave;
   }
 
+  function openEventHistory() {
+    const events = state.save.world.events ?? [];
+    const controls = node("div", "event-history-controls");
+    const search = node("input", "event-history-search");
+    search.type = "search";
+    search.placeholder = "ابحث في عنوان الحدث أو تفاصيله...";
+    search.setAttribute("aria-label", "البحث في سجل الأحداث");
+    const typeFilter = node("select", "event-history-filter");
+    typeFilter.setAttribute("aria-label", "تصفية نوع الحدث");
+    const typeNames = {
+      "weekly-briefing": "إحاطة أسبوعية",
+      "monthly-market": "تقرير شهري",
+      "season-opening": "افتتاح موسم",
+      "task-overdue": "مهمة متأخرة"
+    };
+    const allOption = node("option", "", "كل الأحداث");
+    allOption.value = "all";
+    typeFilter.append(allOption);
+    [...new Set(events.map((event) => event.type))].sort().forEach((type) => {
+      const option = node("option", "", typeNames[type] ?? type);
+      option.value = type;
+      typeFilter.append(option);
+    });
+    controls.append(search, typeFilter);
+
+    const count = node("p", "event-history-count");
+    const list = node("div", "event-history-results");
+    const content = node("div", "event-history-content");
+    content.append(controls, count, list);
+    const refresh = () => {
+      const filtered = filterCareerEvents(events, { type: typeFilter.value, query: search.value });
+      count.textContent = formatHomeNumber(filtered.length) + " حدث";
+      list.replaceChildren();
+      if (filtered.length === 0) {
+        list.append(node("p", "career-activity-empty", "مفيش أحداث مطابقة للبحث."));
+        return;
+      }
+      filtered.forEach((event) => {
+        const row = node("article", "event-history-row");
+        const copy = node("div", "career-activity-copy");
+        copy.append(
+          node("strong", "", event.title),
+          node("span", "", event.description),
+          node("small", "", formatHomeDate(event.date) + " · " + (typeNames[event.type] ?? event.type))
+        );
+        row.append(copy);
+        list.append(row);
+      });
+    };
+    search.addEventListener("input", refresh);
+    typeFilter.addEventListener("change", refresh);
+    refresh();
+    openModal("سجل الأحداث", [content], "إغلاق");
+    search.focus();
+  }
+
   function openInbox() {
     const messages = [...state.save.world.inbox].slice(-12).reverse();
     const content = messages.length
@@ -890,7 +977,7 @@ export function mountApp(root) {
     sidebar.append(sideBottom);
 
     const main = node("main", "main-stage");
-    const context = { save: state.save, navigate, openPlayer, openModal, openInbox, saveCareer, advanceDay, completeTask, markMessageRead, toast, watchlist: state.watchlist, addToWatchlist };
+    const context = { save: state.save, navigate, openPlayer, openModal, openInbox, openEventHistory, saveCareer, advanceDay, completeTask, markMessageRead, toast, watchlist: state.watchlist, addToWatchlist };
     const views = {
       dashboard: renderDashboard,
       players: renderPlayers,

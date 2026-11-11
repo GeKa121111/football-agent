@@ -821,3 +821,33 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   .career-task-row, .career-message-row { gap: 5px; padding: 7px; }
   .task-complete-button, .message-read-button { padding-inline: 6px; }
 }
+
+
+/* Phase 5 follow-up: overdue task states and searchable event history */
+.career-history-panel { grid-column: 1 / -1; }
+.career-task-row.is-overdue { border-color: rgba(232,111,111,.3); background: rgba(126,39,52,.12); }
+.career-task-row.is-overdue .career-activity-copy small { color: #f29b9b; }
+.career-history-button {
+  min-height: 30px; padding: 5px 9px; border: 1px solid rgba(142,125,220,.28);
+  border-radius: 8px; color: #c9bbff; background: rgba(119,91,190,.1);
+  cursor: pointer; font-size: 8px; font-weight: 800;
+}
+.career-event-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px 12px; }
+.career-event-row,.event-history-row {
+  min-width: 0; padding: 8px; border: 1px solid rgba(255,255,255,.06);
+  border-radius: 9px; background: rgba(4,10,21,.24);
+}
+.event-history-controls { display: grid; grid-template-columns: minmax(0,1fr) 150px; gap: 8px; margin-bottom: 10px; }
+.event-history-search,.event-history-filter {
+  width: 100%; min-width: 0; min-height: 40px; padding: 8px 10px;
+  border: 1px solid rgba(143,163,197,.22); border-radius: 9px;
+  color: #edf0fa; background: #111b2e; font-size: 11px;
+}
+.event-history-search::placeholder { color: #7f8ca5; }
+.event-history-count { margin: 0 0 8px; color: #8e9bb2; font-size: 9px; }
+.event-history-results { display: flex; flex-direction: column; gap: 7px; max-height: 55vh; overflow: auto; }
+.event-history-row .career-activity-copy small { color: #7e8ca4; }
+@media (max-width: 760px) {
+  .career-event-list { grid-template-columns: minmax(0,1fr); }
+  .event-history-controls { grid-template-columns: minmax(0,1fr); }
+}
