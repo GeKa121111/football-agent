@@ -233,6 +233,59 @@ function createContract(save, offer, terms, currentDate, resolution) {
   };
 }
 
+
+function commitRepresentationAgreement(save, offer, terms, currentDate, resolution) {
+  if (offer.kind === "renewal") {
+    const representation = save.agency.representation;
+    const contract = representation.contracts.find((item) => item.id === offer.renewalContractId);
+    if (!contract || contract.status !== "active") {
+      return { changed: false, save, error: "عقد اللاعب لم يعد نشطًا ويمكن تجديده." };
+    }
+    const startsOn = getRepresentationContractExpiry(contract);
+    if (!isCalendarDate(startsOn) || startsOn <= currentDate) {
+      return { changed: false, save, error: "انتهت مدة العقد قبل اعتماد التجديد." };
+    }
+    const renewal = {
+      offerId: offer.id,
+      signedOn: currentDate,
+      startsOn,
+      expiresOn: addDays(startsOn, terms.termDays),
+      termDays: terms.termDays,
+      commissionRate: terms.commissionRate
+    };
+    const updated = {
+      ...representation,
+      contracts: representation.contracts.map((item) => item.id === contract.id
+        ? { ...item, renewals: [...(item.renewals ?? []), renewal], relationshipScore: clamp(item.relationshipScore + 3, 0, 100) }
+        : item)
+    };
+    let history = replaceOffer(updated, offer.id, {
+      status: "accepted",
+      contractId: contract.id,
+      resolution
+    });
+    history = nextHistory(history, "offer-accepted", offer, currentDate,
+      "تم الاتفاق على تجديد عقد التمثيل.");
+    history = nextHistory(history, "contract-renewed", contract, currentDate,
+      "تم تجديد العقد بعمولة " + terms.commissionRate + "% لمدة إضافية " + Math.round(terms.termDays / 365) + " سنة.",
+      { offerId: offer.id, contractId: contract.id });
+    return {
+      changed: true,
+      status: "renewed",
+      contract: history.contracts.find((item) => item.id === contract.id),
+      save: { ...save, agency: { ...save.agency, representation: history } }
+    };
+  }
+
+  const signed = createContract(save, offer, terms, currentDate, resolution);
+  return {
+    changed: true,
+    status: "signed",
+    contract: signed.agency.representation.contracts[0],
+    save: signed
+  };
+}
+
 /**
  * Initial representation workspace. Existing agency.clients remains the
  * backward-compatible list of client IDs; signed contracts are the source
@@ -477,6 +530,7 @@ export function createRepresentationOffer(save, player, terms, currentDate = sav
 
   const offer = {
     id: "representation-offer-" + representation.nextOfferSequence,
+    kind: "new",
     playerId: player.id,
     playerName: player.name,
     age: player.age,
@@ -484,6 +538,7 @@ export function createRepresentationOffer(save, player, terms, currentDate = sav
     position: player.position,
     rating: player.rating,
     potential: player.potential,
+    playerPreferences: getPlayerRepresentationProfile(player),
     commissionRate: terms.commissionRate,
     termDays: terms.termDays,
     createdDate: currentDate,
@@ -520,20 +575,22 @@ export function evaluateRepresentationOffer(save, offerId, currentDate = save?.w
   if (!isCalendarDate(currentDate)) return { changed: false, save, error: "تاريخ المسيرة غير صالح." };
   if (currentDate > offer.expiresDate) {
     const advanced = advanceRepresentationState(save, currentDate);
-    return { changed: false, save: advanced.save, error: "انتهت صلاحية عرض التمثيل." };
+    return { changed: true, status: "expired", save: advanced.save, error: "انتهت صلاحية عرض التمثيل." };
+  }
+  if (representation.history.length > MAX_HISTORY - 2) {
+    return { changed: false, save, error: "سجل التفاوض ممتلئ ولا يمكن إضافة رد جديد." };
   }
 
-  const targetCommissionRate = offer.rating >= 80 ? 8 : offer.rating >= 72 ? 9 : 10;
-  const targetTermDays = offer.age <= 20 ? 365 : 730;
-  if (offer.commissionRate > targetCommissionRate || offer.termDays > targetTermDays) {
-    const counterOffer = { commissionRate: targetCommissionRate, termDays: targetTermDays };
+  const terms = { commissionRate: offer.commissionRate, termDays: offer.termDays };
+  if (!playerAcceptsTerms(offer, terms)) {
+    const counterOffer = buildPlayerCounterOffer(offer);
     let updated = replaceOffer(representation, offer.id, {
       status: "countered",
       counterOffer,
       round: offer.round + 1
     });
     updated = nextHistory(updated, "player-countered", offer, currentDate,
-      "طلب اللاعب عمولة " + targetCommissionRate + "% ومدة " + Math.round(targetTermDays / 365) + " سنة.",
+      "قدم اللاعب عرضه الأول: عمولة " + counterOffer.commissionRate + "% لمدة " + Math.round(counterOffer.termDays / 365) + " سنة.",
       { offerId: offer.id });
     return {
       changed: true,
@@ -543,19 +600,92 @@ export function evaluateRepresentationOffer(save, offerId, currentDate = save?.w
     };
   }
 
-  const signed = createContract(save, offer, {
-    commissionRate: offer.commissionRate,
-    termDays: offer.termDays
-  }, currentDate, "direct");
+  return commitRepresentationAgreement(
+    save,
+    offer,
+    terms,
+    currentDate,
+    offer.kind === "renewal" ? "renewal-direct" : "direct"
+  );
+}
+
+/**
+ * The agency can answer a player counter with new terms. The player then
+ * accepts, returns another counter, or rejects after the final round.
+ */
+export function submitRepresentationCounterOffer(save, offerId, terms, currentDate = save?.world?.currentDate) {
+  const representation = save?.agency?.representation;
+  const offer = representation?.offers?.find((item) => item.id === offerId);
+  if (!offer || offer.status !== "countered") {
+    return { changed: false, save, error: "لا يوجد عرض مضاد مفتوح للرد عليه." };
+  }
+  if (!isCalendarDate(currentDate) || currentDate > offer.expiresDate) {
+    return { changed: false, save, error: "انتهت صلاحية العرض قبل إرسال الرد." };
+  }
+  if (!validTerms(terms?.commissionRate, terms?.termDays)) {
+    return { changed: false, save, error: "شروط العرض المضاد غير صالحة." };
+  }
+  if (representation.history.length > MAX_HISTORY - 3) {
+    return { changed: false, save, error: "سجل التفاوض ممتلئ ولا يمكن إضافة جولة جديدة." };
+  }
+
+  const agencyOffer = {
+    ...offer,
+    commissionRate: terms.commissionRate,
+    termDays: terms.termDays
+  };
+  let updated = replaceOffer(representation, offer.id, {
+    commissionRate: terms.commissionRate,
+    termDays: terms.termDays
+  });
+  updated = nextHistory(updated, "agency-countered", offer, currentDate,
+    "ردت الوكالة بعمولة " + terms.commissionRate + "% لمدة " + Math.round(terms.termDays / 365) + " سنة.",
+    { offerId: offer.id });
+  const intermediateSave = {
+    ...save,
+    agency: { ...save.agency, representation: updated }
+  };
+
+  if (playerAcceptsTerms(agencyOffer, terms)) {
+    return commitRepresentationAgreement(
+      intermediateSave,
+      agencyOffer,
+      terms,
+      currentDate,
+      offer.kind === "renewal" ? "renewal-agency-countered" : "agency-countered"
+    );
+  }
+
+  if (offer.round >= 3) {
+    updated = replaceOffer(updated, offer.id, { status: "rejected", counterOffer: undefined });
+    updated = nextHistory(updated, "offer-rejected", offer, currentDate,
+      "رفض اللاعب العرض المضاد الأخير وانتهى التفاوض بعد ثلاث جولات.",
+      { offerId: offer.id });
+    return {
+      changed: true,
+      status: "rejected",
+      save: { ...save, agency: { ...save.agency, representation: updated } }
+    };
+  }
+
+  const counterOffer = buildPlayerCounterOffer({ ...agencyOffer, round: offer.round });
+  updated = replaceOffer(updated, offer.id, {
+    status: "countered",
+    counterOffer,
+    round: offer.round + 1
+  });
+  updated = nextHistory(updated, "player-countered", offer, currentDate,
+    "عاد اللاعب بعرض مضاد: عمولة " + counterOffer.commissionRate + "% لمدة " + Math.round(counterOffer.termDays / 365) + " سنة.",
+    { offerId: offer.id });
   return {
     changed: true,
-    status: "signed",
-    contract: signed.agency.representation.contracts[0],
-    save: signed
+    status: "countered",
+    counterOffer,
+    save: { ...save, agency: { ...save.agency, representation: updated } }
   };
 }
 
-/** Accepts the player's counteroffer and creates the representation contract. */
+/** Accepts the player's current counteroffer and completes the agreement. */
 export function acceptRepresentationCounterOffer(save, offerId, currentDate = save?.world?.currentDate) {
   const representation = save?.agency?.representation;
   const offer = representation?.offers?.find((item) => item.id === offerId);
@@ -565,18 +695,17 @@ export function acceptRepresentationCounterOffer(save, offerId, currentDate = sa
   if (!isCalendarDate(currentDate) || currentDate > offer.expiresDate) {
     return { changed: false, save, error: "انتهت صلاحية العرض المضاد." };
   }
-  if (representation.contracts.length >= MAX_CONTRACTS ||
-      representation.history.length > MAX_HISTORY - 2 ||
-      !Number.isSafeInteger(representation.nextContractSequence)) {
-    return { changed: false, save, error: "وصل سجل العقود إلى الحد المتاح." };
+  if (representation.history.length > MAX_HISTORY - 2 ||
+      (offer.kind !== "renewal" && representation.contracts.length >= MAX_CONTRACTS)) {
+    return { changed: false, save, error: "وصل سجل العقود أو التعاملات إلى الحد المتاح." };
   }
-  const signed = createContract(save, offer, offer.counterOffer, currentDate, "counter-accepted");
-  return {
-    changed: true,
-    status: "signed",
-    contract: signed.agency.representation.contracts[0],
-    save: signed
-  };
+  return commitRepresentationAgreement(
+    save,
+    offer,
+    offer.counterOffer,
+    currentDate,
+    offer.kind === "renewal" ? "renewal-counter-accepted" : "counter-accepted"
+  );
 }
 
 /** Declines the player's counteroffer without creating a client relationship. */
