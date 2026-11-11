@@ -515,3 +515,150 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+
+/* Reference-inspired mobile career dashboard */
+.home-dashboard { width: 100%; max-width: 1120px; margin-inline: auto; padding-bottom: 18px; }
+.home-stadium {
+  position: relative; height: 150px; overflow: hidden; isolation: isolate; margin: -4px -2px 0;
+  border: 1px solid rgba(103,218,168,.22); border-radius: 18px 18px 5px 5px;
+  background:
+    linear-gradient(180deg, rgba(11,19,35,.16), rgba(6,12,24,.08) 47%, rgba(13,57,43,.15)),
+    repeating-linear-gradient(90deg, rgba(211,224,234,.16) 0 1px, transparent 1px 13px),
+    linear-gradient(180deg, #1b314b 0%, #17273a 40%, #1f684b 42%, #24a35f 68%, #12623e 100%);
+}
+.home-stadium::before {
+  content: ""; position: absolute; z-index: -1; inset: 0 0 44%;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 10px, rgba(235,244,255,.11) 10px 11px),
+    repeating-linear-gradient(90deg, rgba(245,248,255,.2) 0 2px, transparent 2px 8px);
+  opacity: .64; transform: perspective(250px) rotateX(-8deg) scale(1.08);
+}
+.home-stadium::after {
+  content: ""; position: absolute; z-index: -1; left: -12%; right: -12%; bottom: -68px; height: 122px;
+  border: 2px solid rgba(226,255,235,.65); border-radius: 50%;
+  background: repeating-linear-gradient(0deg, transparent 0 18px, rgba(255,255,255,.12) 18px 20px);
+  box-shadow: 0 -12px 32px rgba(56,222,128,.16), inset 0 12px 28px rgba(123,255,169,.13);
+}
+.stadium-lights { position: absolute; z-index: 1; top: 8px; width: 74px; height: 13px; border-radius: 3px; background: repeating-linear-gradient(90deg,#fff7d5 0 5px, transparent 5px 8px); box-shadow: 0 0 18px rgba(255,245,193,.8); }
+.stadium-light-left { left: 5%; transform: rotate(-8deg); }
+.stadium-light-right { right: 5%; transform: rotate(8deg); }
+.stadium-stands { position: absolute; inset: 17px 0 53px; opacity: .5; background: repeating-linear-gradient(0deg, transparent 0 7px, rgba(235,242,255,.18) 7px 9px); }
+.stadium-pitch { position: absolute; left: -5%; right: -5%; bottom: -53px; height: 112px; border: 1px solid rgba(230,255,237,.55); border-radius: 50%; background: linear-gradient(180deg,rgba(57,194,112,.6),rgba(13,93,57,.82)); }
+.stadium-center-line { position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: rgba(255,255,255,.45); }
+.stadium-center-circle { position: absolute; width: 54px; height: 54px; left: 50%; top: 50%; border: 1px solid rgba(255,255,255,.46); border-radius: 50%; transform: translate(-50%,-50%); }
+.stadium-goal { position: absolute; top: 52%; width: 28px; height: 16px; border: 1px solid rgba(255,255,255,.5); border-bottom: 0; }
+.stadium-goal-left { left: 3%; }
+.stadium-goal-right { right: 3%; }
+.stadium-label { position: absolute; top: 10px; left: 50%; display: flex; align-items: center; gap: 7px; padding: 4px 11px; border: 1px solid rgba(219,237,255,.25); border-radius: 999px; color: #ecf5ff; background: rgba(6,15,30,.68); font-size: 9px; font-weight: 800; transform: translateX(-50%); backdrop-filter: blur(7px); }
+.stadium-live-dot, .day-foot-dot { width: 6px; height: 6px; border-radius: 50%; background: #5de69d; box-shadow: 0 0 10px rgba(93,230,157,.75); }
+.agent-profile-card {
+  position: relative; z-index: 2; margin: -39px 5px 13px; padding: 13px;
+  border: 1px solid rgba(90,205,224,.68); border-radius: 15px;
+  background: linear-gradient(145deg,rgba(17,31,53,.97),rgba(9,17,32,.98));
+  box-shadow: 0 10px 26px rgba(0,0,0,.32), inset 0 1px rgba(255,255,255,.06);
+}
+.agent-profile-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.agent-avatar { position: relative; width: 51px; height: 51px; flex: 0 0 auto; display: grid; place-items: center; border: 2px solid rgba(238,202,130,.8); border-radius: 12px; color: #fff0c8; background: radial-gradient(circle at 50% 25%,#8c6d4a,#2b344b 62%,#111b30); box-shadow: 0 4px 13px rgba(0,0,0,.3); font-size: 15px; font-weight: 900; }
+.agent-avatar-star { position: absolute; bottom: -5px; right: -5px; width: 17px; height: 17px; display: grid; place-items: center; border: 1px solid #121f33; border-radius: 50%; color: #65e7aa; background: #142e37; font-size: 10px; }
+.agent-identity { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.agent-eyebrow { color: #8ea1bc; font-size: 8px; font-weight: 800; }
+.agent-name { overflow: hidden; margin: 0; color: #f2f6ff; font-size: 15px; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
+.agent-status { color: #77d9a5; font-size: 8px; }
+.agent-level { align-self: start; flex: 0 0 auto; padding: 4px 8px; border: 1px solid rgba(87,213,203,.25); border-radius: 8px; color: #a5e6df; background: rgba(44,155,156,.12); font-size: 8px; font-weight: 800; }
+.agent-profile-stats { display: grid; grid-template-columns: 1.25fr 1fr; gap: 7px; margin-top: 11px; }
+.agent-stat-chip { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 5px; padding: 7px 8px; border: 1px solid rgba(174,188,211,.14); border-radius: 8px; background: rgba(255,255,255,.035); }
+.agent-stat-chip span { color: #8798b1; font-size: 8px; }
+.agent-stat-chip strong { overflow: hidden; color: #f2d48c; font-size: 10px; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
+.agent-reputation-chip strong { color: #8ee6d9; }
+.agent-progress-head { display: flex; justify-content: space-between; margin: 9px 1px 5px; color: #97a5bb; font-size: 8px; }
+.agent-progress-head strong { color: #f4d189; }
+.agent-progress-track { height: 8px; overflow: hidden; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; background: #070d19; box-shadow: inset 0 2px 4px rgba(0,0,0,.55); }
+.agent-progress-fill { display: block; height: 100%; min-width: 2px; border-radius: inherit; background: repeating-linear-gradient(90deg,#f3bb61 0 4px,#ffd98a 4px 6px); box-shadow: 0 0 12px rgba(247,188,87,.42); transition: width .35s ease; }
+.career-day-panel {
+  margin: 0 5px 13px; padding: 12px; border: 1px solid rgba(143,163,197,.17); border-radius: 16px;
+  background: linear-gradient(145deg,rgba(22,29,48,.98),rgba(10,16,29,.98)); box-shadow: 0 8px 22px rgba(0,0,0,.2);
+}
+.career-day-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.career-date { color: #f5f0e7; font-size: 14px; font-weight: 900; }
+.career-season { padding: 4px 7px; border: 1px solid rgba(244,190,89,.2); border-radius: 7px; color: #edc57c; background: rgba(240,184,78,.08); font-size: 8px; }
+.career-day-stats { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; margin-bottom: 10px; }
+.career-day-stat { display: flex; flex-direction: column; gap: 3px; padding: 7px 5px; border: 1px solid rgba(255,255,255,.08); border-radius: 9px; background: rgba(3,8,18,.35); text-align: center; }
+.career-day-stat span { color: #8996ad; font-size: 8px; }
+.career-day-stat strong { color: #fff1d1; font-size: 17px; font-weight: 900; line-height: 1.2; }
+.day-advance-button { width: 100%; min-height: 48px; border: 1px solid rgba(204,255,218,.55); border-radius: 12px; color: #f6fff7; background: linear-gradient(180deg,#48d77b,#16974e 60%,#08743c); box-shadow: inset 0 1px rgba(255,255,255,.28),0 5px 13px rgba(15,158,80,.25); cursor: pointer; font-size: 15px; font-weight: 900; text-shadow: 0 1px 2px rgba(0,0,0,.2); transition: filter .16s ease, transform .16s ease; }
+.day-advance-button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.day-advance-button:active { transform: translateY(1px); }
+.career-day-foot { display: flex; align-items: center; gap: 7px; margin-top: 9px; color: #77859c; font-size: 8px; }
+.career-day-foot .day-foot-dot { width: 5px; height: 5px; flex: 0 0 auto; }
+.home-feature-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; margin: 0 5px 10px; }
+.home-feature-card { min-width: 0; position: relative; display: flex; align-items: center; gap: 9px; min-height: 82px; overflow: hidden; padding: 11px; border: 1px solid rgba(147,164,198,.18); border-radius: 13px; color: #f8f5ff; text-align: right; cursor: pointer; box-shadow: 0 7px 18px rgba(0,0,0,.18); }
+.feature-players { background: radial-gradient(circle at 78% 120%,rgba(128,70,214,.36),transparent 52%),linear-gradient(135deg,#1a2945,#111a2d); }
+.feature-news { background: radial-gradient(circle at 85% 0%,rgba(232,127,54,.35),transparent 48%),linear-gradient(135deg,#22283c,#111827); }
+.feature-card-icon { width: 43px; height: 43px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 11px; background: rgba(255,255,255,.08); font-size: 26px; filter: drop-shadow(0 3px 7px rgba(0,0,0,.35)); }
+.feature-card-copy { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.feature-card-copy strong { font-size: 12px; font-weight: 900; }
+.feature-card-copy small { color: #aab4c8; font-size: 8px; }
+.feature-card-arrow { margin-inline-start: auto; color: #a3b4ca; font-size: 22px; }
+.feature-news-count { position: absolute; top: 6px; left: 7px; width: 19px; height: 19px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.25); border-radius: 50%; color: #fff; background: #c94d4d; font-size: 9px; font-weight: 900; }
+.home-store-banner { width: calc(100% - 10px); min-height: 66px; display: flex; align-items: center; gap: 10px; margin: 0 5px 13px; padding: 9px 13px; border: 1px solid rgba(225,190,112,.32); border-radius: 13px; color: #f9e9c7; background: radial-gradient(ellipse at 75% 50%,rgba(169,127,59,.3),transparent 46%),linear-gradient(110deg,#1b2236,#30271d 60%,#171b2a); text-align: right; cursor: pointer; }
+.store-banner-icon { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid rgba(236,202,130,.22); border-radius: 10px; color: #f1cf88; background: rgba(240,193,105,.1); font-size: 25px; }
+.store-banner-copy { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.store-banner-copy strong { color: #f2d89f; font-size: 13px; }
+.store-banner-copy small { color: #ab9e84; font-size: 8px; }
+.store-banner-arrow { font-size: 19px; color: #e4bf73; }
+.home-menu-heading { display: flex; align-items: end; justify-content: space-between; margin: 5px 6px 9px; }
+.home-menu-heading h2 { margin: 0; color: #f1f3fb; font-size: 14px; font-weight: 900; }
+.home-menu-heading span { color: #8190aa; font-size: 8px; }
+.home-menu-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin: 0 5px 14px; }
+.home-tile { min-width: 0; min-height: 86px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 8px 4px 7px; border: 1px solid rgba(143,160,194,.16); border-radius: 12px; color: #f4f4fc; background: linear-gradient(155deg,rgba(31,43,68,.97),rgba(13,21,37,.98)); box-shadow: inset 0 1px rgba(255,255,255,.035),0 5px 13px rgba(0,0,0,.15); cursor: pointer; transition: transform .16s ease,border-color .16s ease,filter .16s ease; }
+.home-tile:hover { transform: translateY(-2px); border-color: rgba(130,210,212,.42); filter: brightness(1.12); }
+.home-tile-icon { width: 39px; height: 39px; display: grid; place-items: center; border-radius: 11px; color: #e9e5ff; background: rgba(153,124,226,.13); font-size: 24px; text-shadow: 0 4px 9px rgba(0,0,0,.5); }
+.home-tile-title { max-width: 100%; overflow: hidden; font-size: 9px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.home-tile-subtitle { max-width: 100%; overflow: hidden; color: #8290a9; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.tile-orange .home-tile-icon { color: #ffb06c; background: rgba(232,126,56,.13); }
+.tile-blue .home-tile-icon { color: #8dc2ff; background: rgba(82,143,222,.14); }
+.tile-teal .home-tile-icon { color: #80e1d9; background: rgba(63,193,174,.13); }
+.tile-green .home-tile-icon { color: #8be7ae; background: rgba(66,190,116,.13); }
+.tile-gold .home-tile-icon, .tile-yellow .home-tile-icon { color: #f5d17c; background: rgba(226,176,65,.14); }
+.tile-indigo .home-tile-icon { color: #aebaff; background: rgba(112,124,225,.15); }
+.tile-cyan .home-tile-icon { color: #83e6f0; background: rgba(65,188,208,.13); }
+.tile-pink .home-tile-icon { color: #f2a4d5; background: rgba(220,105,183,.13); }
+.tile-purple .home-tile-icon, .tile-violet .home-tile-icon { color: #c7a5ff; background: rgba(159,113,235,.16); }
+.tile-rose .home-tile-icon { color: #ff9baf; background: rgba(221,95,133,.13); }
+.tile-slate .home-tile-icon { color: #c6d0e0; background: rgba(150,166,188,.12); }
+.home-save-footer { display: flex; align-items: center; gap: 10px; margin: 0 5px; padding: 11px; border: 1px solid rgba(70,193,128,.28); border-radius: 12px; background: linear-gradient(100deg,rgba(19,58,48,.7),rgba(12,28,33,.95)); }
+.home-save-icon { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid rgba(116,218,164,.25); border-radius: 9px; color: #85e3ae; background: rgba(75,181,125,.12); font-size: 18px; }
+.home-save-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.home-save-copy strong { color: #a7e8bf; font-size: 10px; }
+.home-save-copy span { color: #7eaa96; font-size: 8px; }
+.home-save-button { min-width: 55px; padding: 7px 10px; border: 1px solid rgba(104,217,160,.34); border-radius: 8px; color: #bcf2d0; background: rgba(54,159,104,.16); cursor: pointer; font-size: 9px; font-weight: 900; }
+.dashboard-shell .topbar { border-color: rgba(94,176,184,.18); background: rgba(10,19,34,.82); }
+.dashboard-shell .brand-mark { color: #e6f7ff; background: linear-gradient(145deg,#3ebd9b,#1b6683); }
+.dashboard-shell .mobile-nav { border-color: rgba(97,179,185,.25); }
+@media (max-width: 760px) {
+  .home-dashboard { padding-bottom: 15px; }
+  .home-stadium { height: 138px; margin-inline: -5px; border-radius: 14px 14px 5px 5px; }
+  .agent-profile-card { margin-inline: 2px; padding: 11px; }
+  .career-day-panel { margin-inline: 2px; padding: 10px; }
+  .home-feature-grid { margin-inline: 2px; gap: 7px; }
+  .home-feature-card { min-height: 74px; padding: 8px; }
+  .home-store-banner { width: calc(100% - 4px); margin-inline: 2px; }
+  .home-menu-grid { margin-inline: 2px; gap: 7px; }
+  .home-tile { min-height: 82px; }
+  .home-save-footer { margin-inline: 2px; }
+  .dashboard-shell .topbar { min-height: 51px; padding: 7px 9px; }
+  .dashboard-shell .brand-mark { width: 32px; height: 32px; }
+  .dashboard-shell .brand-name { letter-spacing: .08em; }
+}
+@media (max-width: 360px) {
+  .agent-profile-top { gap: 7px; }
+  .agent-avatar { width: 45px; height: 45px; }
+  .agent-name { font-size: 13px; }
+  .agent-stat-chip { padding-inline: 6px; }
+  .agent-stat-chip span { font-size: 7px; }
+  .agent-stat-chip strong { font-size: 9px; }
+  .career-date { font-size: 12px; }
+  .home-tile { min-height: 78px; }
+  .home-tile-icon { width: 35px; height: 35px; font-size: 22px; }
+}

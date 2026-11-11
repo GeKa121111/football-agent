@@ -125,72 +125,199 @@ function metricCard(label, value, footnote, icon, tone = "purple") {
   return card;
 }
 
+function formatHomeDate(value) {
+  const date = new Date(value + "T12:00:00");
+  return new Intl.DateTimeFormat("ar-EG", {
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  }).format(date);
+}
+
+function formatHomeNumber(value) {
+  return new Intl.NumberFormat("ar-EG").format(Number(value) || 0);
+}
+
+function homeTile(context, icon, title, subtitle, tone, destination) {
+  const tile = actionButton("", "home-tile tile-" + tone, () => {
+    if (destination) {
+      context.navigate(destination);
+      return;
+    }
+    context.openModal(title, [
+      node("p", "modal-copy", "قسم " + title + " جزء من عالم الوكالة، وسيُضاف ضمن مراحل التطوير القادمة."),
+      node("p", "modal-note", "الأقسام المتاحة حاليًا: اللاعبون، الكشافون، سوق الانتقالات، والوكالة.")
+    ], "تمام");
+  }, title);
+  tile.append(
+    node("span", "home-tile-icon", icon),
+    node("strong", "home-tile-title", title),
+    node("span", "home-tile-subtitle", subtitle)
+  );
+  return tile;
+}
+
 function renderDashboard(context) {
-  const page = node("div", "page-content");
-  const welcome = node("div", "welcome-row");
-  const greeting = node("div", "");
-  greeting.append(
-    node("p", "eyebrow", "لوحة تحكم الوكيل  /  موسم 2026–2027"),
-    node("h1", "page-title", "مساء الخير، يا وكيل"),
-    node("p", "page-subtitle", "كل صفقة تبدأ بعلاقة جيدة. خلّي خطوتك الجاية تصنع الفرق.")
-  );
-  welcome.append(greeting);
-  welcome.append(actionButton("＋  حفظ المسيرة", "button-primary save-button", context.saveCareer));
+  const page = node("div", "page-content home-dashboard");
+  const agency = context.save.agency;
+  const career = context.save.career;
+  const clients = agency.clients.length;
+  const reputation = Math.max(0, Math.min(100, Number(agency.reputation) || 0));
+  const balance = formatMoney(agency.balance);
 
-  const hero = node("section", "feature-banner");
-  const heroCopy = node("div", "feature-copy");
-  heroCopy.append(
-    node("span", "feature-kicker", "فرصة الأسبوع"),
-    node("h2", "", "الموهبة القادمة قد تكون على بُعد مكالمة"),
-    node("p", "", "شبكة الكشافين رصدت مواهب صاعدة تحتاج إلى وكيل يؤمن بقدراتها. ابدأ البحث وابنِ قائمة متابعتك.")
+  const stadium = node("section", "home-stadium");
+  stadium.setAttribute("aria-label", "ملعب كرة قدم");
+  stadium.append(
+    node("span", "stadium-lights stadium-light-left"),
+    node("span", "stadium-lights stadium-light-right"),
+    node("span", "stadium-stands"),
+    node("span", "stadium-pitch"),
+    node("span", "stadium-center-line"),
+    node("span", "stadium-center-circle"),
+    node("span", "stadium-goal stadium-goal-left"),
+    node("span", "stadium-goal stadium-goal-right")
   );
-  heroCopy.append(actionButton("استكشف المواهب  ←", "button-light", () => context.navigate("scouting")));
-  const heroPlayer = node("div", "feature-player");
-  heroPlayer.append(playerArt(DEMO_PLAYERS[0], true));
-  heroPlayer.append(node("span", "feature-player-label", "موهبة تحت المراقبة"));
-  hero.append(heroCopy, heroPlayer, node("span", "banner-orbit orbit-one"), node("span", "banner-orbit orbit-two"));
+  const stadiumLabel = node("div", "stadium-label");
+  stadiumLabel.append(node("span", "stadium-live-dot"), node("span", "", "عالم الوكالة"));
+  stadium.append(stadiumLabel);
 
-  const metrics = node("div", "metrics-grid");
-  metrics.append(
-    metricCard("رصيد الوكالة", formatMoney(context.save.agency.balance), "الأموال المتاحة", "◈", "purple"),
-    metricCard("اللاعبون", String(context.save.agency.clients.length).padStart(2, "0"), "عملاء تحت التمثيل", "◎", "cyan"),
-    metricCard("السمعة", String(context.save.agency.reputation) + " / 100", "مستوى الوكالة", "✦", "gold"),
-    metricCard("فرص السوق", "03", "فرص تجريبية للمعاينة", "⇄", "pink")
+  const profile = node("section", "agent-profile-card");
+  const profileTop = node("div", "agent-profile-top");
+  const avatar = node("div", "agent-avatar", "FA");
+  avatar.append(node("span", "agent-avatar-star", "✦"));
+  const identity = node("div", "agent-identity");
+  identity.append(
+    node("span", "agent-eyebrow", "ملف الوكيل"),
+    node("h1", "agent-name", agency.name),
+    node("span", "agent-status", "●  وكالتك نشطة")
   );
+  const level = node("span", "agent-level", "المستوى 1");
+  profileTop.append(avatar, identity, level);
 
-  const mainGrid = node("div", "dashboard-grid");
-  const prospects = node("section", "panel-section");
-  prospects.append(sectionHeading(
-    "مواهب تستحق المتابعة",
-    "نماذج عرض تجريبية — قاعدة اللاعبين الفعلية تأتي في المرحلة الرابعة",
-    "عرض الكل",
-    () => context.navigate("players")
-  ));
-  const cards = node("div", "players-grid");
-  DEMO_PLAYERS.slice(0, 3).forEach((player) => {
-    cards.append(playerCard(player, context.openPlayer));
+  const profileStats = node("div", "agent-profile-stats");
+  const cash = node("div", "agent-stat-chip");
+  cash.append(node("span", "", "رصيد الوكالة"), node("strong", "", balance));
+  const reputationChip = node("div", "agent-stat-chip agent-reputation-chip");
+  reputationChip.append(node("span", "", "السمعة"), node("strong", "", formatHomeNumber(reputation) + " / 100"));
+  profileStats.append(cash, reputationChip);
+
+  const progressHead = node("div", "agent-progress-head");
+  progressHead.append(node("span", "", "تقدم سمعة الوكالة"), node("strong", "", formatHomeNumber(reputation) + "%"));
+  const progress = node("div", "agent-progress-track");
+  progress.setAttribute("role", "progressbar");
+  progress.setAttribute("aria-label", "تقدم سمعة الوكالة");
+  progress.setAttribute("aria-valuemin", "0");
+  progress.setAttribute("aria-valuemax", "100");
+  progress.setAttribute("aria-valuenow", String(reputation));
+  const progressFill = node("span", "agent-progress-fill");
+  progressFill.style.width = reputation + "%";
+  progress.append(progressFill);
+  profile.append(profileTop, profileStats, progressHead, progress);
+
+  const dayPanel = node("section", "career-day-panel");
+  const dayHeading = node("div", "career-day-heading");
+  dayHeading.append(
+    node("span", "career-date", formatHomeDate(context.save.world.currentDate)),
+    node("span", "career-season", "الموسم " + formatHomeNumber(career.season))
+  );
+  const dayStats = node("div", "career-day-stats");
+  [
+    ["اليوم", formatHomeNumber(career.day)],
+    ["الأسبوع", formatHomeNumber(career.week)],
+    ["العملاء", formatHomeNumber(clients)]
+  ].forEach(([label, value]) => {
+    const stat = node("div", "career-day-stat");
+    stat.append(node("span", "", label), node("strong", "", value));
+    dayStats.append(stat);
   });
-  prospects.append(cards);
+  const dayAction = actionButton("⚽  ابدأ يوم جديد", "day-advance-button", context.advanceDay);
+  const dayFoot = node("div", "career-day-foot");
+  dayFoot.append(node("span", "day-foot-dot"), node("span", "", "تقدم يومك يحدّث تاريخ المسيرة ويحفظه تلقائيًا"));
+  dayPanel.append(dayHeading, dayStats, dayAction, dayFoot);
 
-  const side = node("aside", "side-column");
-  const activity = node("section", "surface-card activity-card");
-  activity.append(
-    node("div", "card-heading", "آخر المستجدات"),
-    activityRow("✦", "شبكة الكشافين", "3 مواهب جديدة متاحة للمعاينة", "منذ قليل", "purple"),
-    activityRow("↗", "سوق الانتقالات", "نافذة الانتقالات الصيفية مفتوحة", "اليوم", "cyan"),
-    activityRow("◷", "تذكير", "راجع عقود اللاعبين قبل نهاية الموسم", "هذا الأسبوع", "gold")
+  const featureGrid = node("div", "home-feature-grid");
+  const playersFeature = actionButton("", "home-feature-card feature-players", () => context.navigate("players"));
+  playersFeature.append(
+    node("span", "feature-card-icon", "⚽"),
+    node("span", "feature-card-copy"),
+    node("span", "feature-card-arrow", "‹")
   );
-  const quick = node("section", "surface-card quick-card");
-  quick.append(node("div", "card-heading", "اختصارات سريعة"));
-  quick.append(
-    actionButton("＋  اكتشاف موهبة", "quick-action", () => context.navigate("scouting")),
-    actionButton("♧  قائمة اللاعبين", "quick-action", () => context.navigate("players")),
-    actionButton("⇄  متابعة السوق", "quick-action", () => context.navigate("market"))
+  playersFeature.children[1].append(
+    node("strong", "", "اللاعبون"),
+    node("small", "", "اكتشف ملفات المواهب")
   );
-  side.append(activity, quick);
-  mainGrid.append(prospects, side);
+  const newsFeature = actionButton("", "home-feature-card feature-news", () => context.openModal("أخبار الوكالة", [
+    node("p", "modal-copy", "هنا هتظهر أخبار اللاعبين والأندية والانتقالات والأحداث المؤثرة في عالمك."),
+    node("p", "modal-note", "مركز الأخبار قيد التطوير.")
+  ], "تمام"));
+  newsFeature.append(
+    node("span", "feature-card-icon", "▤"),
+    node("span", "feature-card-copy"),
+    node("span", "feature-news-count", "3")
+  );
+  newsFeature.children[1].append(
+    node("strong", "", "الأخبار"),
+    node("small", "", "آخر مستجدات عالم الكرة")
+  );
+  featureGrid.append(playersFeature, newsFeature);
 
-  page.append(welcome, hero, metrics, mainGrid);
+  const storeBanner = actionButton("", "home-store-banner", () => context.openModal("متجر الوكالة", [
+    node("p", "modal-copy", "المتجر هيضم أدوات وتطويرات تساعدك توسّع وكالتك وتدير مسيرتك."),
+    node("p", "modal-note", "المتجر لم يُفعّل بعد، ومفيش مشتريات أو مدفوعات في النسخة الحالية.")
+  ], "تمام"));
+  storeBanner.append(
+    node("span", "store-banner-icon", "♛"),
+    node("span", "store-banner-copy"),
+    node("span", "store-banner-arrow", "←")
+  );
+  storeBanner.children[1].append(
+    node("strong", "", "متجر الوكالة"),
+    node("small", "", "تطويرات ومزايا مستقبلية")
+  );
+
+  const menuHeading = node("div", "home-menu-heading");
+  menuHeading.append(
+    node("h2", "", "أقسام الوكالة"),
+    node("span", "", "اختر وجهتك")
+  );
+  const menu = node("div", "home-menu-grid");
+  const tiles = [
+    ["⚽", "اللاعبون", "ملفات المواهب", "violet", "players"],
+    ["▤", "الأخبار", "عالم كرة القدم", "orange", null],
+    ["⌂", "المكتب", "إدارة الوكالة", "blue", "agency"],
+    ["▥", "البنك", "الأرصدة", "teal", "agency"],
+    ["◈", "المالية", "حسابات الوكالة", "green", "agency"],
+    ["⌕", "الكشافون", "اكتشاف المواهب", "gold", "scouting"],
+    ["🏆", "البطولات", "إنجازات مستقبلية", "yellow", null],
+    ["▦", "الدوريات", "المسابقات", "indigo", null],
+    ["⇄", "الانتقالات", "سوق الصفقات", "orange", "market"],
+    ["▧", "العقود", "اتفاقيات اللاعبين", "cyan", null],
+    ["◎", "الاستثمارات", "توسيع الأعمال", "blue", null],
+    ["▤", "الصحافة", "التغطية الإعلامية", "pink", null],
+    ["♜", "مجلس الإدارة", "قرارات الوكالة", "purple", "agency"],
+    ["↗", "المسيرة", "تطور الوكالة", "rose", "agency"],
+    ["▣", "المهام", "أهدافك القادمة", "gold", null],
+    ["✦", "الرعاة", "الشراكات التجارية", "green", null],
+    ["◉", "التقارير", "أداء الوكالة", "teal", "agency"],
+    ["⚙", "الإعدادات", "تفضيلات اللعبة", "slate", null]
+  ];
+  tiles.forEach(([icon, title, subtitle, tone, destination]) => {
+    menu.append(homeTile(context, icon, title, subtitle, tone, destination));
+  });
+
+  const saveFooter = node("section", "home-save-footer");
+  const saveCopy = node("div", "home-save-copy");
+  saveCopy.append(
+    node("strong", "", "مسيرتك في أمان"),
+    node("span", "", "احفظ تقدمك على هذا الجهاز")
+  );
+  saveFooter.append(
+    node("span", "home-save-icon", "▣"),
+    saveCopy,
+    actionButton("حفظ", "home-save-button", context.saveCareer)
+  );
+
+  page.append(stadium, profile, dayPanel, featureGrid, storeBanner, menuHeading, menu, saveFooter);
   return page;
 }
 
@@ -445,6 +572,33 @@ export function mountApp(root) {
     }
   }
 
+  function advanceDay() {
+    if (!state.canWrite) {
+      toast(loaded.status === "unsupported"
+        ? "ملف الحفظ من إصدار أحدث؛ لا يمكن بدء يوم جديد."
+        : "ملف الحفظ غير صالح أو غير متاح؛ لم نغيّره.");
+      return;
+    }
+
+    const currentDate = new Date(state.save.world.currentDate + "T12:00:00Z");
+    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+    const day = state.save.career.day + 1;
+    state.save = {
+      ...state.save,
+      career: {
+        ...state.save.career,
+        day,
+        week: Math.ceil(day / 7)
+      },
+      world: {
+        ...state.save.world,
+        currentDate: currentDate.toISOString().slice(0, 10)
+      }
+    };
+    saveCareer();
+    render();
+  }
+
   function navigate(view) {
     state.view = view;
     render();
@@ -526,7 +680,7 @@ export function mountApp(root) {
   }
 
   function render() {
-    const shell = node("div", "app-shell");
+    const shell = node("div", state.view === "dashboard" ? "app-shell dashboard-shell" : "app-shell");
     const header = node("header", "topbar");
     const brand = node("div", "brand-lockup");
     brand.append(node("span", "brand-mark", "FA"), node("span", "brand-name", "FOOTBALL AGENT"));
@@ -549,7 +703,7 @@ export function mountApp(root) {
     sidebar.append(sideBottom);
 
     const main = node("main", "main-stage");
-    const context = { save: state.save, navigate, openPlayer, openModal, saveCareer, toast, watchlist: state.watchlist, addToWatchlist };
+    const context = { save: state.save, navigate, openPlayer, openModal, saveCareer, advanceDay, toast, watchlist: state.watchlist, addToWatchlist };
     const views = {
       dashboard: renderDashboard,
       players: renderPlayers,
