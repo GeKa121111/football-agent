@@ -2362,7 +2362,7 @@ export function mountApp(root) {
 
   function navigate(view) {
     state.view = view;
-    render();
+    render({ focusMain: true });
   }
 
   function openModal(title, children, closeLabel = "إغلاق") {
@@ -2510,7 +2510,7 @@ export function mountApp(root) {
     openModal("ملف اللاعب", [content, actions]);
   }
 
-  function render() {
+  function render({ focusMain = false } = {}) {
     const context = {
       save: state.save,
       navigate,
@@ -2594,6 +2594,9 @@ export function mountApp(root) {
     }
     if (state.toastMessage) {
       root.append(node("div", "toast-message", state.toastMessage));
+    }
+    if (focusMain) {
+      root.querySelector(".main-stage")?.focus();
     }
   }
 
