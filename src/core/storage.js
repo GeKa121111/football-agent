@@ -1,8 +1,9 @@
 import { createInitialCareerCalendar } from "../engines/career-calendar.js";
 import { createInitialScoutingState, SCOUTING_MISSION_TYPES, SCOUTING_SCOUTS, SCOUTING_SOURCES } from "../engines/scouting.js";
+import { createInitialRepresentationState, isValidRepresentationState } from "../engines/representation.js";
 
 export const STORAGE_KEY = "football-agent.save";
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const WATCHLIST_KEY = "football-agent.watchlist";
 
 export function createInitialSave(now = new Date().toISOString()) {
@@ -23,7 +24,8 @@ export function createInitialSave(now = new Date().toISOString()) {
       name: "وكالتك الجديدة",
       balance: 100000,
       reputation: 1,
-      clients: []
+      clients: [],
+      representation: createInitialRepresentationState()
     },
     world: {
       currentDate: "2026-07-01",
@@ -341,7 +343,9 @@ export function isValidSave(value) {
   if (!isValidCalendarDate(currentDate)) return false;
   if (![players, clubs, competitions, activeOffers].every(Array.isArray)) return false;
   if (![players, clubs, competitions, activeOffers].every(hasUniqueIds)) return false;
-  return isValidActivityCollections(value.world) && isValidScoutingState(value.world.scouting, currentDate);
+  return isValidActivityCollections(value.world) &&
+    isValidScoutingState(value.world.scouting, currentDate) &&
+    isValidRepresentationState(value.agency.representation, currentDate, clients);
 }
 
 export function readWatchlist(storage) {
@@ -387,13 +391,19 @@ function resolveStorage(storage) {
 
 function migrateSave(value) {
   if (!isRecord(value) || !isRecord(value.meta) || !isRecord(value.world)) return value;
-  if (![1, 2].includes(value.meta.version)) return value;
+  if (![1, 2, 3].includes(value.meta.version)) return value;
 
   return {
     ...value,
     meta: {
       ...value.meta,
       version: SAVE_VERSION
+    },
+    agency: {
+      ...value.agency,
+      representation: isRecord(value.agency?.representation)
+        ? value.agency.representation
+        : createInitialRepresentationState()
     },
     world: {
       ...value.world,
