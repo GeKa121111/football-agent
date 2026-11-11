@@ -469,21 +469,23 @@ test.describe("Desktop experience", () => {
     await expect(trigger).toBeFocused();
   });
 
-  test("opens a transfer preview and closes it by clicking outside", async ({ page }) => {
+  test("shows the live transfer workspace and empty deal history", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الانتقالات");
-    await page.locator(".market-card").first().getByRole("button", { name: "التفاصيل" }).click();
-    await expect(page.getByRole("dialog", { name: "فرصة انتقال تجريبية" })).toBeVisible();
-    await page.locator(".modal-overlay").click({ position: { x: 5, y: 5 } });
-    await expect(page.locator(".modal-overlay")).toHaveCount(0);
+    await expect(page.locator(".transfer-window-card")).toBeVisible();
+    await expect(page.locator(".transfer-proposal-panel")).toBeVisible();
+    await expect(page.locator(".transfer-list-panel")).toBeVisible();
+    await expect(page.locator(".transfer-moves-panel")).toBeVisible();
+    await expect(page.locator(".transfer-deal-card")).toHaveCount(0);
+    await hasNoHorizontalOverflow(page);
   });
 
-  test("labels all market cards as illustrative preview data", async ({ page }) => {
+  test("requires an active representation contract before offering a transfer", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الانتقالات");
-    await expect(page.locator(".market-preview-notice")).toContainText("ليست عروض انتقال حقيقية");
-    await expect(page.locator(".market-preview-state")).toHaveText("DEMO DATA");
-    await expect(page.locator(".market-card")).toHaveCount(3);
+    await expect(page.locator(".transfer-empty-clients")).toContainText("عقد تمثيل نشط");
+    await expect(page.locator(".transfer-proposal-form")).toHaveCount(0);
+    await expect(page.locator(".market-card, .market-preview-notice")).toHaveCount(0);
     await hasNoHorizontalOverflow(page);
   });
 });
