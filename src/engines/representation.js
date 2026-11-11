@@ -832,12 +832,12 @@ export function submitRepresentationCounterOffer(save, offerId, terms, currentDa
     ...offer,
     commissionRate: terms.commissionRate,
     termDays: terms.termDays,
-    representationType: normalizeRepresentationType(terms.representationType ?? offer.representationType)
+    representationType: normalizeRepresentationType(terms.representationType ?? offer.counterOffer?.representationType ?? offer.representationType)
   };
   let updated = replaceOffer(representation, offer.id, {
     commissionRate: terms.commissionRate,
     termDays: terms.termDays,
-    representationType: normalizeRepresentationType(terms.representationType ?? offer.representationType)
+    representationType: normalizeRepresentationType(terms.representationType ?? offer.counterOffer?.representationType ?? offer.representationType)
   });
   updated = nextHistory(updated, "agency-countered", offer, currentDate,
     "ردت الوكالة بعمولة " + terms.commissionRate + "% لمدة " + Math.round(terms.termDays / 365) + " سنة.",
