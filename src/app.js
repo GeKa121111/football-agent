@@ -1470,7 +1470,8 @@ export function mountApp(root) {
     try {
       const advancedSave = advanceCareerDays(state.save, 7);
       const scoutingResult = advanceScoutingMissions(advancedSave, WORLD_PLAYERS);
-      state.save = scoutingResult.save;
+      const representationResult = advanceRepresentationState(scoutingResult.save, scoutingResult.save.world.currentDate);
+      state.save = representationResult.save;
       if (saveCareer()) {
         render();
         toast(scoutingResult.completedReports.length > 0
