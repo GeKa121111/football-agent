@@ -655,6 +655,7 @@
 .talent-pipeline-copy > span, .talent-pipeline-copy small { color: var(--fa-muted); font-size: 8px; line-height: 1.65; overflow-wrap: anywhere; }
 .talent-pipeline-copy .talent-pipeline-sources { color: var(--fa-accent); }
 .talent-pipeline-followup.is-overdue { color: #f3a28e; }
+.talent-pipeline-followup.is-due { color: var(--fa-accent); font-weight: 900; }
 .talent-pipeline-stage { justify-self: end; align-self: start; padding: 5px 7px; border: 1px solid var(--fa-border); border-radius: 99px; color: var(--fa-muted); font-size: 7px; white-space: nowrap; }
 .talent-pipeline-stage.stage-negotiating, .talent-pipeline-stage.stage-client { color: var(--fa-accent); border-color: rgba(166,225,103,.3); }
 .talent-pipeline-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
