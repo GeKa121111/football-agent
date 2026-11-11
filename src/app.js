@@ -7,6 +7,15 @@ import {
 } from "./core/storage.js";
 import { WORLD_DATABASE, getWorldPlayerProfiles, getWorldSummary } from "./data/world-database.js";
 import {
+  getUpcomingFootballFixtures,
+  getRecentFootballResults
+} from "./engines/football-season.js";
+import {
+  TRAINING_FOCUSES,
+  setPlayerTrainingPlan as setPlayerTrainingPlanInEngine,
+  getPlayerDevelopmentRecord
+} from "./engines/player-development.js";
+import {
   SCOUTING_MISSION_TYPES,
   SCOUTING_SOURCES,
   advanceScoutingMissions,
@@ -704,6 +713,259 @@ function renderPlayers(context) {
   sort.addEventListener("change", refresh);
   refresh();
   page.append(worldStats, toolbar, grid);
+  return page;
+}
+
+function renderFootball(context) {
+  const page = node("div", "page-content rebuild-screen football-screen");
+  page.append(
+    node("p", "eyebrow rebuild-page-kicker", "محاكاة الموسم"),
+    node("h1", "page-title rebuild-page-title", "المباريات وتطور اللاعبين"),
+    node("p", "page-subtitle rebuild-page-subtitle", "تابع جدول المسابقات ونتائج المباريات، واضبط خطة تدريب لاعبي قاعدة العالم. التشكيلات المساعدة موضحة كبيانات محاكاة وليست ملفات لاعبين إضافية.")
+  );
+
+  const football = context.save.world.football;
+  const clubById = new Map(WORLD_DATABASE.clubs.map((club) => [club.id, club]));
+  const fixtures = getUpcomingFootballFixtures(football, context.save.world.currentDate, 12);
+  const results = getRecentFootballResults(football, 8);
+  const developmentPlayers = football.playerDevelopment.players;
+  const summary = node("div", "football-summary-grid");
+  [
+    ["مباريات الموسم", football.fixtures.length],
+    ["مباريات لُعبت", football.results.length],
+    ["مواعيد قادمة", fixtures.length],
+    ["لاعبون قابلون للتطوير", developmentPlayers.length]
+  ].forEach(([label, value]) => {
+    const card = node("article", "football-summary-card");
+    card.append(node("small", "", label), node("strong", "", formatHomeNumber(value)));
+    summary.append(card);
+  });
+
+  const schedulePanel = node("section", "surface-card football-panel");
+  const scheduleHeading = node("div", "football-panel-heading");
+  scheduleHeading.append(
+    node("h2", "", "المواعيد القادمة"),
+    node("span", "representation-count", formatHomeNumber(fixtures.length) + " مباراة ظاهرة")
+  );
+  schedulePanel.append(scheduleHeading);
+  if (fixtures.length === 0) {
+    schedulePanel.append(node("p", "representation-empty", "لا توجد مباريات قادمة في الجدول الحالي."));
+  } else {
+    const fixtureList = node("div", "football-fixture-grid");
+    fixtures.forEach((fixture) => {
+      const home = clubById.get(fixture.homeClubId);
+      const away = clubById.get(fixture.awayClubId);
+      const card = node("article", "football-fixture-card");
+      const top = node("div", "football-fixture-meta");
+      top.append(
+        node("span", "", fixture.competitionName),
+        node("small", "", "الجولة " + formatHomeNumber(fixture.round))
+      );
+      const teams = node("div", "football-fixture-teams");
+      teams.append(
+        node("strong", "", home?.shortName ?? fixture.homeClubId),
+        node("span", "", "VS"),
+        node("strong", "", away?.shortName ?? fixture.awayClubId)
+      );
+      card.append(
+        top,
+        teams,
+        node("small", "football-fixture-date", formatHomeDate(fixture.date) + " · مباراة مجدولة")
+      );
+      fixtureList.append(card);
+    });
+    schedulePanel.append(fixtureList);
+  }
+
+  const resultsPanel = node("section", "surface-card football-panel");
+  const resultsHeading = node("div", "football-panel-heading");
+  resultsHeading.append(
+    node("h2", "", "نتائج المباريات"),
+    node("span", "representation-count", formatHomeNumber(results.length) + " نتيجة حديثة")
+  );
+  resultsPanel.append(resultsHeading);
+  if (results.length === 0) {
+    resultsPanel.append(node("p", "representation-empty", "نتائج أولى المباريات هتظهر هنا بمجرد تقدم تاريخ المسيرة إلى مواعيدها."));
+  } else {
+    const resultList = node("div", "football-result-list");
+    results.forEach((result) => {
+      const row = node("article", "football-result-row");
+      const meta = node("small", "", result.competitionName + " · " + formatHomeDate(result.date));
+      const score = node("strong", "football-result-score",
+        result.home.name + "  " + result.home.goals + " - " + result.away.goals + "  " + result.away.name);
+      const actions = node("div", "football-result-actions");
+      actions.append(
+        node("span", "football-result-badge", result.result === "draw" ? "تعادل" : "انتهت"),
+        actionButton("تفاصيل المباراة", "button-outline football-match-details-button", () => {
+          const report = node("div", "football-match-report");
+          const headline = node("h3", "football-match-report-score",
+            result.home.name + " " + result.home.goals + " - " + result.away.goals + " " + result.away.name);
+          report.append(
+            headline,
+            node("p", "modal-note", result.competitionName + " · " + formatHomeDate(result.date) +
+              " · " + result.durationMinutes + " دقيقة"),
+            node("p", "modal-copy", "الاستحواذ " + result.home.possession + "% مقابل " + result.away.possession +
+              "% · التسديدات " + result.home.shots + " مقابل " + result.away.shots +
+              " · على المرمى " + result.home.shotsOnTarget + " مقابل " + result.away.shotsOnTarget)
+          );
+          const eventList = node("div", "football-match-events");
+          result.events.forEach((event) => {
+            const eventLabels = {
+              goal: "هدف",
+              "yellow-card": "بطاقة صفراء",
+              injury: "إصابة"
+            };
+            const item = node("div", "football-match-event");
+            item.append(
+              node("strong", "", formatHomeNumber(event.minute) + "′ · " + (eventLabels[event.type] ?? "حدث")),
+              node("span", "", event.playerName + (event.assistPlayerName ? " · صناعة " + event.assistPlayerName : "") +
+                (event.daysOut ? " · غياب " + event.daysOut + " أيام" : ""))
+            );
+            eventList.append(item);
+          });
+          report.append(node("h4", "", "أحداث المباراة"), eventList);
+          const topPlayers = [...result.playerPerformances]
+            .sort((a, b) => b.rating - a.rating || b.goals - a.goals)
+            .slice(0, 5);
+          const performers = node("div", "football-performers-list");
+          topPlayers.forEach((player) => {
+            const item = node("div", "football-performer-row");
+            item.append(
+              node("span", "", player.playerName + (player.simulationOnly ? " · لاعب محاكاة" : "")),
+              node("strong", "", formatHomeNumber(player.rating) + " / 10")
+            );
+            performers.append(item);
+          });
+          report.append(node("h4", "", "أفضل تقييمات اللاعبين"), performers,
+            node("p", "player-profile-disclaimer", "التشكيلة تستخدم لاعبي قاعدة العالم المتاحين، مع لاعبين مجهولين مولّدين للمحاكاة لإكمال 11 لاعبًا. هؤلاء لا يُضافون إلى قاعدة المواهب.")
+          );
+          context.openModal("تقرير المباراة", [report], "إغلاق");
+        })
+      );
+      row.append(meta, score, actions);
+      resultList.append(row);
+    });
+    resultsPanel.append(resultList);
+  }
+
+  const trainingPanel = node("section", "surface-card football-panel football-training-panel");
+  const trainingHeading = node("div", "football-panel-heading");
+  trainingHeading.append(
+    node("h2", "", "خطط التدريب وتطور اللاعبين"),
+    node("span", "representation-count", "تدريب أسبوعي")
+  );
+  trainingPanel.append(
+    trainingHeading,
+    node("p", "football-training-intro", "تتطبق جلسة التدريب تلقائيًا يوم الاثنين داخل المسيرة. اختار تركيز كل لاعب وشدة التدريب؛ الحمل العالي يرفع الإرهاق وقد يؤخر التطور لو اللياقة منخفضة.")
+  );
+
+  const form = node("div", "football-training-form");
+  const playerSelect = node("select", "filter-select");
+  playerSelect.setAttribute("aria-label", "لاعب خطة التدريب");
+  developmentPlayers.forEach((player) => {
+    const worldProfile = WORLD_PLAYERS.find((item) => item.id === player.playerId);
+    const option = node("option", "", player.playerName + " · " + (worldProfile?.club ?? player.clubId));
+    option.value = player.playerId;
+    playerSelect.append(option);
+  });
+  const focusSelect = node("select", "filter-select");
+  focusSelect.setAttribute("aria-label", "تركيز التدريب");
+  Object.entries(TRAINING_FOCUSES).forEach(([value, definition]) => {
+    const option = node("option", "", definition.label);
+    option.value = value;
+    focusSelect.append(option);
+  });
+  const intensitySelect = node("select", "filter-select");
+  intensitySelect.setAttribute("aria-label", "شدة التدريب");
+  [
+    ["light", "خفيف"],
+    ["normal", "طبيعي"],
+    ["intense", "مكثف"]
+  ].forEach(([value, label]) => {
+    const option = node("option", "", label);
+    option.value = value;
+    intensitySelect.append(option);
+  });
+  form.append(playerSelect, focusSelect, intensitySelect);
+
+  const playerDetails = node("div", "football-development-detail");
+  const refreshPlayerDetails = () => {
+    const player = getPlayerDevelopmentRecord(football.playerDevelopment, playerSelect.value);
+    if (!player) {
+      playerDetails.replaceChildren(node("p", "representation-empty", "ملف التطور غير متاح."));
+      return;
+    }
+    focusSelect.value = player.trainingFocus;
+    intensitySelect.value = player.trainingIntensity;
+    [...focusSelect.options].forEach((option) => {
+      option.disabled = option.value === "goalkeeping" && player.role !== "حراسة";
+    });
+    const metrics = node("div", "football-player-metrics");
+    [
+      ["التقييم", formatHomeNumber(player.rating)],
+      ["الإمكانيات", player.potential],
+      ["العمر", player.age + " سنة"],
+      ["المشاركات", player.appearances],
+      ["الدقائق", formatHomeNumber(player.minutesPlayed)],
+      ["الأهداف", player.goals],
+      ["التمريرات الحاسمة", player.assists],
+      ["اللياقة", player.fitness + "%"],
+      ["الإرهاق", player.fatigue + "%"],
+      ["الإصابة", player.injuryDays > 0 ? player.injuryDays + " يوم" : "سليم"]
+    ].forEach(([label, value]) => {
+      const item = node("div", "football-player-metric");
+      item.append(node("small", "", label), node("strong", "", String(value)));
+      metrics.append(item);
+    });
+    const skills = node("div", "football-skill-list");
+    const skillLabels = {
+      finishing: "إنهاء",
+      pace: "سرعة",
+      passing: "تمرير",
+      dribbling: "مراوغة",
+      defending: "دفاع",
+      stamina: "تحمل",
+      handling: "إمساك",
+      reflexes: "رد فعل",
+      positioning: "تمركز"
+    };
+    Object.entries(player.skills).forEach(([key, value]) => {
+      if (value <= 20 && player.role !== "حراسة") return;
+      const item = node("div", "football-skill-item");
+      const line = node("div", "football-skill-line");
+      line.append(node("span", "", skillLabels[key] ?? key), node("strong", "", formatHomeNumber(value)));
+      const track = node("div", "football-skill-track");
+      const fill = node("span", "football-skill-fill");
+      fill.style.width = value + "%";
+      track.append(fill);
+      item.append(line, track);
+      skills.append(item);
+    });
+    const history = football.playerDevelopment.trainingHistory
+      .filter((session) => session.playerId === player.playerId)
+      .slice(-5)
+      .reverse();
+    const historyPanel = node("div", "football-training-history");
+    historyPanel.append(node("strong", "", "آخر جلسات التدريب"));
+    if (history.length === 0) {
+      historyPanel.append(node("small", "", "لم تبدأ جلسة تدريب لهذا اللاعب بعد."));
+    } else {
+      history.forEach((session) => {
+        historyPanel.append(node("small", "", formatHomeDate(session.date) + " · " +
+          TRAINING_FOCUSES[session.focus].label + " · " +
+          (session.improvement > 0 ? "+" : "") + session.improvement));
+      });
+    }
+    playerDetails.replaceChildren(metrics, node("h3", "", "المهارات"), skills, historyPanel);
+  };
+  playerSelect.addEventListener("change", refreshPlayerDetails);
+  refreshPlayerDetails();
+
+  const savePlanButton = actionButton("حفظ خطة التدريب", "button-primary football-training-save", () => {
+    context.updatePlayerTrainingPlan(playerSelect.value, focusSelect.value, intensitySelect.value);
+  });
+  trainingPanel.append(form, savePlanButton, playerDetails);
+  page.append(summary, schedulePanel, resultsPanel, trainingPanel);
   return page;
 }
 
