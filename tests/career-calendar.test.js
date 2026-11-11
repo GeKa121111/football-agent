@@ -137,6 +137,43 @@ test("completes a task once and keeps unknown or completed tasks unchanged", () 
   assert.equal(completeCareerTask(next, "missing-task").changed, false);
 });
 
+test("trims completed task history immediately without dropping actionable work", () => {
+  const save = createInitialSave();
+  save.world.currentDate = "2026-07-02";
+  save.career.day = 2;
+  save.career.week = 1;
+
+  const completedHistory = Array.from({ length: 60 }, (_, index) => makeTask({
+    id: "task-history-" + String(index).padStart(2, "0"),
+    title: "مهمة محفوظة " + index,
+    category: "history-" + index,
+    createdDate: "2026-07-01",
+    dueDate: "2026-07-10",
+    status: "completed",
+    completedDate: "2026-07-02",
+    completedLate: false
+  }));
+  const actionableTask = makeTask({
+    id: "task-new-completion",
+    title: "مهمة جديدة قابلة للإنجاز",
+    category: "new-completion",
+    createdDate: "2026-07-02",
+    dueDate: "2026-07-10",
+    status: "open"
+  });
+  save.world.tasks = [...completedHistory, actionableTask];
+
+  const result = completeCareerTask(save, actionableTask.id);
+
+  assert.equal(result.changed, true);
+  assert.equal(result.save.world.tasks.length, 60);
+  assert.ok(result.save.world.tasks.every((task) => task.status === "completed"));
+  assert.ok(!result.save.world.tasks.some((task) => task.id === "task-history-00"));
+  assert.ok(result.save.world.tasks.some((task) => task.id === actionableTask.id));
+  assert.equal(isValidSave(result.save), true);
+  assert.equal(save.world.tasks.length, 61, "the input save remains unchanged");
+});
+
 test("marks an inbox message read without changing other messages", () => {
   const save = createInitialSave();
   save.world.currentDate = "2026-07-05";
