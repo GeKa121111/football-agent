@@ -99,6 +99,14 @@ test.describe("Desktop experience", () => {
     expect(saved.agency.representation.history.map((entry) => entry.type)).toContain("contract-signed");
     await expect(page.locator(".representation-contract-row")).toBeVisible();
 
+    const clientSearch = page.getByRole("searchbox", { name: "البحث في عملاء الوكالة" });
+    await clientSearch.fill(saved.agency.representation.contracts[0].playerName.slice(0, 3));
+    await expect(page.locator(".representation-contract-row")).toHaveCount(1);
+    await clientSearch.fill("اسم غير موجود");
+    await expect(page.locator(".empty-results")).toBeVisible();
+    await page.getByRole("button", { name: "مسح البحث" }).click();
+    await expect(page.locator(".representation-contract-row")).toHaveCount(1);
+
     await page.locator(".representation-terminate-button").click();
     saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(saved.agency.clients).toHaveLength(0);
