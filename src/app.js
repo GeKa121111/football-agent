@@ -2099,13 +2099,43 @@ export function mountApp(root) {
           statMini("الثقة", finding.confidence + "%")
         );
         const history = getPlayerScoutingHistory(state.save.world.scouting, finding.playerId);
+        const player = WORLD_PLAYERS.find((candidate) => candidate.id === finding.playerId);
+        const representation = state.save.agency.representation;
+        const isClient = state.save.agency.clients.includes(finding.playerId) ||
+          representation.contracts.some((contract) => contract.playerId === finding.playerId && contract.status === "active");
+        const openOffer = representation.offers.find((offer) =>
+          offer.playerId === finding.playerId && ["pending", "countered"].includes(offer.status)
+        );
+        const findingActions = node("div", "scout-finding-actions");
+        if (player) {
+          findingActions.append(actionButton("فتح ملف اللاعب", "button-outline scout-finding-profile-button", () => {
+            root.querySelector(".modal-overlay .icon-button")?.click();
+            openPlayer(player);
+          }));
+          if (isClient) {
+            findingActions.append(node("span", "scout-finding-state", "عميل حالي في الوكالة"));
+          } else if (openOffer) {
+            findingActions.append(actionButton("متابعة عرض التمثيل", "button-outline scout-finding-followup-button", () => {
+              root.querySelector(".modal-overlay .icon-button")?.click();
+              navigate("agency");
+            }));
+          } else {
+            findingActions.append(actionButton("بدء عرض تمثيل", "button-primary scout-finding-representation-button", () => {
+              root.querySelector(".modal-overlay .icon-button")?.click();
+              openRepresentationOffer(player);
+            }));
+          }
+        } else {
+          findingActions.append(node("span", "scout-finding-state", "ملف اللاعب غير متاح في قاعدة العالم الحالية"));
+        }
         row.append(
           heading,
           subline,
           sources,
           stats,
           node("p", "scout-finding-rationale", finding.rationale),
-          actionButton("سجل الرصد (" + history.totalObservations + ")", "button-outline scout-history-button", () => openScoutingHistory(finding.playerId))
+          actionButton("سجل الرصد (" + history.totalObservations + ")", "button-outline scout-history-button", () => openScoutingHistory(finding.playerId)),
+          findingActions
         );
         list.append(row);
       });
