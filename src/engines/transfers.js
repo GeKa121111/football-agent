@@ -289,7 +289,10 @@ export function advanceTransferState(save, currentDate = save?.world?.currentDat
   for (const offer of state.offers) {
     const agreedWindow = offer.status === "agreed" ? getTransferWindow(offer.agreedDate).window : null;
     const agreementMissedWindow = offer.status === "agreed" && (!agreedWindow || currentDate > agreedWindow.endDate);
-    const staleOpenOffer = ["pending", "countered"].includes(offer.status) && currentDate > offer.expiresDate;
+    const offerWindow = getTransferWindow(offer.createdDate).window;
+    const offerWindowClosed = !offerWindow || currentDate > offerWindow.endDate;
+    const staleOpenOffer = ["pending", "countered"].includes(offer.status) &&
+      (currentDate > offer.expiresDate || offerWindowClosed);
     if (agreementMissedWindow || staleOpenOffer) {
       const result = expireTransferOffer(nextSave, offer, currentDate);
       nextSave = result.save;
