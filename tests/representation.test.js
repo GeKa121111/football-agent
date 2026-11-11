@@ -32,7 +32,13 @@ function advanceToDate(save, targetDate) {
   const target = Date.parse(targetDate + "T00:00:00.000Z");
   const days = Math.round((target - current) / 86400000);
   assert.ok(days >= 0, "test date must not precede the saved career date");
-  return advanceCareerDays(save, days);
+  let advanced = save;
+  while (days > 0) {
+    const step = Math.min(days, 31);
+    advanced = advanceCareerDays(advanced, step);
+    days -= step;
+  }
+  return advanced;
 }
 
 function sendOffer(save, profile = player(), terms = { commissionRate: 15, termDays: 1095 }) {
