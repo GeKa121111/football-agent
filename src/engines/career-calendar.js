@@ -345,21 +345,53 @@ export function markCareerMessageRead(save, messageId) {
 }
 
 
+const CAREER_EVENT_TYPE_LABELS = Object.freeze({
+  "weekly-briefing": "الإحاطة الأسبوعية",
+  "monthly-market": "تقرير السوق الشهري",
+  "season-opening": "افتتاح الموسم",
+  "preseason-review": "مراجعة ما قبل الموسم",
+  "midseason-review": "مراجعة منتصف الموسم",
+  "season-review": "تقييم نهاية الموسم",
+  "season-closing": "ختام الموسم",
+  "task-overdue": "تأخر مهمة",
+  "task-completed": "إنجاز مهمة"
+});
+
+const CAREER_EVENT_PRIORITY_LABELS = Object.freeze({
+  low: "منخفضة",
+  normal: "عادية",
+  high: "عالية"
+});
+
+export function getCareerEventTypeLabel(type) {
+  if (typeof type !== "string" || !type.trim()) return "حدث غير مصنف";
+  return CAREER_EVENT_TYPE_LABELS[type] ?? "حدث آخر";
+}
+
+export function getCareerEventPriorityLabel(priority) {
+  return CAREER_EVENT_PRIORITY_LABELS[priority] ?? "أولوية غير محددة";
+}
+
 /**
  * Filters the retained event history without changing the persisted collection.
- * Results are returned newest-first so the same query is stable in every view.
+ * Arabic search includes the localized event type and priority as well as text
+ * and date. Results are newest-first and deterministic.
  */
 export function filterCareerEvents(events, { type = "all", query = "" } = {}) {
   if (!Array.isArray(events)) return [];
-  const normalizedQuery = String(query).trim().toLocaleLowerCase("ar");
+  const normalizedQuery = String(query ?? "").trim().toLocaleLowerCase("ar");
   return [...events]
     .filter((event) => type === "all" || event.type === type)
     .filter((event) => {
       if (!normalizedQuery) return true;
-      const haystack = [event.title, event.description, event.type, event.date]
-        .filter(Boolean)
-        .join(" ")
-        .toLocaleLowerCase("ar");
+      const haystack = [
+        event.title,
+        event.description,
+        event.type,
+        getCareerEventTypeLabel(event.type),
+        getCareerEventPriorityLabel(event.priority),
+        event.date
+      ].filter(Boolean).join(" ").toLocaleLowerCase("ar");
       return haystack.includes(normalizedQuery);
     })
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
