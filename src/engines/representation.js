@@ -150,6 +150,17 @@ export function getRepresentationContractCommission(contract, currentDate) {
   return commissionRate;
 }
 
+export function getRepresentationContractType(contract, currentDate) {
+  let representationType = normalizeRepresentationType(contract?.representationType);
+  const renewals = Array.isArray(contract?.renewals) ? contract.renewals : [];
+  for (const renewal of renewals) {
+    if (isCalendarDate(currentDate) && currentDate >= renewal.startsOn) {
+      representationType = normalizeRepresentationType(renewal.representationType);
+    }
+  }
+  return representationType;
+}
+
 function playerAcceptsTerms(offer, terms) {
   const preferences = getOfferPreferences(offer);
   const agencyReputation = Number.isInteger(offer.agencyReputation) ? offer.agencyReputation : 50;
@@ -300,8 +311,10 @@ function createContract(save, offer, terms, currentDate, resolution) {
   updated = nextHistory(updated, "offer-accepted", offer, currentDate,
     resolution === "counter-accepted" ? "وافق الوكيل على الشروط المضادة للاعب." : "وافق اللاعب على عرض التمثيل.");
   updated = nextHistory(updated, "contract-signed", offer, currentDate,
-    "تم توقيع عقد تمثيل لمدة " + Math.round(terms.termDays / 365) + " سنة وبعمولة " + terms.commissionRate + "%.",
+    "تم توقيع عقد تمثيل " + (contract.representationType === "exclusive" ? "حصري" : "غير حصري") +
+      " لمدة " + Math.round(terms.termDays / 365) + " سنة وبعمولة " + terms.commissionRate + "%.",
     { offerId: offer.id, contractId });
+  updated = adjustAgencyReputation(updated, contract.representationType === "exclusive" ? 2 : 1);
   const clients = save.agency.clients.includes(offer.playerId)
     ? save.agency.clients
     : [...save.agency.clients, offer.playerId];
@@ -336,12 +349,13 @@ function commitRepresentationAgreement(save, offer, terms, currentDate, resoluti
       commissionRate: terms.commissionRate,
       representationType: normalizeRepresentationType(terms.representationType ?? offer.representationType ?? contract.representationType)
     };
-    const updated = {
+    let updated = {
       ...representation,
       contracts: representation.contracts.map((item) => item.id === contract.id
         ? { ...item, renewals: [...(item.renewals ?? []), renewal], relationshipScore: clamp(item.relationshipScore + 3, 0, 100) }
         : item)
     };
+    updated = adjustAgencyReputation(updated, renewal.representationType === "exclusive" ? 1 : 0);
     let history = replaceOffer(updated, offer.id, {
       status: "accepted",
       contractId: contract.id,
@@ -906,8 +920,9 @@ export function createRepresentationRenewalOffer(save, contractId, terms, curren
   if (remainingDays < 1 || remainingDays > 90) {
     return { changed: false, save, error: "يمكن فتح التجديد خلال آخر 90 يومًا من العقد فقط." };
   }
-  if (!validTerms(terms?.commissionRate, terms?.termDays)) {
-    return { changed: false, save, error: "اختر عمولة من 5% إلى 15% ومدة تجديد سنة أو سنتين أو ثلاث سنوات." };
+  if (!validTerms(terms?.commissionRate, terms?.termDays) ||
+      (terms?.representationType !== undefined && !isValidRepresentationType(terms.representationType))) {
+    return { changed: false, save, error: "اختر عمولة ومدة تجديد ونوع تمثيل صالح." };
   }
   if (representation.offers.some((offer) =>
     offer.kind === "renewal" && offer.renewalContractId === contract.id &&
