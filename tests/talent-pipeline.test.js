@@ -6,8 +6,10 @@ import {
   getTalentProspect,
   isValidTalentPipelineState,
   upsertTalentProspect,
-  recordTalentProspectContact
+  recordTalentProspectContact,
+  completeTalentProspectFollowUp
 } from "../src/engines/talent-pipeline.js";
+import { completeCareerTask } from "../src/engines/career-calendar.js";
 
 function player(overrides = {}) {
   return {
@@ -102,6 +104,9 @@ test("rejects invalid player details, stages, sources, dates, and malformed save
   const invalidFollowUp = structuredClone(added.save);
   invalidFollowUp.agency.talentPipeline.entries[0].nextFollowUpDate = "2026-02-31";
   assert.equal(isValidSave(invalidFollowUp), false);
+  assert.equal(upsertTalentProspect(save, player(), {
+    nextFollowUpDate: "2026-06-30"
+  }).changed, false);
 });
 
 test("keeps older v4 saves valid when they do not yet contain a talent pipeline", () => {
@@ -170,6 +175,76 @@ test("records pre-contract outreach, outcome and follow-up without creating a cl
   assert.equal(isValidSave(result.save), true);
 });
 
+test("creates and reschedules one agency task per prospect while keeping task IDs unique", () => {
+  const first = recordTalentProspectContact(createInitialSave(), player(), {
+    kind: "call",
+    outcome: "pending",
+    followUpDate: "2026-07-04",
+    note: "بانتظار الرد."
+  });
+  const firstTask = first.save.world.tasks.find((task) => task.category === "talent-follow-up");
+  assert.ok(firstTask);
+  assert.equal(firstTask.dueDate, "2026-07-04");
+  assert.equal(firstTask.prospectId, first.entry.id);
+
+  const rescheduled = upsertTalentProspect(first.save, player(), {
+    sourceId: "watchlist",
+    nextFollowUpDate: "2026-07-05"
+  });
+  const activeTasks = rescheduled.save.world.tasks.filter((task) =>
+    task.category === "talent-follow-up" && ["open", "overdue"].includes(task.status)
+  );
+  assert.equal(activeTasks.length, 1);
+  assert.equal(activeTasks[0].id, firstTask.id);
+  assert.equal(activeTasks[0].dueDate, "2026-07-05");
+
+  const secondPlayer = player({ id: "pipeline-player-2", name: "لاعب آخر" });
+  const secondProspect = upsertTalentProspect(rescheduled.save, secondPlayer, {
+    nextFollowUpDate: "2026-07-06"
+  });
+  const allFollowUpTasks = secondProspect.save.world.tasks.filter((task) => task.category === "talent-follow-up");
+  assert.equal(allFollowUpTasks.length, 2);
+  assert.notEqual(allFollowUpTasks[0].id, allFollowUpTasks[1].id);
+  assert.equal(isValidSave(secondProspect.save), true);
+});
+
+test("completes a due prospect review without contacting the player or changing client status", () => {
+  const contacted = recordTalentProspectContact(createInitialSave(), player(), {
+    kind: "message",
+    outcome: "pending",
+    followUpDate: "2026-07-04",
+    note: "تم إرسال رسالة."
+  });
+  const task = contacted.save.world.tasks.find((item) => item.category === "talent-follow-up");
+  const completedTask = completeCareerTask(contacted.save, task.id);
+  assert.equal(completedTask.changed, true);
+
+  const reviewed = completeTalentProspectFollowUp(completedTask.save, task.id);
+  assert.equal(reviewed.changed, true);
+  assert.equal(reviewed.entry.nextFollowUpDate, null);
+  assert.equal(reviewed.entry.activity.at(-1).type, "follow-up-reviewed");
+  assert.equal(reviewed.entry.activity.at(-1).taskId, task.id);
+  assert.equal(reviewed.entry.activity.filter((event) => event.type === "contact").length, 1);
+  assert.deepEqual(reviewed.save.agency.clients, []);
+  assert.deepEqual(reviewed.save.agency.representation.offers, []);
+  assert.deepEqual(reviewed.save.agency.representation.contracts, []);
+  assert.equal(reviewed.save.world.tasks.find((item) => item.id === task.id).status, "completed");
+  assert.equal(isValidSave(reviewed.save), true);
+});
+
+test("cancels an active follow-up task when the prospect is archived", () => {
+  const tracked = upsertTalentProspect(createInitialSave(), player(), {
+    sourceId: "manual",
+    nextFollowUpDate: "2026-07-06"
+  });
+  const archived = upsertTalentProspect(tracked.save, player(), { stage: "archived" });
+  const task = archived.save.world.tasks.find((item) => item.category === "talent-follow-up");
+  assert.equal(archived.entry.nextFollowUpDate, null);
+  assert.equal(task.status, "completed");
+  assert.equal(task.completionReason, "archived");
+  assert.equal(isValidSave(archived.save), true);
+});
+
 test("allows later contact outcomes and preserves earlier activity and stable prospect identity", () => {
   const first = recordTalentProspectContact(createInitialSave(), player(), {
     kind: "message",
@@ -224,6 +299,7 @@ test("accepts legacy pipeline entries without activity and rejects malformed act
   const tracked = upsertTalentProspect(createInitialSave(), player(), { sourceId: "scouting" });
   const legacy = structuredClone(tracked.save);
   delete legacy.agency.talentPipeline.entries[0].activity;
+  delete legacy.agency.talentPipeline.nextFollowUpTaskSequence;
   assert.equal(isValidSave(legacy), true);
 
   const invalid = structuredClone(tracked.save);
