@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createInitialSave, isValidSave } from "../src/core/storage.js";
+import { advanceCareerDays } from "../src/engines/career-calendar.js";
 import {
   createInitialRepresentationState,
   createRepresentationOffer,
@@ -26,8 +27,12 @@ function player(overrides = {}) {
   };
 }
 
-function withCurrentDate(save, currentDate) {
-  return { ...save, world: { ...save.world, currentDate } };
+function advanceToDate(save, targetDate) {
+  const current = Date.parse(save.world.currentDate + "T00:00:00.000Z");
+  const target = Date.parse(targetDate + "T00:00:00.000Z");
+  const days = Math.round((target - current) / 86400000);
+  assert.ok(days >= 0, "test date must not precede the saved career date");
+  return advanceCareerDays(save, days);
 }
 
 function sendOffer(save, profile = player(), terms = { commissionRate: 15, termDays: 1095 }) {
@@ -132,7 +137,7 @@ test("ending a mandate removes the active client but preserves the contract and 
     termDays: 730
   });
   const signed = evaluateRepresentationOffer(sent.save, sent.offer.id);
-  const atTerminationDate = withCurrentDate(signed.save, "2026-08-01");
+  const atTerminationDate = advanceToDate(signed.save, "2026-08-01");
   const ended = terminateRepresentationContract(atTerminationDate, signed.contract.id, "2026-08-01");
   assert.equal(ended.changed, true);
   assert.deepEqual(ended.save.agency.clients, []);
@@ -147,7 +152,7 @@ test("calendar progression expires offers and contracts without dropping archiva
     commissionRate: 9,
     termDays: 365
   });
-  const offerAtExpiry = withCurrentDate(sent.save, "2026-08-01");
+  const offerAtExpiry = advanceToDate(sent.save, "2026-08-01");
   const noResponse = advanceRepresentationState(offerAtExpiry, "2026-08-01");
   assert.deepEqual(noResponse.expiredOffers, [sent.offer.id]);
   assert.equal(noResponse.save.agency.representation.offers[0].status, "expired");
@@ -158,7 +163,7 @@ test("calendar progression expires offers and contracts without dropping archiva
     termDays: 365
   });
   const signed = evaluateRepresentationOffer(signedOffer.save, signedOffer.offer.id);
-  const contractAtExpiry = withCurrentDate(signed.save, "2027-07-01");
+  const contractAtExpiry = advanceToDate(signed.save, "2027-07-01");
   const expired = advanceRepresentationState(contractAtExpiry, "2027-07-01");
   assert.deepEqual(expired.expiredContracts, [signed.contract.id]);
   assert.equal(expired.save.agency.representation.contracts[0].status, "expired");
