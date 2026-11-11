@@ -30,7 +30,7 @@ function player(overrides = {}) {
 function advanceToDate(save, targetDate) {
   const current = Date.parse(save.world.currentDate + "T00:00:00.000Z");
   const target = Date.parse(targetDate + "T00:00:00.000Z");
-  const days = Math.round((target - current) / 86400000);
+  let days = Math.round((target - current) / 86400000);
   assert.ok(days >= 0, "test date must not precede the saved career date");
   let advanced = save;
   while (days > 0) {
