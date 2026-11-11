@@ -517,3 +517,15 @@
   .player-profile-details { gap: 6px; }
   .player-profile-detail { padding: 8px; }
 }
+
+.representation-client-toolbar {
+  margin: 11px 0;
+  padding: 9px;
+  border: 1px solid var(--fa-border);
+  border-radius: 12px;
+  background: rgba(5,10,18,.25);
+}
+.representation-client-toolbar .search-input { width: 100%; min-width: 0; }
+@media (max-width: 760px) {
+  .representation-client-toolbar { padding: 8px; }
+}
