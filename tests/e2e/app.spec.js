@@ -482,3 +482,67 @@ test.describe("Annual career calendar", () => {
     await hasNoHorizontalOverflow(page);
   });
 });
+
+
+test.describe("Inbox archive", () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test("searches all retained messages, filters read state and marks a message without closing the archive", async ({ page }) => {
+    await page.goto("/");
+    await page.locator(".home-save-button").click();
+    await page.evaluate(() => {
+      const save = JSON.parse(localStorage.getItem("football-agent.save"));
+      const records = Array.from({ length: 15 }, (_, index) => {
+        const suffix = String(index).padStart(2, "0");
+        const eventId = "event-inbox-" + suffix;
+        return {
+          event: {
+            id: eventId,
+            date: save.world.currentDate,
+            type: "weekly-briefing",
+            title: "حدث صندوق " + suffix,
+            description: "حدث تجريبي للرسالة " + suffix,
+            priority: "normal"
+          },
+          message: {
+            id: "message-inbox-" + suffix,
+            eventId,
+            date: save.world.currentDate,
+            title: "رسالة رقم " + suffix,
+            body: "تفاصيل محفوظة للرسالة " + suffix,
+            read: index % 2 === 0
+          }
+        };
+      });
+      save.world.events = records.map((record) => record.event);
+      save.world.inbox = records.map((record) => record.message);
+      localStorage.setItem("football-agent.save", JSON.stringify(save));
+    });
+    await page.reload();
+    await page.locator(".feature-news").click();
+
+    const dialog = page.getByRole("dialog", { name: "صندوق الوارد" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator(".inbox-modal-item")).toHaveCount(15);
+    await expect(dialog.locator(".event-history-count")).toHaveText("١٥ رسالة");
+
+    const search = dialog.getByRole("searchbox", { name: "البحث في صندوق الوارد" });
+    await search.fill("رسالة رقم 14");
+    await expect(dialog.locator(".inbox-modal-item")).toHaveCount(1);
+    await expect(dialog.locator(".inbox-modal-item strong")).toHaveText("رسالة رقم 14");
+
+    await search.clear();
+    const filter = dialog.getByLabel("تصفية حالة الرسالة");
+    await filter.selectOption("read");
+    await expect(dialog.locator(".inbox-modal-item")).toHaveCount(8);
+    await filter.selectOption("unread");
+    await expect(dialog.locator(".inbox-modal-item")).toHaveCount(7);
+
+    await dialog.locator(".inbox-modal-item").first().getByRole("button", { name: "تحديد كمقروء" }).click();
+    await expect(dialog.locator(".inbox-modal-item")).toHaveCount(6);
+    await expect(dialog).toBeVisible();
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.world.inbox.filter((message) => message.read).length).toBe(9);
+    await hasNoHorizontalOverflow(page);
+  });
+});
