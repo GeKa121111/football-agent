@@ -281,7 +281,7 @@ export function recordTalentProspectContact(save, player, options = {}) {
     ...entry,
     lastContactDate: currentDate,
     nextFollowUpDate: followUpDate,
-    note,
+    note: entry.note,
     activity: [...(entry.activity ?? []), contact]
   };
   const entries = tracked.save.agency.talentPipeline.entries.map((item) =>
