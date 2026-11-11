@@ -1020,7 +1020,7 @@ function getTalentPipelineRecords(context) {
   context.watchlist.forEach((playerId) => add(playerId, "watchlist"));
 
   representation.offers
-    .filter((offer) => ["pending", "countered"].includes(offer.status)
+    .filter((offer) => ["pending", "countered"].includes(offer.status))
     .forEach((offer) => add(offer.playerId, "manual"));
   representation.contracts
     .filter((contract) => contract.status === "active")
