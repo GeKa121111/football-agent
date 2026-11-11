@@ -3098,6 +3098,46 @@ export function mountApp(root) {
     else state.save = previousSave;
   }
 
+  function updatePlayerTrainingPlan(playerId, focus, intensity) {
+    if (!state.canWrite) {
+      toast("ملف الحفظ غير قابل للتعديل؛ لم نغيّر خطة التدريب.");
+      return false;
+    }
+    const previousSave = state.save;
+    const result = setPlayerTrainingPlanInEngine(
+      state.save.world.football.playerDevelopment,
+      playerId,
+      focus,
+      intensity
+    );
+    if (!result.changed) {
+      const messages = {
+        "invalid-plan": "اختار تركيز وشدة تدريب صالحين.",
+        "player-not-found": "ملف اللاعب غير موجود في سجل التطور.",
+        "role-mismatch": "تدريب حراسة المرمى متاح لحراس المرمى فقط."
+      };
+      toast(messages[result.reason] ?? "تعذر تحديث خطة التدريب.");
+      return false;
+    }
+    state.save = {
+      ...state.save,
+      world: {
+        ...state.save.world,
+        football: {
+          ...state.save.world.football,
+          playerDevelopment: result.state
+        }
+      }
+    };
+    if (saveCareer()) {
+      render();
+      toast("تم حفظ خطة التدريب. هتتطبق في جلسة يوم الاثنين القادمة.");
+      return true;
+    }
+    state.save = previousSave;
+    return false;
+  }
+
   function markMessageRead(messageId, shouldRender = true) {
     if (!state.canWrite) {
       toast("ملف الحفظ غير قابل للتعديل؛ لم نغيّره.");
@@ -3540,6 +3580,7 @@ export function mountApp(root) {
       renewScoutingContract,
       addToWatchlist,
       players: WORLD_PLAYERS,
+      updatePlayerTrainingPlan,
       openRepresentationOffer,
       manageTalentProspect,
       manageTalentContact,
@@ -3568,6 +3609,7 @@ export function mountApp(root) {
       players: renderPlayers,
       scouting: renderScouting,
       market: renderMarket,
+      football: renderFootball,
       agency: renderAgency
     };
     const page = views[state.view] ? views[state.view](context) : renderDashboard(context);
