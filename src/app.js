@@ -1,7 +1,9 @@
 import {
   createInitialSave,
   readSave,
-  writeSave
+  writeSave,
+  readWatchlist,
+  writeWatchlist
 } from "./core/storage.js";
 import { DEMO_PLAYERS } from "./data/demo-players.js";
 
@@ -150,7 +152,7 @@ function renderDashboard(context) {
 
   const metrics = node("div", "metrics-grid");
   metrics.append(
-    metricCard("قيمة الوكالة", formatMoney(context.save.agency.balance), "الرصيد الحالي", "◈", "purple"),
+    metricCard("رصيد الوكالة", formatMoney(context.save.agency.balance), "الأموال المتاحة", "◈", "purple"),
     metricCard("اللاعبون", String(context.save.agency.clients.length).padStart(2, "0"), "عملاء تحت التمثيل", "◎", "cyan"),
     metricCard("السمعة", String(context.save.agency.reputation) + " / 100", "مستوى الوكالة", "✦", "gold"),
     metricCard("فرص السوق", "03", "فرص تجريبية للمعاينة", "⇄", "pink")
@@ -278,9 +280,10 @@ function renderScouting(context) {
         context.watchlist.has(player.id) ? "✓  في قائمة المتابعة" : "＋  أضف للمتابعة",
         context.watchlist.has(player.id) ? "watch-button is-active" : "watch-button",
         () => {
-          context.watchlist.add(player.id);
-          context.toast("تمت إضافة " + player.name + " لقائمة المتابعة التجريبية.");
-          render();
+          if (context.addToWatchlist(player)) {
+            follow.textContent = "✓  في قائمة المتابعة";
+            follow.classList.add("is-active");
+          }
         }
       );
       card.append(follow);
@@ -376,27 +379,53 @@ function roadmapRow(title, detail, active) {
 export function mountApp(root) {
   const loaded = readSave();
   const save = loaded.status === "loaded" ? loaded.save : createInitialSave();
+  const loadedWatchlist = readWatchlist();
   const state = {
     view: "dashboard",
     save,
     isSaved: loaded.status === "loaded",
     canWrite: loaded.status === "new" || loaded.status === "loaded",
-    watchlist: new Set(),
+    watchlist: new Set(loadedWatchlist.ids),
+    canPersistWatchlist: loadedWatchlist.status === "new" || loadedWatchlist.status === "loaded",
     toastMessage: "",
     toastTimer: null
   };
 
   function toast(message) {
     state.toastMessage = message;
-    render();
-    const toastElement = root.querySelector(".toast-message");
-    if (toastElement) toastElement.textContent = message;
+    let toastElement = root.querySelector(".toast-message");
+    if (!toastElement) {
+      toastElement = node("div", "toast-message");
+      toastElement.setAttribute("role", "status");
+      toastElement.setAttribute("aria-live", "polite");
+      root.append(toastElement);
+    }
+    toastElement.textContent = message;
     if (state.toastTimer) clearTimeout(state.toastTimer);
     state.toastTimer = setTimeout(() => {
       state.toastMessage = "";
-      const current = root.querySelector(".toast-message");
-      if (current) current.remove();
+      root.querySelector(".toast-message")?.remove();
     }, 2800);
+  }
+
+  function addToWatchlist(player) {
+    if (state.watchlist.has(player.id)) return true;
+    state.watchlist.add(player.id);
+
+    if (!state.canPersistWatchlist) {
+      toast("تمت الإضافة لهذه الجلسة فقط؛ لم نكتب فوق ملف قائمة متابعة غير صالح أو غير متاح.");
+      return true;
+    }
+
+    try {
+      writeWatchlist([...state.watchlist]);
+      toast("تمت إضافة " + player.name + " لقائمة المتابعة.");
+      return true;
+    } catch (error) {
+      state.watchlist.delete(player.id);
+      toast("تعذر حفظ قائمة المتابعة: " + error.message);
+      return false;
+    }
   }
 
   function saveCareer() {
@@ -407,6 +436,9 @@ export function mountApp(root) {
     try {
       state.save = writeSave(state.save);
       state.isSaved = true;
+      root.querySelectorAll(".save-chip, .save-button").forEach((button) => {
+        button.textContent = "✓  محفوظ";
+      });
       toast("تم حفظ مسيرتك بنجاح.");
     } catch (error) {
       toast("تعذر الحفظ: " + error.message);
@@ -419,19 +451,52 @@ export function mountApp(root) {
   }
 
   function openModal(title, children, closeLabel = "إغلاق") {
+    const previousFocus = document.activeElement;
     const overlay = node("div", "modal-overlay");
+    const close = () => {
+      if (!overlay.isConnected) return;
+      overlay.remove();
+      if (previousFocus && typeof previousFocus.focus === "function") previousFocus.focus();
+    };
     overlay.addEventListener("click", (event) => {
-      if (event.target === overlay) overlay.remove();
+      if (event.target === overlay) close();
     });
+
     const dialog = node("section", "modal-dialog");
     dialog.setAttribute("role", "dialog");
     dialog.setAttribute("aria-modal", "true");
     dialog.setAttribute("aria-label", title);
+    dialog.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = [...dialog.querySelectorAll(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+      )];
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+
     const head = node("div", "modal-heading");
-    head.append(node("h2", "", title), actionButton("×", "icon-button", () => overlay.remove(), "إغلاق"));
+    head.append(node("h2", "", title), actionButton("×", "icon-button", close, "إغلاق"));
     const body = node("div", "modal-body");
     body.append(...children);
-    dialog.append(head, body, actionButton(closeLabel, "button-primary modal-close", () => overlay.remove()));
+    dialog.append(head, body, actionButton(closeLabel, "button-primary modal-close", close));
     overlay.append(dialog);
     root.append(overlay);
     dialog.querySelector(".icon-button").focus();
@@ -453,9 +518,9 @@ export function mountApp(root) {
       wrapper,
       node("p", "modal-note", "بطاقة معاينة تصميمية. التعاقد وإدارة الملف ستُفعّل ضمن المراحل القادمة."),
       actionButton(state.watchlist.has(player.id) ? "✓  في قائمة المتابعة" : "＋  أضف لقائمة المتابعة", "watch-button", () => {
-        state.watchlist.add(player.id);
-        toast("أُضيف " + player.name + " لقائمة المتابعة التجريبية.");
-        root.querySelector(".modal-overlay")?.remove();
+        if (addToWatchlist(player)) {
+          root.querySelector(".modal-overlay .icon-button")?.click();
+        }
       })
     ]);
   }
@@ -484,7 +549,7 @@ export function mountApp(root) {
     sidebar.append(sideBottom);
 
     const main = node("main", "main-stage");
-    const context = { save: state.save, navigate, openPlayer, openModal, saveCareer, toast, watchlist: state.watchlist };
+    const context = { save: state.save, navigate, openPlayer, openModal, saveCareer, toast, watchlist: state.watchlist, addToWatchlist };
     const views = {
       dashboard: renderDashboard,
       players: renderPlayers,
@@ -505,6 +570,13 @@ export function mountApp(root) {
 
     shell.append(header, layout, bottomNav);
     root.replaceChildren(shell);
+    if (loadedWatchlist.status === "corrupt" || loadedWatchlist.status === "unavailable") {
+      const warning = node("div", "save-warning");
+      warning.textContent = loadedWatchlist.status === "corrupt"
+        ? "تنبيه: ملف قائمة المتابعة غير صالح. لن نستبدله تلقائيًا."
+        : "تنبيه: قائمة المتابعة غير متاحة في هذه الجلسة.";
+      root.append(warning);
+    }
     if (loaded.status === "corrupt" || loaded.status === "unsupported" || loaded.status === "unavailable") {
       const warning = node("div", "save-warning");
       warning.textContent = loaded.status === "unsupported"
