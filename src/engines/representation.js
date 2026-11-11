@@ -444,13 +444,20 @@ export function isValidRepresentationState(representation, currentDate, clients 
     contractsById.set(contract.id, contract);
   }
 
+  const openRenewalContracts = new Set();
   for (const offer of representation.offers) {
     if (offer.kind === "renewal") {
       const renewalContract = contractsById.get(offer.renewalContractId);
       if (!renewalContract || renewalContract.playerId !== offer.playerId) return false;
-      if (["pending", "countered"].includes(offer.status) &&
-          (renewalContract.status !== "active" ||
-           currentDate >= getRepresentationContractExpiry(renewalContract))) return false;
+      const effectiveExpiry = getRepresentationContractExpiry(renewalContract);
+      const renewalWindowDays = Math.round((Date.parse(effectiveExpiry + "T00:00:00.000Z") -
+        Date.parse(offer.createdDate + "T00:00:00.000Z")) / 86400000);
+      if (renewalWindowDays < 1 || renewalWindowDays > 90) return false;
+      if (["pending", "countered"].includes(offer.status)) {
+        if (renewalContract.status !== "active" || currentDate >= effectiveExpiry ||
+            openRenewalContracts.has(renewalContract.id)) return false;
+        openRenewalContracts.add(renewalContract.id);
+      }
     }
     if (offer.status === "accepted") {
       const contract = contractsById.get(offer.contractId);
