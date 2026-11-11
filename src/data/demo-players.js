@@ -19,7 +19,8 @@ export const DEMO_PLAYERS = Object.freeze([
     hairStyle: "hair-curly",
     kit: "#7138a8",
     kitLight: "#c7a2ef",
-    glow: "rgba(184, 131, 255, .56)"
+    glow: "rgba(184, 131, 255, .56)",
+    appearance: Object.freeze({ faceShape: "oval", haircut: "curly", facialHair: "none", eyeColor: "#2b1d18", kitPattern: "stripes" })
   }),
   Object.freeze({
     id: "demo-ziad-fawzy",
@@ -39,7 +40,8 @@ export const DEMO_PLAYERS = Object.freeze([
     hairStyle: "hair-fade",
     kit: "#174d85",
     kitLight: "#77c9ef",
-    glow: "rgba(85, 195, 232, .45)"
+    glow: "rgba(85, 195, 232, .45)",
+    appearance: Object.freeze({ faceShape: "round", haircut: "fade", facialHair: "none", eyeColor: "#38271f", kitPattern: "sash" })
   }),
   Object.freeze({
     id: "demo-omar-nabil",
@@ -59,7 +61,8 @@ export const DEMO_PLAYERS = Object.freeze([
     hairStyle: "hair-wavy",
     kit: "#9b273f",
     kitLight: "#e78a9c",
-    glow: "rgba(229, 114, 154, .44)"
+    glow: "rgba(229, 114, 154, .44)",
+    appearance: Object.freeze({ faceShape: "angular", haircut: "wavy", facialHair: "short-beard", eyeColor: "#211713", kitPattern: "chevron" })
   }),
   Object.freeze({
     id: "demo-karim-tarek",
@@ -79,6 +82,7 @@ export const DEMO_PLAYERS = Object.freeze([
     hairStyle: "hair-curly",
     kit: "#d6d7df",
     kitLight: "#8a8fa4",
-    glow: "rgba(190, 197, 222, .4)"
+    glow: "rgba(190, 197, 222, .4)",
+    appearance: Object.freeze({ faceShape: "square", haircut: "short", facialHair: "full-beard", eyeColor: "#31231d", kitPattern: "solid" })
   })
 ]);

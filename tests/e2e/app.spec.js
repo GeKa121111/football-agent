@@ -52,6 +52,36 @@ test.describe("Desktop experience", () => {
     }
   });
 
+  test("renders distinct SVG player portraits and reuses them in player details", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "اللاعبون");
+
+    const portraits = page.locator(".player-card .player-portrait");
+    await expect(portraits).toHaveCount(4);
+
+    const profiles = await portraits.evaluateAll((elements) => elements.map((element) => ({
+      hair: element.dataset.hairStyle,
+      face: element.dataset.faceShape,
+      beard: element.dataset.facialHair,
+      kit: element.dataset.kitPattern,
+      paths: element.querySelectorAll("svg path").length
+    })));
+    expect(new Set(profiles.map((profile) => profile.face)).size).toBe(4);
+    expect(new Set(profiles.map((profile) => profile.hair)).size).toBe(4);
+    expect(new Set(profiles.map((profile) => profile.kit)).size).toBe(4);
+    expect(profiles.every((profile) => profile.paths >= 10)).toBe(true);
+
+    const animationName = await portraits.first().locator(".portrait-athlete").evaluate(
+      (element) => getComputedStyle(element).animationName
+    );
+    expect(animationName).toBe("portrait-idle");
+
+    await portraits.first().locator("xpath=ancestor::article").getByRole("button", { name: "ملف اللاعب" }).click();
+    await expect(page.locator(".modal-player-art .portrait-svg")).toBeVisible();
+    await expect(page.locator(".modal-player-art")).toHaveAttribute("aria-label", /ياسين عادل/);
+    await expect(page.locator(".modal-player-art")).toHaveAttribute("data-hair-style", profiles[0].hair);
+  });
+
   test("opens a player profile and restores focus after Escape", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "اللاعبون");
@@ -83,6 +113,16 @@ test.describe("Desktop experience", () => {
 
 test.describe("Mobile experience", () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test("respects the operating system reduced-motion preference", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/");
+    await navigateTo(page, "اللاعبون");
+    const athlete = page.locator(".player-portrait .portrait-athlete").first();
+    await expect(athlete).toBeVisible();
+    const animationName = await athlete.evaluate((element) => getComputedStyle(element).animationName);
+    expect(animationName).toBe("none");
+  });
 
   test("shows bottom navigation with no horizontal overflow", async ({ page }) => {
     await page.goto("/");
