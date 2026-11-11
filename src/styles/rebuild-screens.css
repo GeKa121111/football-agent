@@ -668,3 +668,14 @@
   .talent-pipeline-toolbar { grid-template-columns: minmax(0,1fr); }
   .talent-pipeline-toolbar .representation-count { justify-self: end; }
 }
+
+
+.talent-pipeline-last-contact { color: var(--fa-accent) !important; }
+.talent-contact-form { max-width: 100%; }
+.talent-contact-form select, .talent-contact-form input { width: 100%; min-width: 0; }
+.talent-contact-form textarea { width: 100%; min-width: 0; }
+.talent-activity-history { display: grid; gap: 9px; max-height: min(58vh, 520px); overflow-y: auto; }
+.talent-activity-row { display: grid; gap: 5px; padding: 11px; border: 1px solid var(--fa-border); border-radius: 11px; background: rgba(255,255,255,.025); }
+.talent-activity-row strong { color: var(--fa-text); font-size: 10px; }
+.talent-activity-row > small { color: var(--fa-muted); font-size: 8px; }
+.talent-activity-row p { margin: 0; color: var(--fa-text); font-size: 9px; line-height: 1.7; overflow-wrap: anywhere; }
