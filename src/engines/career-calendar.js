@@ -320,6 +320,34 @@ export function filterCareerEvents(events, { type = "all", query = "" } = {}) {
 
 
 /**
+ * Filters the retained task history without mutating the persisted collection.
+ * Completed tasks sort by completion date; open/overdue tasks sort by their
+ * effective deadline. IDs provide a deterministic tie-breaker.
+ */
+export function filterCareerTasks(tasks, { status = "all", query = "" } = {}) {
+  if (!Array.isArray(tasks)) return [];
+  if (!["all", "open", "overdue", "completed"].includes(status)) return [];
+
+  const normalizedQuery = String(query ?? "").trim().toLocaleLowerCase("ar");
+  return [...tasks]
+    .filter((task) => task && typeof task === "object")
+    .filter((task) => status === "all" || task.status === status)
+    .filter((task) => {
+      if (!normalizedQuery) return true;
+      const haystack = [
+        task.id, task.title, task.description, task.category, task.status,
+        task.createdDate, task.dueDate, task.overdueDate, task.completedDate
+      ].filter((value) => typeof value === "string").join(" ").toLocaleLowerCase("ar");
+      return haystack.includes(normalizedQuery);
+    })
+    .sort((a, b) => {
+      const aDate = a.completedDate ?? a.overdueDate ?? a.dueDate ?? a.createdDate ?? "";
+      const bDate = b.completedDate ?? b.overdueDate ?? b.dueDate ?? b.createdDate ?? "";
+      return bDate.localeCompare(aDate) || String(b.id ?? "").localeCompare(String(a.id ?? ""));
+    });
+}
+
+/**
  * Creates the deterministic calendar records for the career's starting date.
  * New careers should begin with the events and tasks scheduled for that date.
  */
