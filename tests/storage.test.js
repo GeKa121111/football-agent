@@ -114,6 +114,10 @@ test("migrates version 1 saves without losing career or agency progress", () => 
   legacy.agency.balance = 765432;
   legacy.agency.clients = ["player-legacy"];
   legacy.world.currentDate = "2026-08-11";
+  legacy.world.players = [{ id: "saved-player", career: { goals: 8, appearances: 21 } }];
+  legacy.world.clubs = [{ id: "saved-club", reputation: 17 }];
+  legacy.world.competitions = [{ id: "saved-competition", season: 4 }];
+  legacy.world.activeOffers = [{ id: "saved-offer", playerId: "saved-player" }];
   delete legacy.world.events;
   delete legacy.world.inbox;
   delete legacy.world.tasks;
@@ -131,6 +135,10 @@ test("migrates version 1 saves without losing career or agency progress", () => 
   assert.equal(result.save.agency.balance, 765432);
   assert.deepEqual(result.save.agency.clients, ["player-legacy"]);
   assert.equal(result.save.world.currentDate, "2026-08-11");
+  assert.deepEqual(result.save.world.players, [{ id: "saved-player", career: { goals: 8, appearances: 21 } }]);
+  assert.deepEqual(result.save.world.clubs, [{ id: "saved-club", reputation: 17 }]);
+  assert.deepEqual(result.save.world.competitions, [{ id: "saved-competition", season: 4 }]);
+  assert.deepEqual(result.save.world.activeOffers, [{ id: "saved-offer", playerId: "saved-player" }]);
   assert.deepEqual(result.save.world.events, []);
   assert.deepEqual(result.save.world.inbox, []);
   assert.deepEqual(result.save.world.tasks, []);
