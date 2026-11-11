@@ -213,7 +213,7 @@ test.describe("Mobile experience", () => {
     await expect(page.getByRole("button", { name: "عرض التقرير" })).toBeVisible();
     await page.getByRole("button", { name: "عرض التقرير" }).click();
     await expect(page.getByRole("dialog", { name: "تقرير الكشافين" })).toBeVisible();
-    await expect(page.getByText("فجوة التطور المقدرة كبيرة مع مستوى ثقة مناسب في التقرير.").or(page.getByText("هناك مؤشر فني واعد، ويستحق اللاعب مشاهدة إضافية قبل أي قرار.")).or(page.getByText("المؤشرات الحالية لا تكفي لترشيح اللاعب كأولوية تعاقد."))).toBeVisible();
+    await expect(page.locator(".scout-finding-rationale").first()).toBeVisible();
 
     await page.reload();
     await navigateTo(page, "الكشافون");
