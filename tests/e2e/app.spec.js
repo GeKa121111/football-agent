@@ -48,7 +48,7 @@ test.describe("Desktop experience", () => {
     await hasNoHorizontalOverflow(page);
   });
   
-  test("keeps all five workspaces within every supported viewport width", async ({ page }) => {
+  test("keeps all six workspaces within every supported viewport width", async ({ page }) => {
     await page.goto("/");
     const viewports = [
       { width: 320, height: 800 },
@@ -56,7 +56,7 @@ test.describe("Desktop experience", () => {
       { width: 768, height: 900 },
       { width: 1440, height: 960 }
     ];
-    const screens = ["اللاعبون", "الكشافون", "الانتقالات", "الوكالة", "الرئيسية"];
+    const screens = ["اللاعبون", "الكشافون", "المباريات", "الانتقالات", "الوكالة", "الرئيسية"];
 
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
@@ -82,11 +82,12 @@ test.describe("Desktop experience", () => {
     await expect(page.locator(".main-stage")).toBeFocused();
   });
 
-  test("navigates through all five primary screens", async ({ page }) => {
+  test("navigates through all six primary screens", async ({ page }) => {
     await page.goto("/");
     const screens = [
       ["اللاعبون", "قاعدة اللاعبين"],
       ["الكشافون", "الكشافون"],
+      ["المباريات", "المباريات وتطور اللاعبين"],
       ["الانتقالات", "سوق الانتقالات"],
       ["الوكالة", "الوكالة"],
       ["الرئيسية", "وكالتك الجديدة"]
@@ -101,6 +102,41 @@ test.describe("Desktop experience", () => {
       }
       await expect(page.locator('.sidebar [aria-current="page"]')).toHaveCount(1);
     }
+  });
+
+
+  test("plays scheduled matchdays and persists player training plans", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator(".football-screen")).toHaveCount(0);
+    const firstSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(firstSave.meta.version).toBe(5);
+    expect(firstSave.world.football.fixtures.length).toBeGreaterThan(0);
+
+    await navigateTo(page, "المباريات");
+    await expect(page.locator(".football-screen")).toBeVisible();
+    await expect(page.locator(".football-fixture-card")).toHaveCount(12);
+    await expect(page.getByLabel("لاعب خطة التدريب")).toBeVisible();
+
+    await page.getByLabel("لاعب خطة التدريب").selectOption("demo-yassin-adel");
+    await page.getByLabel("تركيز التدريب").selectOption("attacking");
+    await page.getByLabel("شدة التدريب").selectOption("intense");
+    await page.getByRole("button", { name: "حفظ خطة التدريب" }).click();
+
+    const trainedPlanSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const yassin = trainedPlanSave.world.football.playerDevelopment.players.find((player) => player.playerId === "demo-yassin-adel");
+    expect(yassin.trainingFocus).toBe("attacking");
+    expect(yassin.trainingIntensity).toBe("intense");
+
+    await navigateTo(page, "الرئيسية");
+    for (let day = 0; day < 3; day += 1) {
+      await page.locator(".day-advance-button").click();
+    }
+    await navigateTo(page, "المباريات");
+    await expect(page.locator(".football-result-row").first()).toBeVisible();
+    const playedSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(playedSave.world.football.results.length).toBeGreaterThan(0);
+    expect(playedSave.world.events.some((event) => event.type === "football-match-played")).toBe(true);
+    await hasNoHorizontalOverflow(page);
   });
 
   test("negotiates and signs a player representation contract", async ({ page }) => {
