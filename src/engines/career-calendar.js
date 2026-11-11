@@ -1,4 +1,5 @@
 import { createInitialFootballState, advanceFootballSeasonDay } from "./football-season.js";
+import { advanceTransferState } from "./transfers.js";
 
 const MAX_EVENTS = 90;
 const MAX_MESSAGES = 90;
@@ -226,10 +227,13 @@ export function advanceCareerDay(save) {
   const seasonStarted = nextDate.getUTCMonth() === 6 && nextDate.getUTCDate() === 1;
   const season = save.career.season + (seasonStarted ? 1 : 0);
   const scheduled = scheduledItems(nextDate, season);
+  const transferTransition = advanceTransferState(save, dateKey);
   const footballTransition = advanceFootballSeasonDay(
     save.world.football ?? createInitialFootballState(save.career.season, save.world.currentDate),
     dateKey,
-    season
+    season,
+    undefined,
+    transferTransition.save.world.transfers
   );
 
   const overdueTasks = [];
@@ -312,7 +316,8 @@ export function advanceCareerDay(save) {
       events,
       inbox,
       tasks,
-      football: footballTransition.football
+      football: footballTransition.football,
+      transfers: transferTransition.save.world.transfers
     }
   };
 }
