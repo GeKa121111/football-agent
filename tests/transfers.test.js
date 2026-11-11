@@ -125,6 +125,14 @@ test("completes an agreed permanent transfer and records a EUR agent commission 
   assert.equal(isValidTransferState(completed.save.world.transfers, "2026-07-02", completed.save.agency.clients, completed.save.agency.representation), true);
 });
 
+test("retains completed historical deals after an agency mandate ends", () => {
+  const sent = send();
+  const countered = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
+  const agreed = acceptTransferCounterOffer(countered.save, sent.offer.id, "2026-07-02");
+  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-02");
+  assert.equal(isValidTransferState(completed.save.world.transfers, "2026-07-02", [], completed.save.agency.representation), true);
+});
+
 test("supports loans, tracks the temporary club, and returns the player on the due date", () => {
   const sent = send(makeSave(), "loan", loanTerms);
   const response = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
