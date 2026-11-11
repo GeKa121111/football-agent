@@ -22,7 +22,7 @@ function sequenceOf(id, prefix) {
   return match ? Number(match[1]) : 0;
 }
 export function isTransferCalendarDate(value) {
-  if (typeof value !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(value + "T00:00:00.000Z");
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
@@ -270,7 +270,7 @@ export function completeTransfer(save, offerId, currentDate = save?.world?.curre
   if (commissionEur > 0) {
     const entry = { id: "transfer-ledger-" + next.nextLedgerSequence, type: "agent-commission",
       offerId: offer.id, moveId, playerId: offer.playerId, date: currentDate, currency: "EUR",
-      amountEur: commissionEur, commissionRate: mandate.commissionRate, basisEur: terms.signingBonusEur };
+      amountEur: commissionEur, commissionRate: mandate.commissionRate, representationContractId: mandate.id, basisEur: terms.signingBonusEur };
     next = { ...next, nextLedgerSequence: next.nextLedgerSequence + 1,
       earnedCommissionEur: next.earnedCommissionEur + commissionEur, ledger: [entry, ...next.ledger] };
   }
@@ -337,7 +337,7 @@ export function isValidTransferState(state, currentDate, clients = [], represent
     if (["agreed", "completed"].includes(offer.status) && (!validTerms(offer.type, offer.agreedTerms) || !isTransferCalendarDate(offer.agreedDate))) return false;
     if (offer.status === "completed" && (!validId(offer.moveId) || !isTransferCalendarDate(offer.completedDate))) return false;
     if (offer.status !== "completed" && offer.moveId !== null) return false;
-    if (!clients.includes(offer.playerId) && !["rejected", "expired"].includes(offer.status)) return false;
+    if (["pending", "countered", "agreed"].includes(offer.status) && !clients.includes(offer.playerId)) return false;
     offers.set(offer.id, offer);
     highestOffer = Math.max(highestOffer, sequenceOf(offer.id, "transfer-offer"));
   }
@@ -381,8 +381,8 @@ export function isValidTransferState(state, currentDate, clients = [], represent
         entry.currency !== "EUR" || !validMoney(entry.amountEur) ||
         !Number.isInteger(entry.commissionRate) || entry.commissionRate < 5 || entry.commissionRate > 15 ||
         !validMoney(entry.basisEur) || entry.amountEur !== Math.round(entry.basisEur * entry.commissionRate / 100)) return false;
-    const contract = representation?.contracts?.find((item) => item.playerId === entry.playerId);
-    if (contract && contract.commissionRate !== entry.commissionRate) return false;
+    const contract = representation?.contracts?.find((item) => item.id === entry.representationContractId);
+    if (!contract || contract.playerId !== entry.playerId || contract.commissionRate !== entry.commissionRate) return false;
     ledgerTotal += entry.amountEur;
     highestLedger = Math.max(highestLedger, sequenceOf(entry.id, "transfer-ledger"));
   }
