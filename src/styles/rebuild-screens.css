@@ -655,6 +655,7 @@
 .talent-pipeline-copy > span, .talent-pipeline-copy small { color: var(--fa-muted); font-size: 8px; line-height: 1.65; overflow-wrap: anywhere; }
 .talent-pipeline-copy .talent-pipeline-sources { color: var(--fa-accent); }
 .talent-pipeline-followup.is-overdue { color: #f3a28e; }
+.talent-pipeline-followup.is-due { color: var(--fa-accent); font-weight: 900; }
 .talent-pipeline-stage { justify-self: end; align-self: start; padding: 5px 7px; border: 1px solid var(--fa-border); border-radius: 99px; color: var(--fa-muted); font-size: 7px; white-space: nowrap; }
 .talent-pipeline-stage.stage-negotiating, .talent-pipeline-stage.stage-client { color: var(--fa-accent); border-color: rgba(166,225,103,.3); }
 .talent-pipeline-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
@@ -668,3 +669,41 @@
   .talent-pipeline-toolbar { grid-template-columns: minmax(0,1fr); }
   .talent-pipeline-toolbar .representation-count { justify-self: end; }
 }
+
+
+.talent-pipeline-last-contact { color: var(--fa-accent) !important; }
+.talent-pipeline-owner { color: var(--fa-text-soft) !important; }
+.agency-screen .talent-staff-panel { display: grid; gap: 12px; }
+.talent-staff-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 9px; }
+.talent-staff-card { min-width: 0; display: grid; align-content: start; gap: 8px; padding: 12px; border: 1px solid var(--fa-border); border-radius: 13px; background: rgba(255,255,255,.025); }
+.talent-staff-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.talent-staff-card-top strong { color: var(--fa-text); font-size: 10px; }
+.talent-staff-status { padding: 4px 6px; border: 1px solid rgba(166,225,103,.25); border-radius: 99px; color: var(--fa-accent); font-size: 7px; white-space: nowrap; }
+.talent-staff-status.is-expired { color: #f3a28e; border-color: rgba(243,162,142,.35); }
+.talent-staff-status.is-busy { color: #e8c77b; border-color: rgba(232,199,123,.3); }
+.talent-staff-card-copy { display: grid; gap: 4px; }
+.talent-staff-card-copy span { color: var(--fa-text-soft); font-size: 8px; }
+.talent-staff-card-copy small, .talent-staff-empty { margin: 0; color: var(--fa-muted); font-size: 8px; line-height: 1.7; }
+.talent-staff-workload { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.talent-staff-workload strong { color: var(--fa-text); font-size: 9px; font-variant-numeric: tabular-nums; }
+.talent-staff-workload small { color: var(--fa-muted); font-size: 8px; }
+.talent-staff-load-track { height: 5px; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.08); }
+.talent-staff-load-fill { display: block; height: 100%; border-radius: inherit; background: var(--fa-accent); }
+.talent-staff-assigned-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.talent-staff-assigned-list span { max-width: 100%; padding: 4px 6px; border-radius: 7px; color: var(--fa-text-soft); background: rgba(255,255,255,.045); font-size: 7px; }
+.talent-staff-assigned-list small { align-self: center; color: var(--fa-muted); font-size: 7px; }
+.talent-prospect-form select { width: 100%; min-width: 0; }
+@media (max-width: 760px) {
+  .talent-staff-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (max-width: 430px) {
+  .talent-staff-grid { grid-template-columns: minmax(0,1fr); }
+}
+.talent-contact-form { max-width: 100%; }
+.talent-contact-form select, .talent-contact-form input { width: 100%; min-width: 0; }
+.talent-contact-form textarea { width: 100%; min-width: 0; }
+.talent-activity-history { display: grid; gap: 9px; max-height: min(58vh, 520px); overflow-y: auto; }
+.talent-activity-row { display: grid; gap: 5px; padding: 11px; border: 1px solid var(--fa-border); border-radius: 11px; background: rgba(255,255,255,.025); }
+.talent-activity-row strong { color: var(--fa-text); font-size: 10px; }
+.talent-activity-row > small { color: var(--fa-muted); font-size: 8px; }
+.talent-activity-row p { margin: 0; color: var(--fa-text); font-size: 9px; line-height: 1.7; overflow-wrap: anywhere; }

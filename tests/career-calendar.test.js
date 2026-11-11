@@ -62,6 +62,41 @@ test("starts a weekly briefing, inbox message and actionable task on Monday", ()
   assert.equal(next.world.tasks[0].dueDate, "2026-07-12");
 });
 
+test("notifies the agency once when a talent follow-up task reaches its due date", () => {
+  const save = createInitialSave();
+  save.world.currentDate = "2026-07-08";
+  save.career.day = 8;
+  save.career.week = 2;
+  save.world.events = [];
+  save.world.inbox = [];
+  save.world.tasks = [makeTask({
+    id: "talent-follow-up-task-1",
+    title: "متابعة اللاعب: ياسين عادل",
+    description: "راجع التواصل مع اللاعب.",
+    dueDate: "2026-07-09",
+    category: "talent-follow-up",
+    playerId: "world-player-1",
+    prospectId: "talent-prospect-1",
+    playerName: "ياسين عادل"
+  })];
+
+  const due = advanceCareerDay(save);
+  assert.equal(due.world.currentDate, "2026-07-09");
+  const events = due.world.events.filter((event) => event.type === "talent-follow-up-due");
+  assert.equal(events.length, 1);
+  assert.equal(events[0].title, "موعد متابعة مستحق: ياسين عادل");
+  const message = due.world.inbox.find((item) => item.eventId === events[0].id);
+  assert.ok(message);
+  assert.equal(message.read, false);
+  assert.equal(due.world.tasks[0].status, "open");
+
+  const followingDay = advanceCareerDay(due);
+  assert.equal(followingDay.world.events.filter((event) => event.type === "talent-follow-up-due").length, 1);
+  assert.equal(followingDay.world.inbox.filter((item) => item.eventId === events[0].id).length, 1);
+  assert.equal(isValidSave(due), true);
+  assert.equal(save.world.currentDate, "2026-07-08");
+});
+
 test("creates monthly reports on the first day of a month", () => {
   const save = createInitialSave();
   save.world.currentDate = "2026-07-31";
