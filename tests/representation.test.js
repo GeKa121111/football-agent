@@ -107,6 +107,7 @@ test("player can counter a high commission and long mandate, then sign when the 
   assert.deepEqual(response.counterOffer, {
     commissionRate: sent.offer.playerPreferences.preferredCommissionRate,
     termDays: sent.offer.playerPreferences.preferredTermDays,
+    signingBonus: sent.offer.signingBonus ?? 0,
     representationType: sent.offer.playerPreferences.prefersExclusive ? "exclusive" : "non-exclusive"
   });
   assert.equal(response.save.agency.clients.length, 0);
