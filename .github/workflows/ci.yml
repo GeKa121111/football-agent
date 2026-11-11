@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, rebuild/phase-1-foundation]
 
 concurrency:
   group: validate-${{ github.event.pull_request.number || github.ref }}
