@@ -264,6 +264,18 @@ test("stores repeat observations by stable player ID and preserves an auditable 
   const malformed = structuredClone(secondCompleted.save);
   malformed.world.scouting.observations[0].confidence = 100;
   assert.equal(isValidSave(malformed), false);
+
+  const duplicate = structuredClone(secondCompleted.save);
+  duplicate.world.scouting.observations[1] = { ...duplicate.world.scouting.observations[0] };
+  assert.equal(isValidSave(duplicate), false);
+
+  const overflow = structuredClone(secondCompleted.save);
+  overflow.world.scouting.observations = Array.from({ length: 301 }, (_, index) => ({
+    ...history.observations[0],
+    id: "overflow-observation-" + index
+  }));
+  assert.equal(isValidSave(overflow), false);
+
   const repeated = advanceScoutingMissions(secondCompleted.save, PLAYERS);
   assert.equal(repeated.changed, false);
   assert.equal(repeated.save.world.scouting.observations.length, 2);
