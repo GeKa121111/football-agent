@@ -50,3 +50,25 @@ test("portrait profile falls back to legacy hairstyle fields for old player reco
   assert.equal(profile.hairStyle, "wavy");
   assert.equal(profile.shirtNumber, 7);
 });
+
+
+test("portrait profiles expose stable asset metadata without changing football attributes", () => {
+  const player = {
+    id: "catalog-test-player",
+    name: "اختبار اللاعب",
+    rating: 74,
+    potential: 88,
+    age: 20,
+    portraitAssetId: "portrait-catalog-test-player",
+    portraitVersion: 1,
+    portraitStyle: "illustrated-pro",
+    portraitSeed: 12345
+  };
+  const profile = getPortraitProfile(player);
+  assert.equal(profile.portraitAssetId, player.portraitAssetId);
+  assert.equal(profile.portraitVersion, 1);
+  assert.equal(profile.portraitStyle, "illustrated-pro");
+  assert.equal(profile.portraitSeed, 12345);
+  assert.equal(player.rating, 74);
+  assert.equal(player.potential, 88);
+});
