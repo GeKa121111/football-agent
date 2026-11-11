@@ -21,6 +21,8 @@ const MARKET_ITEMS = [
   { id: "deal-03", player: "سيف حمدي", age: 24, position: "مدافع", from: "المدينة الرياضي", to: "قابل للتفاوض", fee: "€2.4M", note: "مراقب من عدة أندية", accent: "purple" }
 ];
 
+let modalSequence = 0;
+
 function node(tag, className = "", text) {
   const element = document.createElement(tag);
   if (className) element.className = className;
@@ -332,6 +334,20 @@ function activityRow(icon, title, detail, time, tone) {
   return row;
 }
 
+function emptyResults(title, description, actionLabel, callback) {
+  const empty = node("section", "empty-results");
+  empty.setAttribute("role", "status");
+  empty.append(
+    node("span", "empty-results-icon", "⌕"),
+    node("h2", "", title),
+    node("p", "", description)
+  );
+  if (actionLabel && callback) {
+    empty.append(actionButton(actionLabel, "button-outline empty-results-action", callback));
+  }
+  return empty;
+}
+
 function renderPlayers(context) {
   const page = node("div", "page-content");
   page.append(
@@ -339,24 +355,48 @@ function renderPlayers(context) {
     node("h1", "page-title", "اللاعبون"),
     node("p", "page-subtitle", "تابع الملفات والمهارات والإمكانيات. البيانات الظاهرة هنا أمثلة تصميمية مؤقتة.")
   );
+
   const toolbar = node("div", "list-toolbar");
   const search = node("input", "search-input");
   search.type = "search";
-  search.placeholder = "ابحث باسم اللاعب أو النادي...";
+  search.placeholder = "ابحث باسم اللاعب أو النادي أو المركز أو البلد...";
   search.setAttribute("aria-label", "البحث عن لاعب");
-  toolbar.append(search, node("span", "result-count", DEMO_PLAYERS.length + " ملفات تجريبية"));
+  const count = node("span", "result-count", DEMO_PLAYERS.length + " ملفات تجريبية");
+  count.setAttribute("aria-live", "polite");
+  toolbar.append(search, count);
+
   const grid = node("div", "players-grid players-grid-large");
-  DEMO_PLAYERS.forEach((player) => grid.append(playerCard(player, context.openPlayer)));
-  search.addEventListener("input", () => {
+  const refresh = () => {
     const query = search.value.trim().toLocaleLowerCase("ar");
     const filtered = DEMO_PLAYERS.filter((player) =>
       [player.name, player.club, player.position, player.country].some((value) =>
         value.toLocaleLowerCase("ar").includes(query)
       )
     );
+
+    count.textContent = query
+      ? filtered.length + " نتائج"
+      : DEMO_PLAYERS.length + " ملفات تجريبية";
+
+    if (filtered.length === 0) {
+      grid.replaceChildren(emptyResults(
+        "مفيش لاعبين مطابقين للبحث",
+        "جرّب اسم لاعب أو نادي أو مركز مختلف.",
+        "مسح البحث",
+        () => {
+          search.value = "";
+          refresh();
+          search.focus();
+        }
+      ));
+      return;
+    }
+
     grid.replaceChildren(...filtered.map((player) => playerCard(player, context.openPlayer)));
-    toolbar.querySelector(".result-count").textContent = filtered.length + " نتائج";
-  });
+  };
+
+  search.addEventListener("input", refresh);
+  refresh();
   page.append(toolbar, grid);
   return page;
 }
@@ -366,13 +406,14 @@ function renderScouting(context) {
   page.append(
     node("p", "eyebrow", "شبكة اكتشاف المواهب"),
     node("h1", "page-title", "الكشافون"),
-    node("p", "page-subtitle", "ابحث عن لاعبين واعدِين وابدأ تكوين قائمة المتابعة. نظام الكشافين الفعلي سيُبنى في المرحلة الخامسة.")
+    node("p", "page-subtitle", "ابحث عن لاعبين واعدِين وابدأ تكوين قائمة المتابعة. نظام الكشافين الفعلي سيُبنى في المرحلة السادسة.")
   );
+
   const scoutBanner = node("section", "scout-banner");
   scoutBanner.append(
     node("div", "scout-symbol", "⌕"),
     node("div", "scout-banner-copy"),
-    node("span", "scout-counter", "03  /  مواهب مقترحة")
+    node("span", "scout-counter", DEMO_PLAYERS.length + " / مواهب مقترحة")
   );
   scoutBanner.children[1].append(
     node("h2", "", "عينك على المستقبل"),
@@ -382,7 +423,7 @@ function renderScouting(context) {
   const toolbar = node("div", "list-toolbar");
   const search = node("input", "search-input");
   search.type = "search";
-  search.placeholder = "ابحث عن اسم أو مركز أو نادٍ...";
+  search.placeholder = "ابحث عن اسم أو مركز أو نادٍ أو بلد...";
   search.setAttribute("aria-label", "البحث في المواهب");
   const position = node("select", "filter-select");
   position.setAttribute("aria-label", "تصفية حسب المركز");
@@ -391,32 +432,59 @@ function renderScouting(context) {
     option.value = value;
     position.append(option);
   });
-  toolbar.append(search, position);
+  const count = node("span", "result-count", DEMO_PLAYERS.length + " نتائج");
+  count.setAttribute("aria-live", "polite");
+  toolbar.append(search, position, count);
+
   const grid = node("div", "players-grid players-grid-large");
   const refresh = () => {
-    const q = search.value.trim().toLocaleLowerCase("ar");
+    const query = search.value.trim().toLocaleLowerCase("ar");
     const role = position.value;
     const filtered = DEMO_PLAYERS.filter((player) => {
-      const matchesText = [player.name, player.club, player.position].some((value) => value.toLocaleLowerCase("ar").includes(q));
+      const matchesText = [player.name, player.club, player.position, player.country].some((value) =>
+        value.toLocaleLowerCase("ar").includes(query)
+      );
       const matchesRole = role === "all" || player.role === role;
       return matchesText && matchesRole;
     });
+
+    count.textContent = filtered.length + " نتائج";
+    if (filtered.length === 0) {
+      grid.replaceChildren(emptyResults(
+        "مفيش مواهب مطابقة",
+        "وسّع البحث أو اختار كل المراكز علشان تشوف اقتراحات تانية.",
+        "إعادة ضبط البحث",
+        () => {
+          search.value = "";
+          position.value = "all";
+          refresh();
+          search.focus();
+        }
+      ));
+      return;
+    }
+
     grid.replaceChildren(...filtered.map((player) => {
       const card = playerCard(player, context.openPlayer);
+      const alreadyWatched = context.watchlist.has(player.id);
       const follow = actionButton(
-        context.watchlist.has(player.id) ? "✓  في قائمة المتابعة" : "＋  أضف للمتابعة",
-        context.watchlist.has(player.id) ? "watch-button is-active" : "watch-button",
+        alreadyWatched ? "✓  في قائمة المتابعة" : "＋  أضف للمتابعة",
+        alreadyWatched ? "watch-button is-active" : "watch-button",
         () => {
           if (context.addToWatchlist(player)) {
             follow.textContent = "✓  في قائمة المتابعة";
             follow.classList.add("is-active");
+            follow.disabled = context.watchlist.has(player.id);
           }
         }
       );
+      follow.disabled = alreadyWatched;
+      follow.setAttribute("aria-pressed", String(alreadyWatched));
       card.append(follow);
       return card;
     }));
   };
+
   search.addEventListener("input", refresh);
   position.addEventListener("change", refresh);
   refresh();
@@ -429,7 +497,7 @@ function renderMarket(context) {
   page.append(
     node("p", "eyebrow", "حركة الأندية والصفقات"),
     node("h1", "page-title", "سوق الانتقالات"),
-    node("p", "page-subtitle", "نظرة أولية على فرص السوق. التفاوض وإتمام الصفقات سيُنفذان في المرحلة السادسة.")
+    node("p", "page-subtitle", "نظرة أولية على فرص السوق. التفاوض وإتمام الصفقات سيُنفذان في المرحلة الثامنة.")
   );
   const summary = node("div", "market-summary");
   summary.append(
@@ -619,7 +687,9 @@ export function mountApp(root) {
     const dialog = node("section", "modal-dialog");
     dialog.setAttribute("role", "dialog");
     dialog.setAttribute("aria-modal", "true");
-    dialog.setAttribute("aria-label", title);
+    const titleId = "modal-title-" + (++modalSequence);
+    dialog.setAttribute("aria-labelledby", titleId);
+    dialog.setAttribute("tabindex", "-1");
     dialog.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -647,7 +717,9 @@ export function mountApp(root) {
     });
 
     const head = node("div", "modal-heading");
-    head.append(node("h2", "", title), actionButton("×", "icon-button", close, "إغلاق"));
+    const titleElement = node("h2", "", title);
+    titleElement.id = titleId;
+    head.append(titleElement, actionButton("×", "icon-button", close, "إغلاق"));
     const body = node("div", "modal-body");
     body.append(...children);
     dialog.append(head, body, actionButton(closeLabel, "button-primary modal-close", close));
@@ -694,7 +766,7 @@ export function mountApp(root) {
     sidebar.append(node("p", "nav-caption", "القائمة"));
     NAV_ITEMS.forEach((item) => {
       const navButton = actionButton("", state.view === item.id ? "nav-link is-active" : "nav-link", () => navigate(item.id));
-      navButton.setAttribute("aria-current", state.view === item.id ? "page" : "false");
+      if (state.view === item.id) navButton.setAttribute("aria-current", "page");
       navButton.append(node("span", "nav-icon", item.icon), node("span", "nav-label", item.label));
       sidebar.append(navButton);
     });
@@ -718,6 +790,7 @@ export function mountApp(root) {
     bottomNav.setAttribute("aria-label", "التنقل");
     NAV_ITEMS.forEach((item) => {
       const navButton = actionButton("", state.view === item.id ? "mobile-nav-link is-active" : "mobile-nav-link", () => navigate(item.id));
+      if (state.view === item.id) navButton.setAttribute("aria-current", "page");
       navButton.append(node("span", "mobile-nav-icon", item.icon), node("span", "mobile-nav-label", item.label));
       bottomNav.append(navButton);
     });
@@ -746,4 +819,13 @@ export function mountApp(root) {
   }
 
   render();
+  return {
+    navigate,
+    render,
+    destroy() {
+      if (state.toastTimer) clearTimeout(state.toastTimer);
+      state.toastTimer = null;
+      root.replaceChildren();
+    }
+  };
 }
