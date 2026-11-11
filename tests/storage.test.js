@@ -129,6 +129,32 @@ test("validates career counter consistency and stable IDs in persisted collectio
   assert.equal(isValidSave(valid), true);
 });
 
+test("does not overwrite saves rejected by career or entity invariants", () => {
+  const invalidSaves = [];
+
+  const badCounters = createInitialSave();
+  badCounters.career.day = 15;
+  badCounters.career.week = 2;
+  invalidSaves.push(badCounters);
+
+  const duplicatePlayers = createInitialSave();
+  duplicatePlayers.world.players = [{ id: "player-1" }, { id: "player-1" }];
+  invalidSaves.push(duplicatePlayers);
+
+  const duplicateClients = createInitialSave();
+  duplicateClients.agency.clients = ["player-1", "player-1"];
+  invalidSaves.push(duplicateClients);
+
+  for (const invalid of invalidSaves) {
+    const raw = JSON.stringify(invalid);
+    const storage = memoryStorage({ [STORAGE_KEY]: raw });
+    assert.equal(readSave(storage).status, "corrupt");
+    assert.equal(storage.getItem(STORAGE_KEY), raw);
+    assert.throws(() => writeSave(invalid, storage), TypeError);
+    assert.equal(storage.getItem(STORAGE_KEY), raw);
+  }
+});
+
 test("persists unique watchlist player IDs", () => {
   const storage = memoryStorage();
   assert.deepEqual(readWatchlist(storage), { status: "new", ids: [], error: null });
