@@ -96,6 +96,7 @@ function playerArt(player, featured = false) {
 
 function playerCard(player, onDetails) {
   const card = node("article", "player-card");
+  card.dataset.playerId = player.id;
   const visual = node("div", "player-card-visual");
   visual.append(playerArt(player));
 
@@ -104,25 +105,40 @@ function playerCard(player, onDetails) {
     node("strong", "", player.rating),
     node("span", "", "OVR")
   );
-  visual.append(rating, node("span", "player-position-tag", player.position));
+  const position = node("span", "player-position-tag", player.position);
+  const countryBadge = node("span", "player-nationality-tag", player.country);
+  visual.append(rating, position, countryBadge);
+
   const info = node("div", "player-card-info");
   info.append(
-    node("p", "player-country", player.country + "  ·  " + player.age + " سنة"),
+    node("p", "player-country", player.age + " سنة · " + (player.foot === "left" ? "قدم يسرى" : "قدم يمنى")),
     node("h3", "player-name", player.name),
-    node("p", "player-club", player.club)
+    node("p", "player-club", player.club + " · " + player.league)
   );
+
+  const potential = node("div", "player-potential-row");
+  potential.append(
+    node("span", "", "الإمكانيات"),
+    node("strong", "", String(player.potential) + " POT")
+  );
+  const potentialTrack = node("div", "player-potential-track");
+  const potentialFill = node("span", "player-potential-fill");
+  potentialFill.style.width = Math.max(0, Math.min(100, Number(player.potential) || 0)) + "%";
+  potentialTrack.append(potentialFill);
+  info.append(potential, potentialTrack);
 
   const stats = node("div", "player-card-stats");
   stats.append(
-    statMini("POT", player.potential),
-    statMini("القيمة", player.value),
-    statMini("العمر", player.age)
+    statMini("القيمة السوقية", player.value),
+    statMini("العمر", player.age),
+    statMini("التقييم", player.rating)
   );
   info.append(stats);
+
   const footer = node("div", "player-card-footer");
   footer.append(
     node("span", "scout-status", player.status),
-    actionButton("ملف اللاعب", "text-button", () => onDetails(player))
+    actionButton("عرض الملف", "text-button", () => onDetails(player))
   );
   card.append(visual, info, footer);
   return card;
@@ -490,61 +506,112 @@ function renderPlayers(context) {
   const page = node("div", "page-content rebuild-screen players-screen");
   page.append(
     node("p", "eyebrow rebuild-page-kicker", "إدارة المواهب"),
-    node("h1", "page-title rebuild-page-title", "اللاعبون"),
-    node("p", "page-subtitle rebuild-page-subtitle", "قاعدة بيانات تأسيسية مترابطة للاعبين والأندية والدوريات والبطولات. ملفات اللاعبين خيالية ومخصصة للمحاكاة.")
+    node("h1", "page-title rebuild-page-title", "قاعدة اللاعبين"),
+    node("p", "page-subtitle rebuild-page-subtitle", "ابحث في قاعدة العالم، قارن مستوى اللاعب بإمكانياته، وافتح ملفه قبل اتخاذ قرار المتابعة أو التمثيل. البيانات الحالية خيالية ومخصصة للمحاكاة.")
   );
 
   const worldStats = node("div", "metrics-grid world-metrics");
   worldStats.append(
-    metricCard("الدول", WORLD_COUNTS.countries, "نطاق تأسيسي", "◎", "purple"),
-    metricCard("الدوريات", WORLD_COUNTS.leagues, "درجات أولى", "▤", "cyan"),
+    metricCard("الدول", WORLD_COUNTS.countries, "نطاق جغرافي تأسيسي", "◎", "purple"),
+    metricCard("الدوريات", WORLD_COUNTS.leagues, "دوريات مرجعية", "▤", "cyan"),
     metricCard("الأندية", WORLD_COUNTS.clubs, "كيانات مترابطة", "♜", "gold"),
     metricCard("اللاعبون", WORLD_COUNTS.players, "ملفات خيالية", "⚽", "purple")
   );
-  page.append(worldStats);
 
-  const toolbar = node("div", "list-toolbar");
+  const toolbar = node("div", "player-library-toolbar");
   const search = node("input", "search-input");
   search.type = "search";
-  search.placeholder = "ابحث باسم اللاعب أو النادي أو المركز أو البلد...";
+  search.placeholder = "ابحث بالاسم أو النادي أو المركز أو البلد...";
   search.setAttribute("aria-label", "البحث عن لاعب");
-  const count = node("span", "result-count", WORLD_PLAYERS.length + " لاعبًا في قاعدة البيانات");
+
+  const role = node("select", "filter-select");
+  role.setAttribute("aria-label", "تصفية حسب مركز اللاعب");
+  [
+    ["all", "كل المراكز"],
+    ["هجوم", "الهجوم"],
+    ["وسط", "الوسط"],
+    ["دفاع", "الدفاع"],
+    ["حراسة", "حراسة المرمى"]
+  ].forEach(([value, label]) => {
+    const option = node("option", "", label);
+    option.value = value;
+    role.append(option);
+  });
+
+  const country = node("select", "filter-select");
+  country.setAttribute("aria-label", "تصفية حسب الجنسية");
+  const allCountries = node("option", "", "كل الجنسيات");
+  allCountries.value = "all";
+  country.append(allCountries);
+  [...new Map(WORLD_PLAYERS.map((player) => [player.country, player.country])).keys()]
+    .sort((a, b) => a.localeCompare(b, "ar"))
+    .forEach((name) => {
+      const option = node("option", "", name);
+      option.value = name;
+      country.append(option);
+    });
+
+  const sort = node("select", "filter-select");
+  sort.setAttribute("aria-label", "ترتيب اللاعبين");
+  [
+    ["potential", "الأعلى إمكانيات"],
+    ["rating", "الأعلى تقييمًا"],
+    ["youngest", "الأصغر سنًا"],
+    ["value", "الأعلى قيمة سوقية"]
+  ].forEach(([value, label]) => {
+    const option = node("option", "", label);
+    option.value = value;
+    sort.append(option);
+  });
+  const count = node("span", "result-count player-library-count", "");
   count.setAttribute("aria-live", "polite");
-  toolbar.append(search, count);
+  toolbar.append(search, role, country, sort, count);
 
   const grid = node("div", "players-grid players-grid-large");
   const refresh = () => {
     const query = search.value.trim().toLocaleLowerCase("ar");
-    const filtered = WORLD_PLAYERS.filter((player) =>
-      [player.name, player.club, player.position, player.country].some((value) =>
-        value.toLocaleLowerCase("ar").includes(query)
-      )
-    );
+    const selectedRole = role.value;
+    const selectedCountry = country.value;
+    const filtered = WORLD_PLAYERS.filter((player) => {
+      const matchesText = [player.name, player.club, player.position, player.country, player.league]
+        .some((value) => String(value ?? "").toLocaleLowerCase("ar").includes(query));
+      const matchesRole = selectedRole === "all" || player.role === selectedRole;
+      const matchesCountry = selectedCountry === "all" || player.country === selectedCountry;
+      return matchesText && matchesRole && matchesCountry;
+    });
 
-    count.textContent = query
-      ? filtered.length + " نتائج"
-      : WORLD_PLAYERS.length + " لاعبًا في قاعدة البيانات";
-
-    if (filtered.length === 0) {
+    const sorted = [...filtered].sort((a, b) => {
+      if (sort.value === "rating") return b.rating - a.rating || b.potential - a.potential;
+      if (sort.value === "youngest") return a.age - b.age || b.potential - a.potential;
+      if (sort.value === "value") return b.marketValueEur - a.marketValueEur || b.rating - a.rating;
+      return b.potential - a.potential || b.rating - a.rating;
+    });
+    count.textContent = formatHomeNumber(sorted.length) + " من " + formatHomeNumber(WORLD_PLAYERS.length) + " لاعب";
+    if (sorted.length === 0) {
       grid.replaceChildren(emptyResults(
         "مفيش لاعبين مطابقين للبحث",
-        "جرّب اسم لاعب أو نادي أو مركز مختلف.",
-        "مسح البحث",
+        "جرّب تغيير المركز أو الجنسية أو كلمات البحث.",
+        "مسح الفلاتر",
         () => {
           search.value = "";
+          role.value = "all";
+          country.value = "all";
+          sort.value = "potential";
           refresh();
           search.focus();
         }
       ));
       return;
     }
-
-    grid.replaceChildren(...filtered.map((player) => playerCard(player, context.openPlayer)));
+    grid.replaceChildren(...sorted.map((player) => playerCard(player, context.openPlayer)));
   };
 
   search.addEventListener("input", refresh);
+  role.addEventListener("change", refresh);
+  country.addEventListener("change", refresh);
+  sort.addEventListener("change", refresh);
   refresh();
-  page.append(toolbar, grid);
+  page.append(worldStats, toolbar, grid);
   return page;
 }
 
@@ -2258,24 +2325,90 @@ export function mountApp(root) {
   function openPlayer(player) {
     const art = playerArt(player, true);
     art.classList.add("modal-player-art");
-    const summary = node("div", "modal-player-summary");
-    summary.append(
-      node("p", "eyebrow", player.position + "  ·  " + player.country),
+
+    const identity = node("div", "player-profile-identity");
+    identity.append(
+      node("span", "player-profile-kicker", "PLAYER DOSSIER · ملف اللاعب"),
       node("h3", "", player.name),
-      node("p", "modal-copy", player.club + "  ·  " + player.league + "  ·  " + player.age + " سنة"),
-      node("p", "modal-note", "التقييم " + player.rating + "  |  الإمكانيات " + player.potential + "  |  القيمة " + player.value)
+      node("p", "", player.position + " · " + player.club),
+      node("span", "player-profile-status", player.status)
     );
-    const wrapper = node("div", "modal-player-layout");
-    wrapper.append(art, summary);
-    openModal("ملف اللاعب", [
-      wrapper,
-      node("p", "modal-note", "ملف لاعب خيالي ضمن بيانات البداية. يمكنك تقديم عرض تمثيل له من قسم الوكالة."),
-      actionButton(state.watchlist.has(player.id) ? "✓  في قائمة المتابعة" : "＋  أضف لقائمة المتابعة", "watch-button", () => {
+
+    const hero = node("div", "player-profile-hero");
+    hero.append(art, identity);
+
+    const ratingCards = node("div", "player-profile-stats");
+    [
+      ["التقييم الحالي", player.rating, "OVR"],
+      ["الإمكانيات", player.potential, "POT"],
+      ["العمر", player.age, "سنة"],
+      ["القيمة السوقية", player.value, "EUR"]
+    ].forEach(([label, value, suffix]) => {
+      const item = node("article", "player-profile-stat");
+      item.append(
+        node("small", "", label),
+        node("strong", "", String(value)),
+        node("span", "", suffix)
+      );
+      ratingCards.append(item);
+    });
+
+    const details = node("div", "player-profile-details");
+    [
+      ["الجنسية", player.country],
+      ["النادي", player.club],
+      ["الدوري", player.league],
+      ["القدم المفضلة", player.foot === "left" ? "اليسرى" : "اليمنى"],
+      ["المركز العام", player.role],
+      ["نهاية عقد النادي", player.contractUntil ? formatHomeDate(player.contractUntil) : "غير متاح"]
+    ].forEach(([label, value]) => {
+      const row = node("div", "player-profile-detail");
+      row.append(node("small", "", label), node("strong", "", String(value)));
+      details.append(row);
+    });
+
+    const growth = node("section", "player-profile-growth");
+    const growthHeading = node("div", "player-profile-growth-heading");
+    growthHeading.append(
+      node("strong", "", "مساحة التطور"),
+      node("span", "", "فرق " + Math.max(0, player.potential - player.rating) + " نقطة")
+    );
+    const growthTrack = node("div", "player-profile-growth-track");
+    const growthFill = node("span", "player-profile-growth-fill");
+    growthFill.style.width = Math.max(0, Math.min(100, Number(player.potential) || 0)) + "%";
+    growthTrack.append(growthFill);
+    growth.append(growthHeading, growthTrack);
+
+    const content = node("div", "player-profile-content");
+    content.append(hero, ratingCards, details, growth,
+      node("p", "player-profile-disclaimer", "هذا ملف لاعب خيالي من قاعدة العالم التجريبية. القيمة السوقية تقدير داخل اللعبة وليست عرض انتقال رسميًا.")
+    );
+
+    const isWatched = state.watchlist.has(player.id);
+    const actions = node("div", "player-profile-actions");
+    const watchButton = actionButton(
+      isWatched ? "✓  تمت إضافته للمتابعة" : "＋  أضف لقائمة المتابعة",
+      isWatched ? "button-outline player-profile-watch is-active" : "button-outline player-profile-watch",
+      () => {
         if (addToWatchlist(player)) {
-          root.querySelector(".modal-overlay .icon-button")?.click();
+          watchButton.textContent = "✓  تمت إضافته للمتابعة";
+          watchButton.classList.add("is-active");
+          watchButton.disabled = true;
+          watchButton.setAttribute("aria-pressed", "true");
         }
+      }
+    );
+    watchButton.disabled = isWatched;
+    watchButton.setAttribute("aria-pressed", String(isWatched));
+    actions.append(
+      watchButton,
+      actionButton("بدء عرض تمثيل", "button-primary player-profile-representation", () => {
+        root.querySelector(".modal-overlay .icon-button")?.click();
+        openRepresentationOffer(player);
       })
-    ]);
+    );
+
+    openModal("ملف اللاعب", [content, actions]);
   }
 
   function render() {
