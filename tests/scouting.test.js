@@ -52,6 +52,18 @@ test("filters candidates through distinct discovery channels without changing th
 });
 
 
+test("existing scouts cover the expanded European leagues and the global network covers South America", () => {
+  const state = createInitialScoutingState();
+  const westernEurope = getScoutingScoutFit("scout-western-europe", state, "country-nl", "وسط", 0.62);
+  assert.equal(westernEurope.countryMatch, true);
+  const portugalNetwork = signScoutingContract(createInitialSave(), "scout-iberian-network");
+  assert.equal(portugalNetwork.changed, true);
+  const iberian = getScoutingScoutFit("scout-iberian-network", portugalNetwork.save.world.scouting, "country-pt", "هجوم", 0.62);
+  assert.equal(iberian.countryMatch, true);
+  const global = getScoutingScoutFit("scout-global-youth", state, "country-br", "دفاع", 0.62);
+  assert.equal(global.countryMatch, true);
+});
+
 test("can launch a valid scouting scope for every country and general role", () => {
   const countries = ["country-eg", "country-ma", "country-tn", "country-gb", "country-es", "country-de", "country-fr", "country-it", "country-nl", "country-pt", "country-br", "country-ar"];
   const roles = ["هجوم", "وسط", "دفاع", "حراسة"];
