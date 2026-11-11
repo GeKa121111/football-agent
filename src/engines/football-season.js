@@ -400,7 +400,7 @@ export function isValidFootballState(state, currentDate, season, database = WORL
     [1, 2].includes(fixture.leg) &&
     clubIds.has(fixture.homeClubId) && clubIds.has(fixture.awayClubId) &&
     fixture.homeClubId !== fixture.awayClubId &&
-    ((fixture.status === "scheduled" && fixture.resultId === null && fixture.date > currentDate) ||
+    ((fixture.status === "scheduled" && fixture.resultId === null) ||
       (fixture.status === "played" && fixture.resultId === fixture.id && fixture.date <= currentDate))
   )) return false;
 
