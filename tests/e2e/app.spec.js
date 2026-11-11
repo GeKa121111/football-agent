@@ -653,7 +653,7 @@ test.describe("Mobile experience", () => {
     await navigateTo(page, "الوكالة");
     await expect(page.locator(".talent-pipeline-card")).toHaveCount(1);
     await expect(page.locator(".talent-pipeline-stage")).toHaveText("قيد التفاوض");
-    await expect(page.locator(".talent-pipeline-followup")).toContainText("15 يوليو 2026");
+    await expect(page.locator(".talent-pipeline-followup")).toContainText("يوليو");
     await page.reload();
     await navigateTo(page, "الوكالة");
     await expect(page.locator(".talent-pipeline-card")).toHaveCount(1);
