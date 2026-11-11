@@ -760,3 +760,32 @@ test.describe("Scouting recruitment contracts", () => {
     expect(assigned.world.scouting.activeMissions[0].scoutId).toBe("scout-iberian-network"); await hasNoHorizontalOverflow(page);
   });
 });
+
+test.describe("Scouting recruitment contracts on mobile", () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test("keeps annual scout recruitment usable and persisted on a phone viewport", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الكشافون");
+
+    await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)")).toHaveCount(4);
+    await expect(page.locator(".scout-recruit-card")).toHaveCount(2);
+
+    const recruitCard = page.locator(".scout-recruit-card").filter({ hasText: "ماتياس كروغر" });
+    await expect(recruitCard).toContainText("15,000");
+    await recruitCard.getByRole("button", { name: "توقيع عقد سنوي" }).click();
+
+    await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)")).toHaveCount(5);
+    await expect(page.locator(".scout-recruit-card")).toHaveCount(1);
+
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const contract = saved.world.scouting.scouts.find((scout) => scout.id === "scout-central-europe");
+    expect(saved.agency.balance).toBe(85000);
+    expect(contract.contractStartedOn).toBe("2026-07-01");
+    expect(contract.contractExpiresOn).toBe("2027-07-01");
+    expect(contract.contractCost).toBe(15000);
+
+    await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)").filter({ hasText: "ماتياس كروغر" })).toContainText("عقد حتى");
+    await hasNoHorizontalOverflow(page);
+  });
+});
