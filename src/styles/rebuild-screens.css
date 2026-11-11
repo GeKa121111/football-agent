@@ -774,3 +774,15 @@
   .football-fixture-grid, .football-skill-list { grid-template-columns: minmax(0,1fr); }
   .football-player-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
+
+
+.football-standings-table { display: grid; gap: 5px; min-width: 0; overflow-x: auto; }
+.football-standings-row { display: grid; grid-template-columns: 28px minmax(105px,1.5fr) repeat(6,minmax(28px,.42fr)) minmax(42px,.5fr); align-items: center; gap: 5px; min-width: 440px; padding: 8px 7px; border-bottom: 1px solid var(--fa-border); color: var(--fa-text-soft); font-size: 8px; text-align: center; }
+.football-standings-row.is-header { position: sticky; top: 0; color: var(--fa-muted); background: rgba(12,18,28,.96); font-weight: 800; }
+.football-standings-row > span:first-child, .football-standings-row > span:last-child { color: var(--fa-accent); font-weight: 900; }
+.football-standings-club { color: var(--fa-text) !important; font-weight: 800; text-align: start; }
+.football-panel-heading .filter-select { width: min(100%,260px); min-width: 0; }
+@media (max-width: 760px) {
+  .football-standings-row { min-width: 420px; }
+  .football-panel-heading .filter-select { width: 100%; }
+}
