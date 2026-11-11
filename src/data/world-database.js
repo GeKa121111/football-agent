@@ -81,7 +81,7 @@ const PLAYER_SEEDS = [
   { id: "seed-matteo-rinaldi", name: "Matteo Rinaldi", age: 20, countryId: "country-it", clubId: "club-inter", position: "ظهير أيمن", role: "دفاع", rating: 74, potential: 87, marketValueEur: 2200000, status: "تحت المراقبة", shirtNumber: 7, contractUntil: "2028-06-30", foot: "right" , discoverySourceIds: ["club-network","agent-referral"]},
   { id: "seed-luca-bianchi", name: "Luca Bianchi", age: 19, countryId: "country-it", clubId: "club-juventus", position: "حارس مرمى", role: "حراسة", rating: 70, potential: 84, marketValueEur: 1100000, status: "موهبة صاعدة", shirtNumber: 22, contractUntil: "2029-06-30", foot: "right" , discoverySourceIds: ["academy","youth-tournament"]},
   { id: "seed-anis-ben-salem", name: "أنيس بن سالم", age: 20, countryId: "country-tn", clubId: "club-es-tunis", position: "وسط هجومي", role: "وسط", rating: 73, potential: 86, marketValueEur: 1750000, status: "تحت المراقبة", shirtNumber: 18, contractUntil: "2028-06-30", foot: "left" , discoverySourceIds: ["club-network","agent-referral"]},
-  { id: "seed-youssef-amrani", name: "يوسف العمراني", age: 19, countryId: "country-ma", clubId: "club-raja", position: "قلب دفاع", role: "دفاع", rating: 72, potential: 85, marketValueEur: 1400000, status: "موهبة صاعدة", shirtNumber: 13, contractUntil: "2029-06-30", foot: "right" , discoverySourceIds: ["academy","youth-tournament"]}
+  { id: "seed-youssef-amrani", name: "يوسف العمراني", age: 19, countryId: "country-ma", clubId: "club-raja", position: "قلب دفاع", role: "دفاع", rating: 72, potential: 85, marketValueEur: 1400000, status: "موهبة صاعدة", shirtNumber: 13, contractUntil: "2029-06-30", foot: "right" , discoverySourceIds: ["academy","youth-tournament"]},
   { id: "seed-eg-ahly-keeper", name: "مروان السيد", age: 19, countryId: "country-eg", clubId: "club-al-ahly", position: "حارس مرمى", role: "حراسة", rating: 68, potential: 85, marketValueEur: 700000, status: "موهبة صاعدة", shirtNumber: 31, contractUntil: "2029-06-30", foot: "right", discoverySourceIds: ["academy", "youth-tournament"] },
   { id: "seed-eg-zamalek-defender", name: "آدم صبري", age: 18, countryId: "country-eg", clubId: "club-zamalek", position: "قلب دفاع", role: "دفاع", rating: 69, potential: 86, marketValueEur: 900000, status: "متاح للكشف", shirtNumber: 15, contractUntil: "2029-06-30", foot: "right", discoverySourceIds: ["club-network", "agent-referral"] },
   { id: "seed-ma-wydad-midfielder", name: "أيوب الكتاني", age: 19, countryId: "country-ma", clubId: "club-wydad", position: "وسط دفاعي", role: "وسط", rating: 70, potential: 86, marketValueEur: 950000, status: "موهبة صاعدة", shirtNumber: 6, contractUntil: "2029-06-30", foot: "left", discoverySourceIds: ["academy", "youth-tournament"] },
@@ -99,7 +99,8 @@ const PLAYER_SEEDS = [
   { id: "seed-it-inter-striker", name: "Lorenzo Conti", age: 19, countryId: "country-it", clubId: "club-inter", position: "مهاجم", role: "هجوم", rating: 73, potential: 88, marketValueEur: 2500000, status: "موهبة صاعدة", shirtNumber: 19, contractUntil: "2029-06-30", foot: "right", discoverySourceIds: ["academy", "youth-tournament"] },
   { id: "seed-it-juventus-midfielder", name: "Andrea Moretti", age: 18, countryId: "country-it", clubId: "club-juventus", position: "وسط مركزي", role: "وسط", rating: 70, potential: 89, marketValueEur: 2000000, status: "متاح للكشف", shirtNumber: 18, contractUntil: "2029-06-30", foot: "left", discoverySourceIds: ["club-network", "agent-referral"] }
 ];
-\nconst players = PLAYER_SEEDS.map((player, index) => ({
+
+const players = PLAYER_SEEDS.map((player, index) => ({
   ...player,
   ...PORTRAIT_PRESETS[index % PORTRAIT_PRESETS.length]
 }));
