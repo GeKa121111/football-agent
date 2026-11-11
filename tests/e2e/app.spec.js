@@ -229,7 +229,7 @@ test.describe("Mobile experience", () => {
     expect(saved.world.tasks[0].status).toBe("open");
 
     await expect(page.locator(".career-operations")).toBeVisible();
-    await expect(page.getByText("الإحاطة الأسبوعية للوكالة")).toBeVisible();
+    await expect(page.getByText("الإحاطة الأسبوعية للوكالة").first()).toBeVisible();
     await page.locator(".task-complete-button").click();
     saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(saved.world.tasks[0].status).toBe("completed");
@@ -285,6 +285,7 @@ test.describe("Career operations follow-up", () => {
 
   test("marks a task overdue, keeps it actionable and persists late completion", async ({ page }) => {
     await page.goto("/");
+    await page.locator(".home-save-button").click();
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       save.world.tasks = [{
@@ -312,6 +313,7 @@ test.describe("Career operations follow-up", () => {
 
   test("searches and filters the event history", async ({ page }) => {
     await page.goto("/");
+    await page.locator(".home-save-button").click();
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       save.world.currentDate = "2026-07-05";
