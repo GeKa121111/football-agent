@@ -1,5 +1,5 @@
 import { WORLD_DATABASE } from "../data/world-database.js";
-import { getRepresentationContractExpiry } from "./representation.js";
+import { getRepresentationContractExpiry, getRepresentationContractCommission } from "./representation.js";
 
 export const TRANSFER_OFFER_VALIDITY_DAYS = 14;
 export const MAX_TRANSFER_OFFERS = 100;
@@ -249,7 +249,14 @@ export function completeTransfer(save, offerId, currentDate = save?.world?.curre
   if (state.moves.length >= MAX_TRANSFER_MOVES || state.ledger.length >= MAX_TRANSFER_LEDGER ||
       state.history.length >= MAX_TRANSFER_HISTORY) return { changed: false, save, error: "وصل سجل الصفقات أو العمولات إلى الحد المتاح." };
   const terms = offer.agreedTerms;
-  const commissionEur = Math.round(terms.signingBonusEur * mandate.commissionRate / 100);
+  const contractWeeks = offer.type === "permanent"
+    ? terms.contractYears * 52
+    : Math.round(terms.loanMonths * 52 / 12);
+  const commissionBasisEur = terms.weeklyWageEur * contractWeeks + terms.signingBonusEur;
+  if (!validMoney(commissionBasisEur))
+    return { changed: false, save, error: "قيمة دخل اللاعب التعاقدي تجاوزت الحد المالي المسموح." };
+  const commissionRate = getRepresentationContractCommission(mandate, currentDate);
+  const commissionEur = Math.round(commissionBasisEur * commissionRate / 100);
   if (state.earnedCommissionEur + commissionEur > MAX_EUR) return { changed: false, save, error: "سجل عمولات الوكالة تجاوز الحد المالي المسموح." };
   const moveId = "transfer-move-" + state.nextMoveSequence;
   const move = {
@@ -270,7 +277,7 @@ export function completeTransfer(save, offerId, currentDate = save?.world?.curre
   if (commissionEur > 0) {
     const entry = { id: "transfer-ledger-" + next.nextLedgerSequence, type: "agent-commission",
       offerId: offer.id, moveId, playerId: offer.playerId, date: currentDate, currency: "EUR",
-      amountEur: commissionEur, commissionRate: mandate.commissionRate, representationContractId: mandate.id, basisEur: terms.signingBonusEur };
+      amountEur: commissionEur, commissionRate, representationContractId: mandate.id, basisEur: commissionBasisEur };
     next = { ...next, nextLedgerSequence: next.nextLedgerSequence + 1,
       earnedCommissionEur: next.earnedCommissionEur + commissionEur, ledger: [entry, ...next.ledger] };
   }
@@ -385,7 +392,7 @@ export function isValidTransferState(state, currentDate, clients = [], represent
         !Number.isInteger(entry.commissionRate) || entry.commissionRate < 5 || entry.commissionRate > 15 ||
         !validMoney(entry.basisEur) || entry.amountEur !== Math.round(entry.basisEur * entry.commissionRate / 100)) return false;
     const contract = representation?.contracts?.find((item) => item.id === entry.representationContractId);
-    if (!contract || contract.playerId !== entry.playerId || contract.commissionRate !== entry.commissionRate) return false;
+    if (!contract || contract.playerId !== entry.playerId || getRepresentationContractCommission(contract, entry.date) !== entry.commissionRate) return false;
     ledgerTotal += entry.amountEur;
     highestLedger = Math.max(highestLedger, sequenceOf(entry.id, "transfer-ledger"));
   }
