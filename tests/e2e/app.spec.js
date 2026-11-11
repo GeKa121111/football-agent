@@ -349,6 +349,15 @@ test.describe("Desktop experience", () => {
     await page.locator(".modal-overlay").click({ position: { x: 5, y: 5 } });
     await expect(page.locator(".modal-overlay")).toHaveCount(0);
   });
+
+  test("labels all market cards as illustrative preview data", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الانتقالات");
+    await expect(page.locator(".market-preview-notice")).toContainText("ليست عروض انتقال حقيقية");
+    await expect(page.locator(".market-preview-state")).toHaveText("DEMO DATA");
+    await expect(page.locator(".market-card")).toHaveCount(3);
+    await hasNoHorizontalOverflow(page);
+  });
 });
 
 test.describe("Mobile experience", () => {
@@ -361,6 +370,21 @@ test.describe("Mobile experience", () => {
     await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
     await expect(page.getByLabel("نسبة العمولة")).toBeVisible();
     await expect(page.getByLabel("مدة العقد")).toBeVisible();
+    await hasNoHorizontalOverflow(page);
+  });
+
+  test("searches the agency prospect pool without changing its source data", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    await expect(page.locator(".representation-prospect-card")).toHaveCount(32);
+    const search = page.getByRole("searchbox", { name: "البحث عن لاعب لضمّه" });
+    await search.fill("ياسين");
+    await expect(page.locator(".representation-prospect-card")).toHaveCount(1);
+    await expect(page.locator(".representation-prospect-card")).toContainText("ياسين عادل");
+    await search.fill("لا يوجد لاعب بهذا الاسم");
+    await expect(page.locator(".empty-results")).toBeVisible();
+    await page.getByRole("button", { name: "مسح البحث" }).click();
+    await expect(page.locator(".representation-prospect-card")).toHaveCount(32);
     await hasNoHorizontalOverflow(page);
   });
 
@@ -403,6 +427,47 @@ test.describe("Mobile experience", () => {
 
     await page.getByRole("button", { name: "مسح البحث" }).click();
     await expect(page.locator(".player-card")).toHaveCount(32);
+    await hasNoHorizontalOverflow(page);
+  });
+
+  test("filters the player library by role and nationality and supports sorting", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "اللاعبون");
+    const role = page.getByLabel("تصفية حسب مركز اللاعب");
+    const country = page.getByLabel("تصفية حسب الجنسية");
+    const sort = page.getByLabel("ترتيب اللاعبين");
+
+    await role.selectOption("هجوم");
+    const attackCount = await page.locator(".player-card").count();
+    expect(attackCount).toBeGreaterThan(0);
+    expect(attackCount).toBeLessThan(32);
+
+    await country.selectOption("مصر");
+    const egyptAttackCount = await page.locator(".player-card").count();
+    expect(egyptAttackCount).toBeGreaterThan(0);
+    expect(egyptAttackCount).toBeLessThanOrEqual(attackCount);
+
+    await role.selectOption("all");
+    await country.selectOption("all");
+    await sort.selectOption("youngest");
+    await expect(page.locator(".player-card").first().locator(".player-country")).toContainText("18 سنة");
+    await hasNoHorizontalOverflow(page);
+  });
+
+  test("opens a complete player dossier and starts a representation offer from the profile", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "اللاعبون");
+    await page.getByRole("searchbox", { name: "البحث عن لاعب" }).fill("ياسين عادل");
+    await page.locator(".player-card").getByRole("button", { name: "عرض الملف" }).click();
+
+    const dossier = page.getByRole("dialog", { name: "ملف اللاعب" });
+    await expect(dossier.locator(".player-profile-identity h3")).toHaveText("ياسين عادل");
+    await expect(dossier.locator(".player-profile-stats")).toContainText("OVR");
+    await expect(dossier.locator(".player-profile-details")).toContainText("الأهلي");
+    await expect(dossier.locator(".player-profile-details")).toContainText("الدوري المصري الممتاز");
+    await dossier.getByRole("button", { name: "بدء عرض تمثيل" }).click();
+    await expect(page.getByRole("dialog", { name: "عرض تمثيل جديد" })).toBeVisible();
+    await expect(page.getByLabel("نسبة العمولة")).toBeVisible();
     await hasNoHorizontalOverflow(page);
   });
 
