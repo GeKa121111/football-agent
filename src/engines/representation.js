@@ -169,9 +169,11 @@ function playerAcceptsTerms(offer, terms) {
   const preferredRepresentationType = preferences.prefersExclusive === true || agencyReputation >= 90
     ? "exclusive"
     : "non-exclusive";
+  const offeredRepresentationType = terms.representationType ?? offer.representationType ??
+    (preferences.prefersExclusive === true ? "exclusive" : "non-exclusive");
   return terms.commissionRate <= commissionAllowance &&
     terms.termDays === preferences.preferredTermDays &&
-    normalizeRepresentationType(terms.representationType ?? offer.representationType) === preferredRepresentationType;
+    normalizeRepresentationType(offeredRepresentationType) === preferredRepresentationType;
 }
 
 function buildPlayerCounterOffer(offer) {
@@ -716,6 +718,10 @@ export function createRepresentationOffer(save, player, terms, currentDate = sav
     return { changed: false, save, error: "وصل سجل عروض التمثيل إلى الحد المتاح." };
   }
 
+  const playerPreferences = getPlayerRepresentationProfile(player);
+  const representationType = normalizeRepresentationType(
+    terms.representationType ?? (playerPreferences.prefersExclusive ? "exclusive" : "non-exclusive")
+  );
   const offer = {
     id: "representation-offer-" + representation.nextOfferSequence,
     kind: "new",
@@ -726,8 +732,8 @@ export function createRepresentationOffer(save, player, terms, currentDate = sav
     position: player.position,
     rating: player.rating,
     potential: player.potential,
-    playerPreferences: getPlayerRepresentationProfile(player),
-    representationType: normalizeRepresentationType(terms.representationType),
+    playerPreferences,
+    representationType,
     agencyReputation: currentAgencyReputation(representation),
     commissionRate: terms.commissionRate,
     termDays: terms.termDays,
@@ -955,7 +961,7 @@ export function createRepresentationRenewalOffer(save, contractId, terms, curren
     rating,
     potential,
     playerPreferences,
-    representationType: normalizeRepresentationType(contract.representationType),
+    representationType: normalizeRepresentationType(terms.representationType ?? contract.representationType),
     agencyReputation: currentAgencyReputation(representation),
     commissionRate: terms.commissionRate,
     termDays: terms.termDays,
