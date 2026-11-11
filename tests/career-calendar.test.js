@@ -320,3 +320,68 @@ test("filters task history by lifecycle status and Arabic/date search without mu
   assert.deepEqual(filterCareerTasks(tasks, { status: "unknown" }), []);
   assert.deepEqual(tasks.map((task) => task.id), originalIds);
 });
+
+
+test("does not stack a recurring task while an earlier task in its category is actionable", () => {
+  const save = createInitialSave();
+  save.world.currentDate = "2026-07-05";
+  save.world.events = [];
+  save.world.inbox = [];
+  save.world.tasks = [makeTask({
+    id: "task-existing-weekly-review",
+    status: "overdue",
+    overdueDate: "2026-07-04"
+  })];
+
+  const next = advanceCareerDays(save, 28);
+  const weeklyEvents = next.world.events.filter((event) => event.type === "weekly-briefing");
+
+  assert.equal(weeklyEvents.length, 4);
+  assert.equal(next.world.currentDate, "2026-08-02");
+  assert.equal(next.world.tasks.length, 1);
+  assert.equal(next.world.tasks[0].id, "task-existing-weekly-review");
+  assert.equal(next.world.tasks[0].status, "overdue");
+  assert.equal(isValidSave(next), true);
+});
+
+test("bounds completed task history without evicting open or overdue work", () => {
+  const save = createInitialSave();
+  save.world.currentDate = "2026-07-02";
+  const completed = Array.from({ length: 65 }, (_, index) => ({
+    id: "task-completed-" + String(index).padStart(2, "0"),
+    title: "مهمة مكتملة " + index,
+    description: "سجل مكتمل للاختبار.",
+    createdDate: "2025-12-01",
+    dueDate: "2025-12-20",
+    completedDate: new Date(Date.UTC(2026, 0, 1 + index)).toISOString().slice(0, 10),
+    completedLate: false,
+    category: "completed-history",
+    status: "completed"
+  }));
+  const openTask = makeTask({
+    id: "task-legacy-open",
+    category: "legacy-open",
+    createdDate: "2026-06-01",
+    dueDate: "2026-07-20",
+    status: "open"
+  });
+  const overdueTask = makeTask({
+    id: "task-legacy-overdue",
+    category: "legacy-overdue",
+    createdDate: "2026-05-01",
+    dueDate: "2026-06-01",
+    overdueDate: "2026-06-02",
+    status: "overdue"
+  });
+  save.world.tasks = [...completed, openTask, overdueTask];
+
+  const next = advanceCareerDay(save);
+  const retainedCompleted = next.world.tasks.filter((task) => task.status === "completed");
+
+  assert.equal(retainedCompleted.length, 60);
+  assert.equal(retainedCompleted[0].id, "task-completed-05");
+  assert.equal(retainedCompleted.at(-1).id, "task-completed-64");
+  assert.ok(next.world.tasks.some((task) => task.id === openTask.id));
+  assert.ok(next.world.tasks.some((task) => task.id === overdueTask.id));
+  assert.equal(isValidSave(next), true);
+});
