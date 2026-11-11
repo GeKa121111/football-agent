@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test",
-    "check": "node --check src/main.js && node --check src/app.js && node --check src/core/storage.js && node --check src/data/demo-players.js && node --check src/ui/player-portrait.js",
+    "check": "node --check src/main.js && node --check src/app.js && node --check src/core/storage.js && node --check src/data/demo-players.js && node --check src/ui/player-portrait.js && node --check src/data/world-database.js",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

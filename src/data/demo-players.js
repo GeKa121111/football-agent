@@ -1,5 +1,5 @@
-// Presentation-only profiles for the phase 2 UI.
-// Real player records and scouting data are intentionally deferred to phase 4.
+// Legacy portrait-test fixtures retained for backward-compatible illustration tests.
+// The playable application now reads its player records from world-database.js.
 export const DEMO_PLAYERS = Object.freeze([
   Object.freeze({
     id: "demo-yassin-adel",

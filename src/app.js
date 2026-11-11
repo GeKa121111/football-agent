@@ -5,8 +5,11 @@ import {
   readWatchlist,
   writeWatchlist
 } from "./core/storage.js";
-import { DEMO_PLAYERS } from "./data/demo-players.js";
+import { getWorldPlayerProfiles, getWorldSummary } from "./data/world-database.js";
 import { createPlayerPortrait } from "./ui/player-portrait.js";
+
+const WORLD_PLAYERS = getWorldPlayerProfiles();
+const WORLD_COUNTS = getWorldSummary();
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "الرئيسية", icon: "⌂" },
@@ -336,22 +339,31 @@ function renderPlayers(context) {
   page.append(
     node("p", "eyebrow", "إدارة المواهب"),
     node("h1", "page-title", "اللاعبون"),
-    node("p", "page-subtitle", "تابع الملفات والمهارات والإمكانيات. البيانات الظاهرة هنا أمثلة تصميمية مؤقتة.")
+    node("p", "page-subtitle", "قاعدة بيانات تأسيسية مترابطة للاعبين والأندية والدوريات والبطولات. ملفات اللاعبين خيالية ومخصصة للمحاكاة.")
   );
+
+  const worldStats = node("div", "metrics-grid world-metrics");
+  worldStats.append(
+    metricCard("الدول", WORLD_COUNTS.countries, "نطاق تأسيسي", "◎", "purple"),
+    metricCard("الدوريات", WORLD_COUNTS.leagues, "درجات أولى", "▤", "cyan"),
+    metricCard("الأندية", WORLD_COUNTS.clubs, "كيانات مترابطة", "♜", "gold"),
+    metricCard("اللاعبون", WORLD_COUNTS.players, "ملفات خيالية", "⚽", "purple")
+  );
+  page.append(worldStats);
 
   const toolbar = node("div", "list-toolbar");
   const search = node("input", "search-input");
   search.type = "search";
   search.placeholder = "ابحث باسم اللاعب أو النادي أو المركز أو البلد...";
   search.setAttribute("aria-label", "البحث عن لاعب");
-  const count = node("span", "result-count", DEMO_PLAYERS.length + " ملفات تجريبية");
+  const count = node("span", "result-count", WORLD_PLAYERS.length + " لاعبًا في قاعدة البيانات");
   count.setAttribute("aria-live", "polite");
   toolbar.append(search, count);
 
   const grid = node("div", "players-grid players-grid-large");
   const refresh = () => {
     const query = search.value.trim().toLocaleLowerCase("ar");
-    const filtered = DEMO_PLAYERS.filter((player) =>
+    const filtered = WORLD_PLAYERS.filter((player) =>
       [player.name, player.club, player.position, player.country].some((value) =>
         value.toLocaleLowerCase("ar").includes(query)
       )
@@ -359,7 +371,7 @@ function renderPlayers(context) {
 
     count.textContent = query
       ? filtered.length + " نتائج"
-      : DEMO_PLAYERS.length + " ملفات تجريبية";
+      : WORLD_PLAYERS.length + " لاعبًا في قاعدة البيانات";
 
     if (filtered.length === 0) {
       grid.replaceChildren(emptyResults(
@@ -389,18 +401,18 @@ function renderScouting(context) {
   page.append(
     node("p", "eyebrow", "شبكة اكتشاف المواهب"),
     node("h1", "page-title", "الكشافون"),
-    node("p", "page-subtitle", "ابحث عن لاعبين واعدِين وابدأ تكوين قائمة المتابعة. نظام الكشافين الفعلي سيُبنى في المرحلة السادسة.")
+    node("p", "page-subtitle", "استكشف ملفات اللاعبين من قاعدة بيانات العالم، وابدأ تكوين قائمة المتابعة. بعثات الكشافين وتقاريرهم الفعلية ضمن المرحلة السادسة.")
   );
 
   const scoutBanner = node("section", "scout-banner");
   scoutBanner.append(
     node("div", "scout-symbol", "⌕"),
     node("div", "scout-banner-copy"),
-    node("span", "scout-counter", DEMO_PLAYERS.length + " / مواهب مقترحة")
+    node("span", "scout-counter", WORLD_PLAYERS.length + " / ملفات لاعبين")
   );
   scoutBanner.children[1].append(
     node("h2", "", "عينك على المستقبل"),
-    node("p", "", "استخدم البحث للوصول إلى الملف المناسب، ثم أضفه لقائمة المتابعة التجريبية.")
+    node("p", "", "ابحث بالاسم أو النادي أو الجنسية أو المركز، ثم أضف اللاعب لقائمة المتابعة.")
   );
 
   const toolbar = node("div", "list-toolbar");
@@ -410,12 +422,12 @@ function renderScouting(context) {
   search.setAttribute("aria-label", "البحث في المواهب");
   const position = node("select", "filter-select");
   position.setAttribute("aria-label", "تصفية حسب المركز");
-  [["all", "كل المراكز"], ["هجوم", "الهجوم"], ["وسط", "الوسط"], ["دفاع", "الدفاع"]].forEach(([value, label]) => {
+  [["all", "كل المراكز"], ["هجوم", "الهجوم"], ["وسط", "الوسط"], ["دفاع", "الدفاع"], ["حراسة", "حراسة المرمى"]].forEach(([value, label]) => {
     const option = node("option", "", label);
     option.value = value;
     position.append(option);
   });
-  const count = node("span", "result-count", DEMO_PLAYERS.length + " نتائج");
+  const count = node("span", "result-count", WORLD_PLAYERS.length + " نتائج");
   count.setAttribute("aria-live", "polite");
   toolbar.append(search, position, count);
 
@@ -423,7 +435,7 @@ function renderScouting(context) {
   const refresh = () => {
     const query = search.value.trim().toLocaleLowerCase("ar");
     const role = position.value;
-    const filtered = DEMO_PLAYERS.filter((player) => {
+    const filtered = WORLD_PLAYERS.filter((player) => {
       const matchesText = [player.name, player.club, player.position, player.country].some((value) =>
         value.toLocaleLowerCase("ar").includes(query)
       );
@@ -718,14 +730,14 @@ export function mountApp(root) {
     summary.append(
       node("p", "eyebrow", player.position + "  ·  " + player.country),
       node("h3", "", player.name),
-      node("p", "modal-copy", player.club + "  ·  " + player.age + " سنة"),
+      node("p", "modal-copy", player.club + "  ·  " + player.league + "  ·  " + player.age + " سنة"),
       node("p", "modal-note", "التقييم " + player.rating + "  |  الإمكانيات " + player.potential + "  |  القيمة " + player.value)
     );
     const wrapper = node("div", "modal-player-layout");
     wrapper.append(art, summary);
     openModal("ملف اللاعب", [
       wrapper,
-      node("p", "modal-note", "بطاقة معاينة تصميمية. التعاقد وإدارة الملف ستُفعّل ضمن المراحل القادمة."),
+      node("p", "modal-note", "ملف لاعب خيالي ضمن بيانات البداية. التعاقد وإدارة الملف ستُفعّلان في المراحل القادمة."),
       actionButton(state.watchlist.has(player.id) ? "✓  في قائمة المتابعة" : "＋  أضف لقائمة المتابعة", "watch-button", () => {
         if (addToWatchlist(player)) {
           root.querySelector(".modal-overlay .icon-button")?.click();

@@ -57,7 +57,7 @@ test.describe("Desktop experience", () => {
     await navigateTo(page, "اللاعبون");
 
     const portraits = page.locator(".player-card .player-portrait");
-    await expect(portraits).toHaveCount(4);
+    await expect(portraits).toHaveCount(16);
 
     const profiles = await portraits.evaluateAll((elements) => elements.map((element) => ({
       hair: element.dataset.hairStyle,
@@ -67,7 +67,7 @@ test.describe("Desktop experience", () => {
       paths: element.querySelectorAll("svg path").length
     })));
     expect(new Set(profiles.map((profile) => profile.face)).size).toBe(4);
-    expect(new Set(profiles.map((profile) => profile.hair)).size).toBe(4);
+    expect(new Set(profiles.map((profile) => profile.hair)).size).toBeGreaterThanOrEqual(4);
     expect(new Set(profiles.map((profile) => profile.kit)).size).toBe(4);
     expect(profiles.every((profile) => profile.paths >= 10)).toBe(true);
 
@@ -151,15 +151,19 @@ test.describe("Mobile experience", () => {
     await expect(page.getByText("مفيش لاعبين مطابقين للبحث")).toBeVisible();
 
     await page.getByRole("button", { name: "مسح البحث" }).click();
-    await expect(page.locator(".player-card")).toHaveCount(4);
+    await expect(page.locator(".player-card")).toHaveCount(16);
     await hasNoHorizontalOverflow(page);
   });
 
   test("filters scouting candidates and persists the watchlist", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الكشافون");
-    await page.getByLabel("تصفية حسب المركز").selectOption("هجوم");
+    const roleFilter = page.getByLabel("تصفية حسب المركز");
+    await roleFilter.selectOption("هجوم");
     await expect(page.locator(".player-card")).toHaveCount(2);
+    await roleFilter.selectOption("حراسة");
+    await expect(page.locator(".player-card")).toHaveCount(2);
+    await roleFilter.selectOption("all");
 
     await page.getByRole("searchbox", { name: "البحث في المواهب" }).fill("ياسين");
     await expect(page.locator(".player-card")).toHaveCount(1);
