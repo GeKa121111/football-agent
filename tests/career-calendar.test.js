@@ -6,6 +6,7 @@ import {
   completeCareerTask,
   markCareerMessageRead,
   filterCareerEvents,
+  filterCareerTasks,
   createInitialCareerCalendar,
   getUpcomingCareerEvents
 } from "../src/engines/career-calendar.js";
@@ -244,4 +245,40 @@ test("returns the next 365 days of agency milestones in date order across season
   assert.ok(upcoming.every((event, index) => index === 0 || upcoming[index - 1].date <= event.date));
   assert.throws(() => getUpcomingCareerEvents("2026-07-01", 1, 0), /نطاق التقويم/);
   assert.throws(() => getUpcomingCareerEvents("2026-07-01", 1, 731), /نطاق التقويم/);
+});
+
+
+test("filters task history by lifecycle status and Arabic/date search without mutating it", () => {
+  const tasks = [
+    makeTask({ id: "task-open", title: "مراجعة مفتوحة", dueDate: "2026-07-20" }),
+    makeTask({ id: "task-overdue", title: "مهمة متأخرة", status: "overdue", overdueDate: "2026-07-03" }),
+    makeTask({
+      id: "task-completed-late",
+      title: "تقرير مكتمل متأخر",
+      status: "completed",
+      completedDate: "2026-07-09",
+      completedLate: true
+    }),
+    makeTask({
+      id: "task-completed-on-time",
+      title: "تقرير مكتمل في موعده",
+      status: "completed",
+      completedDate: "2026-07-08",
+      completedLate: false
+    })
+  ];
+  const originalIds = tasks.map((task) => task.id);
+
+  assert.deepEqual(filterCareerTasks(tasks, { status: "completed" }).map((task) => task.id), [
+    "task-completed-late",
+    "task-completed-on-time"
+  ]);
+  assert.deepEqual(filterCareerTasks(tasks, { status: "overdue" }).map((task) => task.id), ["task-overdue"]);
+  assert.deepEqual(filterCareerTasks(tasks, { query: "متأخر" }).map((task) => task.id), [
+    "task-completed-late",
+    "task-overdue"
+  ]);
+  assert.deepEqual(filterCareerTasks(tasks, { query: "2026-07-08" }).map((task) => task.id), ["task-completed-on-time"]);
+  assert.deepEqual(filterCareerTasks(tasks, { status: "unknown" }), []);
+  assert.deepEqual(tasks.map((task) => task.id), originalIds);
 });

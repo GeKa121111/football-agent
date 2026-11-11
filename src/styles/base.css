@@ -876,3 +876,21 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   .season-calendar-row { flex-direction:column; gap:4px; }
   .season-calendar-date { flex-basis:auto; }
 }
+
+
+/* Phase 5 — searchable task lifecycle archive */
+.task-history-row { display:flex; align-items:center; gap:10px; }
+.task-history-status {
+  flex:0 0 auto; padding:5px 8px; border:1px solid rgba(143,163,197,.2);
+  border-radius:999px; color:#b9c7dc; background:rgba(143,163,197,.08);
+  font-size:8px; font-weight:900; white-space:nowrap;
+}
+.task-history-status.status-overdue {
+  border-color:rgba(232,111,111,.3); color:#f29b9b; background:rgba(126,39,52,.12);
+}
+.task-history-status.status-completed {
+  border-color:rgba(104,217,160,.25); color:#9be2b7; background:rgba(65,173,113,.1);
+}
+@media (max-width:360px) {
+  .task-history-row { align-items:flex-start; flex-direction:column; gap:7px; }
+}

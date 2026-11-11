@@ -338,6 +338,73 @@ test.describe("Career operations follow-up", () => {
 });
 
 
+test.describe("Task history archive", () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test("searches and filters open, overdue and completed tasks on mobile", async ({ page }) => {
+    await page.goto("/");
+    await page.locator(".home-save-button").click();
+    await page.evaluate(() => {
+      const save = JSON.parse(localStorage.getItem("football-agent.save"));
+      save.world.tasks = [
+        {
+          id: "task-history-open",
+          title: "مراجعة مفتوحة",
+          description: "ملف ما زال قيد التنفيذ.",
+          createdDate: "2026-07-01",
+          dueDate: "2026-07-20",
+          category: "weekly-review",
+          status: "open"
+        },
+        {
+          id: "task-history-overdue",
+          title: "مهمة متأخرة",
+          description: "تجاوزت تاريخ التسليم.",
+          createdDate: "2026-07-01",
+          dueDate: "2026-07-03",
+          overdueDate: "2026-07-04",
+          category: "weekly-review",
+          status: "overdue"
+        },
+        {
+          id: "task-history-completed",
+          title: "تقرير مكتمل متأخر",
+          description: "تم إنجازه بعد الموعد.",
+          createdDate: "2026-07-01",
+          dueDate: "2026-07-08",
+          completedDate: "2026-07-09",
+          completedLate: true,
+          category: "season-review",
+          status: "completed"
+        }
+      ];
+      localStorage.setItem("football-agent.save", JSON.stringify(save));
+    });
+    await page.reload();
+    await page.getByRole("button", { name: "سجل المهام" }).click();
+
+    const dialog = page.getByRole("dialog", { name: "سجل المهام" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator(".task-history-row")).toHaveCount(3);
+
+    const search = dialog.getByRole("searchbox", { name: "البحث في سجل المهام" });
+    await search.fill("مكتمل متأخر");
+    await expect(dialog.locator(".task-history-row")).toHaveCount(1);
+    await expect(dialog.locator(".task-history-status")).toHaveText("مكتملة — متأخرًا");
+
+    await search.clear();
+    await dialog.getByLabel("تصفية حالة المهمة").selectOption("overdue");
+    await expect(dialog.locator(".task-history-row")).toHaveCount(1);
+    await expect(dialog.locator(".task-history-status")).toHaveText("متأخرة");
+
+    await dialog.getByLabel("تصفية حالة المهمة").selectOption("completed");
+    await expect(dialog.locator(".task-history-row")).toHaveCount(1);
+    await expect(dialog.locator(".task-history-row .career-activity-copy small")).toContainText("أُنجزت متأخرًا");
+    await hasNoHorizontalOverflow(page);
+  });
+});
+
+
 test.describe("Annual career calendar", () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
