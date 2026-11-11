@@ -26,8 +26,13 @@ import {
   createRepresentationOffer as createRepresentationOfferInEngine,
   evaluateRepresentationOffer as evaluateRepresentationOfferInEngine,
   acceptRepresentationCounterOffer as acceptRepresentationCounterOfferInEngine,
+  submitRepresentationCounterOffer as submitRepresentationCounterOfferInEngine,
+  createRepresentationRenewalOffer as createRepresentationRenewalOfferInEngine,
   rejectRepresentationOffer as rejectRepresentationOfferInEngine,
   terminateRepresentationContract as terminateRepresentationContractInEngine,
+  getPlayerRepresentationProfile,
+  getRepresentationContractExpiry,
+  getRepresentationContractCommission,
   advanceRepresentationState
 } from "./engines/representation.js";
 import {
@@ -838,7 +843,7 @@ function renderAgency(context) {
   page.append(
     node("p", "eyebrow", "إدارة أعمالك"),
     node("h1", "page-title", "الوكالة"),
-    node("p", "page-subtitle", "ابنِ قائمة عملائك، تفاوض على شروط التمثيل، وتابع عقود كل لاعب.")
+    node("p", "page-subtitle", "ابنِ قائمة عملائك، تفاوض على شروط التمثيل، وجدّد العقود قبل انتهائها.")
   );
 
   const agency = context.save.agency;
@@ -849,6 +854,14 @@ function renderAgency(context) {
     .filter((player) => !agency.clients.includes(player.id) &&
       !openOffers.some((offer) => offer.playerId === player.id))
     .sort((a, b) => b.potential - a.potential || b.rating - a.rating);
+
+  const personalityLabels = {
+    ambitious: "طموح",
+    loyal: "وفيّ",
+    pragmatic: "عملي",
+    cautious: "حذر",
+    professional: "احترافي"
+  };
 
   const overview = node("section", "agency-overview");
   const monogram = node("div", "agency-monogram", "FA");
@@ -881,15 +894,29 @@ function renderAgency(context) {
     activeContracts.forEach((contract) => {
       const row = node("article", "representation-row representation-contract-row");
       const copy = node("div", "representation-copy");
+      const effectiveExpiry = getRepresentationContractExpiry(contract);
+      const commissionRate = getRepresentationContractCommission(contract, context.save.world.currentDate);
+      const remainingDays = Math.round((Date.parse(effectiveExpiry + "T00:00:00.000Z") -
+        Date.parse(context.save.world.currentDate + "T00:00:00.000Z")) / 86400000);
+      const hasOpenRenewal = openOffers.some((offer) =>
+        offer.kind === "renewal" && offer.renewalContractId === contract.id
+      );
       copy.append(
         node("strong", "", contract.playerName),
         node("span", "", contract.position + " · " + contract.club + " · " + contract.age + " سنة"),
-        node("small", "", "عمولتك " + contract.commissionRate + "% · حتى " + formatHomeDate(contract.expiresOn))
+        node("small", "", "عمولتك " + commissionRate + "% · حتى " + formatHomeDate(effectiveExpiry)),
+        node("small", "", hasOpenRenewal
+          ? "يوجد تفاوض تجديد مفتوح"
+          : remainingDays <= 90
+            ? "متبقي " + Math.max(0, remainingDays) + " يومًا · متاح للتجديد"
+            : "متبقي " + remainingDays + " يومًا على العقد")
       );
-      row.append(
-        copy,
-        actionButton("إنهاء التمثيل", "button-outline representation-terminate-button", () => context.terminateRepresentationContract(contract.id))
-      );
+      const actions = node("div", "representation-actions");
+      if (remainingDays >= 1 && remainingDays <= 90 && !hasOpenRenewal) {
+        actions.append(actionButton("تجديد العقد", "button-primary representation-renew-button", () => context.openRepresentationRenewal(contract.id)));
+      }
+      actions.append(actionButton("إنهاء التمثيل", "button-outline representation-terminate-button", () => context.terminateRepresentationContract(contract.id)));
+      row.append(copy, actions);
       contractList.append(row);
     });
   }
@@ -911,19 +938,25 @@ function renderAgency(context) {
         ? "representation-row representation-offer-row is-countered"
         : "representation-row representation-offer-row");
       const copy = node("div", "representation-copy");
+      const profile = offer.playerPreferences ?? getPlayerRepresentationProfile({
+        id: offer.playerId, age: offer.age, rating: offer.rating, potential: offer.potential
+      });
+      const personality = personalityLabels[profile.personality] ?? "متوازن";
       copy.append(
-        node("strong", "", offer.playerName),
-        node("span", "", "عرضك: عمولة " + offer.commissionRate + "% · " + Math.round(offer.termDays / 365) + " سنة"),
+        node("strong", "", offer.playerName + (offer.kind === "renewal" ? " · تجديد عقد" : "")),
+        node("span", "", "عرض الوكالة: عمولة " + offer.commissionRate + "% · " + Math.round(offer.termDays / 365) + " سنة"),
         node("small", "", offer.status === "countered"
           ? "اللاعب يطلب: عمولة " + offer.counterOffer.commissionRate + "% · " + Math.round(offer.counterOffer.termDays / 365) + " سنة"
-          : "بانتظار رد اللاعب · صالح حتى " + formatHomeDate(offer.expiresDate))
+          : "بانتظار رد اللاعب · صالح حتى " + formatHomeDate(offer.expiresDate)),
+        node("small", "", "شخصية " + personality + " · الجولة " + offer.round + " من 3")
       );
       const actions = node("div", "representation-actions");
       if (offer.status === "pending") {
         actions.append(actionButton("متابعة رد اللاعب", "button-outline representation-evaluate-button", () => context.evaluateRepresentationOffer(offer.id)));
         actions.append(actionButton("سحب العرض", "button-outline representation-reject-button", () => context.rejectRepresentationOffer(offer.id)));
       } else {
-        actions.append(actionButton("قبول شروط اللاعب", "button-primary representation-accept-button", () => context.acceptRepresentationCounter(offer.id)));
+        actions.append(actionButton(offer.kind === "renewal" ? "قبول شروط التجديد" : "قبول شروط اللاعب", "button-primary representation-accept-button", () => context.acceptRepresentationCounter(offer.id)));
+        actions.append(actionButton("عرض مضاد", "button-outline representation-counter-button", () => context.openRepresentationCounter(offer.id)));
         actions.append(actionButton("رفض العرض", "button-outline representation-reject-button", () => context.rejectRepresentationOffer(offer.id)));
       }
       row.append(copy, actions);
@@ -940,16 +973,20 @@ function renderAgency(context) {
   );
   prospectsPanel.append(
     prospectsHeading,
-    node("p", "representation-intro", "قدّم عرض تمثيل وحدد نسبة العمولة ومدة العقد. اللاعب قد يقبل أو يطلب تعديل الشروط.")
+    node("p", "representation-intro", "كل لاعب له شخصية وطموح وولاء واحترافية تؤثر على عمولته والمدة التي يقبلها.")
   );
   const prospectGrid = node("div", "representation-prospect-grid");
   prospects.forEach((player) => {
+    const profile = getPlayerRepresentationProfile(player);
     const card = node("article", "representation-prospect-card");
     const copy = node("div", "representation-copy");
     copy.append(
       node("strong", "", player.name),
       node("span", "", player.position + " · " + player.club),
-      node("small", "", player.age + " سنة · تقييم " + player.rating + " · إمكانيات " + player.potential)
+      node("small", "", player.age + " سنة · تقييم " + player.rating + " · إمكانيات " + player.potential),
+      node("small", "", "شخصية " + personalityLabels[profile.personality] +
+        " · طموح " + profile.ambition + "/5 · ولاء " + profile.loyalty + "/5"),
+      node("small", "", "احترافية " + profile.professionalism + "/5")
     );
     card.append(copy, actionButton("عرض تمثيل", "button-outline representation-offer-button", () => context.openRepresentationOffer(player)));
     prospectGrid.append(card);
@@ -968,15 +1005,19 @@ function renderAgency(context) {
     historyPanel.append(node("p", "representation-empty", "كل عرض أو تفاوض أو توقيع هيتسجل هنا."));
   } else {
     const historyList = node("div", "representation-history-list");
-    representation.history.slice(0, 8).forEach((entry) => {
+    historyPanel.append(historyList);
+    representation.history.slice(0, 10).forEach((entry) => {
       const row = node("div", "representation-history-row");
       const labels = {
         "offer-sent": "إرسال عرض",
         "player-countered": "عرض مضاد من اللاعب",
+        "agency-countered": "عرض مضاد من الوكالة",
         "offer-accepted": "قبول العرض",
         "offer-rejected": "رفض العرض",
         "offer-expired": "انتهاء صلاحية العرض",
         "contract-signed": "توقيع عقد",
+        "contract-renewed": "تجديد عقد",
+        "renewal-offer-sent": "إرسال عرض تجديد",
         "contract-terminated": "إنهاء عقد",
         "contract-expired": "انتهاء عقد"
       };
@@ -987,7 +1028,6 @@ function renderAgency(context) {
       );
       historyList.append(row);
     });
-    historyPanel.append(historyList);
   }
 
   const roadmap = node("section", "surface-card roadmap-card");
@@ -1118,6 +1158,106 @@ export function mountApp(root) {
     openModal("عرض تمثيل جديد", [form], "إغلاق");
   }
 
+  function openRepresentationCounter(offerId) {
+    if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لا يمكن إرسال عرض مضاد."); return; }
+    const offer = state.save.agency.representation.offers.find((item) => item.id === offerId);
+    if (!offer || offer.status !== "countered") { toast("عرض التفاوض لم يعد مفتوحًا."); return; }
+    const form = node("div", "representation-offer-form");
+    const commission = node("select", "filter-select");
+    commission.setAttribute("aria-label", "نسبة العمولة في العرض المضاد");
+    for (let rate = 5; rate <= 15; rate += 1) {
+      const option = node("option", "", rate + "%");
+      option.value = String(rate);
+      commission.append(option);
+    }
+    commission.value = String(offer.commissionRate);
+    const duration = node("select", "filter-select");
+    duration.setAttribute("aria-label", "مدة العرض المضاد");
+    [[365, "سنة واحدة"], [730, "سنتان"], [1095, "ثلاث سنوات"]].forEach(([days, label]) => {
+      const option = node("option", "", label);
+      option.value = String(days);
+      duration.append(option);
+    });
+    duration.value = String(offer.termDays);
+    const addField = (label, control) => {
+      const wrapper = node("label", "scout-form-field representation-form-field");
+      wrapper.append(node("span", "", label), control);
+      form.append(wrapper);
+    };
+    addField("العمولة المقترحة من الوكالة", commission);
+    addField("مدة العقد المقترحة", duration);
+    form.append(
+      node("p", "representation-form-note", "دي الجولة " + offer.round + " من 3. اللاعب ممكن يقبل أو يرد بعرض أخير أو يرفض التفاوض.")
+    );
+    form.append(actionButton("إرسال العرض المضاد", "scout-confirm-button representation-send-button", () => {
+      const previousSave = state.save;
+      const result = submitRepresentationCounterOfferInEngine(state.save, offer.id, {
+        commissionRate: Number(commission.value),
+        termDays: Number(duration.value)
+      });
+      if (!result.changed) { toast(result.error); return; }
+      state.save = result.save;
+      if (saveCareer()) {
+        render();
+        toast(result.status === "signed"
+          ? "وافق اللاعب وتم توقيع عقد التمثيل."
+          : result.status === "renewed"
+            ? "وافق اللاعب وتم تجديد عقد التمثيل."
+            : result.status === "rejected"
+              ? "رفض اللاعب العرض المضاد الأخير."
+              : "اللاعب رد بعرض جديد. راجع شروطه.");
+      } else state.save = previousSave;
+    }));
+    openModal("التفاوض على الشروط", [form], "إغلاق");
+  }
+
+  function openRepresentationRenewal(contractId) {
+    if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لا يمكن فتح التجديد."); return; }
+    const contract = state.save.agency.representation.contracts.find((item) => item.id === contractId);
+    if (!contract || contract.status !== "active") { toast("العقد لم يعد نشطًا."); return; }
+    const form = node("div", "representation-offer-form");
+    const commission = node("select", "filter-select");
+    commission.setAttribute("aria-label", "عمولة التجديد");
+    for (let rate = 5; rate <= 15; rate += 1) {
+      const option = node("option", "", rate + "%");
+      option.value = String(rate);
+      commission.append(option);
+    }
+    commission.value = String(getRepresentationContractCommission(contract, state.save.world.currentDate));
+    const duration = node("select", "filter-select");
+    duration.setAttribute("aria-label", "مدة التجديد");
+    [[365, "سنة إضافية"], [730, "سنتان إضافيتان"], [1095, "ثلاث سنوات إضافية"]].forEach(([days, label]) => {
+      const option = node("option", "", label);
+      option.value = String(days);
+      duration.append(option);
+    });
+    duration.value = "730";
+    form.append(
+      node("p", "modal-copy", "تجديد عقد " + contract.playerName + ". مدة التجديد تبدأ بعد نهاية المدة الحالية ولا تلغي تاريخ العقد الأصلي."),
+    );
+    const addField = (label, control) => {
+      const wrapper = node("label", "scout-form-field representation-form-field");
+      wrapper.append(node("span", "", label), control);
+      form.append(wrapper);
+    };
+    addField("عمولة التجديد", commission);
+    addField("مدة التجديد", duration);
+    form.append(actionButton("إرسال عرض التجديد", "scout-confirm-button representation-send-button", () => {
+      const previousSave = state.save;
+      const result = createRepresentationRenewalOfferInEngine(state.save, contract.id, {
+        commissionRate: Number(commission.value),
+        termDays: Number(duration.value)
+      });
+      if (!result.changed) { toast(result.error); return; }
+      state.save = result.save;
+      if (saveCareer()) {
+        render();
+        toast("تم إرسال عرض تجديد عقد " + contract.playerName + ".");
+      } else state.save = previousSave;
+    }));
+    openModal("تجديد عقد التمثيل", [form], "إغلاق");
+  }
+
   function evaluateRepresentationOffer(offerId) {
     if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم نتابع التفاوض."); return; }
     const previousSave = state.save;
@@ -1130,7 +1270,9 @@ export function mountApp(root) {
         ? "اللاعب قدم عرضًا مضادًا. راجع شروطه في قسم التفاوض."
         : result.status === "expired"
           ? "انتهت صلاحية العرض وتم أرشفته."
-          : "اللاعب وافق، وتم توقيع عقد التمثيل.");
+          : result.status === "renewed"
+            ? "اللاعب وافق وتم تجديد عقد التمثيل."
+            : "اللاعب وافق، وتم توقيع عقد التمثيل.");
     } else state.save = previousSave;
   }
 
@@ -1142,7 +1284,9 @@ export function mountApp(root) {
     state.save = result.save;
     if (saveCareer()) {
       render();
-      toast("تم قبول شروط اللاعب وتوقيع عقد التمثيل.");
+      toast(result.status === "renewed"
+        ? "تم قبول شروط اللاعب وتجديد عقد التمثيل."
+        : "تم قبول شروط اللاعب وتوقيع عقد التمثيل.");
     } else state.save = previousSave;
   }
 
@@ -1867,8 +2011,18 @@ export function mountApp(root) {
       addToWatchlist,
       players: WORLD_PLAYERS,
       openRepresentationOffer,
+      openRepresentationCounter,
+      openRepresentationRenewal,
       evaluateRepresentationOffer,
       acceptRepresentationCounter,
+      submitRepresentationCounterOffer: (offerId, terms) => {
+        if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم نرسل ردًا."); return; }
+        const previousSave = state.save;
+        const result = submitRepresentationCounterOfferInEngine(state.save, offerId, terms);
+        if (!result.changed) { toast(result.error); return; }
+        state.save = result.save;
+        if (saveCareer()) { render(); toast("تم تحديث نتيجة التفاوض."); } else state.save = previousSave;
+      },
       rejectRepresentationOffer,
       terminateRepresentationContract
     };

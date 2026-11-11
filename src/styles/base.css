@@ -1081,3 +1081,16 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   .representation-history-row { grid-template-columns: minmax(0,1fr); }
   .representation-history-row small { grid-column: auto; }
 }
+
+
+/* Phase 7 follow-up — negotiation rounds and contract renewals */
+.representation-offer-row .representation-copy small { max-width: 68ch; }
+.representation-actions .representation-counter-button { border-color: rgba(157,136,214,.32); color: #c9b8ef; }
+.representation-actions .representation-accept-button { white-space: nowrap; }
+.representation-contract-row .representation-renew-button { border-color: rgba(101,198,166,.3); color: #9ce0c4; }
+.representation-prospect-card .representation-copy small { line-height: 1.6; }
+.representation-form-note { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .representation-contract-row .representation-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .representation-contract-row .representation-actions button { min-width: 0; }
+}
