@@ -785,7 +785,7 @@ test.describe("Scouting recruitment contracts on mobile", () => {
     expect(contract.contractExpiresOn).toBe("2027-07-01");
     expect(contract.contractCost).toBe(15000);
 
-    await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)").filter({ hasText: "ماتياس كروغر" })).toContainText("عقد حتى");
+    await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)").filter({ hasText: "ماتياس كروغر" })).toContainText("ينتهي في");
     await hasNoHorizontalOverflow(page);
   });
 });
