@@ -464,6 +464,23 @@ test("migrates version 4 agency saves into football season schema v6 without rew
   assert.equal(storage.getItem(STORAGE_KEY), raw, "migration must not rewrite a save on read");
 });
 
+test("migrates v6 saves to transfer schema v7 without rewriting on read", () => {
+  const legacy = createInitialSave("2026-07-01T00:00:00.000Z");
+  legacy.meta.version = 6;
+  delete legacy.world.transfers;
+  const raw = JSON.stringify(legacy);
+  const storage = memoryStorage({ [STORAGE_KEY]: raw });
+
+  const result = readSave(storage);
+  assert.equal(result.status, "loaded");
+  assert.equal(result.migrated, true);
+  assert.equal(result.save.meta.version, SAVE_VERSION);
+  assert.equal(result.save.world.transfers.nextOfferSequence, 1);
+  assert.deepEqual(result.save.world.transfers.offers, []);
+  assert.equal(isValidSave(result.save), true);
+  assert.equal(storage.getItem(STORAGE_KEY), raw, "migration must not rewrite a save on read");
+});
+
 test("migrates v5 player progress into the expanded 432-player squad roster without rewriting on read", () => {
   const legacy = createInitialSave("2026-07-01T00:00:00.000Z");
   legacy.meta.version = 5;
