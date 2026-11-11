@@ -20,7 +20,8 @@ export const SCOUTING_SCOUTS = Object.freeze([
     countryIds: Object.freeze(["country-eg", "country-ma", "country-tn"]),
     roles: Object.freeze(["هجوم", "وسط"]),
     specialty: "المواهب الهجومية في شمال أفريقيا",
-    initialExperience: 60
+    initialExperience: 60,
+    startingStaff: true
   }),
   Object.freeze({
     id: "scout-western-europe",
@@ -29,7 +30,8 @@ export const SCOUTING_SCOUTS = Object.freeze([
     countryIds: Object.freeze(["country-gb", "country-es", "country-de", "country-fr"]),
     roles: Object.freeze(["وسط", "دفاع"]),
     specialty: "لاعبو الوسط والدفاع في أوروبا",
-    initialExperience: 140
+    initialExperience: 140,
+    startingStaff: true
   }),
   Object.freeze({
     id: "scout-mediterranean",
@@ -38,7 +40,8 @@ export const SCOUTING_SCOUTS = Object.freeze([
     countryIds: Object.freeze(["country-tn", "country-it", "country-fr"]),
     roles: Object.freeze(["دفاع", "حراسة"]),
     specialty: "المدافعون وحراس المرمى",
-    initialExperience: 30
+    initialExperience: 30,
+    startingStaff: true
   }),
   Object.freeze({
     id: "scout-global-youth",
@@ -47,8 +50,11 @@ export const SCOUTING_SCOUTS = Object.freeze([
     countryIds: Object.freeze([]),
     roles: Object.freeze(["all"]),
     specialty: "متابعة المواهب الشابة متعددة المراكز",
-    initialExperience: 0
-  })
+    initialExperience: 0,
+    startingStaff: true
+  }),
+  Object.freeze({ id: "scout-iberian-network", name: "رافاييل أورتيغا", region: "إيبيريا", countryIds: Object.freeze(["country-es"]), roles: Object.freeze(["هجوم", "وسط"]), specialty: "المواهب الهجومية وصناع اللعب في إسبانيا", initialExperience: 0, startingStaff: false, contractCost: 18000, renewalCost: 8000, contractDays: 365 }),
+  Object.freeze({ id: "scout-central-europe", name: "ماتياس كروغر", region: "أوروبا الوسطى", countryIds: Object.freeze(["country-de", "country-fr", "country-it"]), roles: Object.freeze(["دفاع", "حراسة"]), specialty: "المدافعون وحراس المرمى في أوروبا الوسطى", initialExperience: 0, startingStaff: false, contractCost: 15000, renewalCost: 7000, contractDays: 365 })
 ]);
 
 export const SCOUTING_SOURCES = Object.freeze([
@@ -70,20 +76,20 @@ function getPlayerDiscoverySourceIds(player) {
 }
 
 function initialScoutProgress() {
-  return SCOUTING_SCOUTS.map((scout) => ({
-    id: scout.id,
-    experience: scout.initialExperience,
-    missionsCompleted: 0
-  }));
+  return SCOUTING_SCOUTS.filter((scout) => scout.startingStaff).map((scout) => ({ id: scout.id, experience: scout.initialExperience, missionsCompleted: 0 }));
 }
 
 function getProgressRecords(scouting) {
+  const hasExplicitRoster = scouting?.scouts !== undefined;
   const saved = Array.isArray(scouting?.scouts) ? scouting.scouts : [];
-  return SCOUTING_SCOUTS.map((profile) => {
+  return SCOUTING_SCOUTS.flatMap((profile) => {
     const record = saved.find((scout) => scout?.id === profile.id);
-    return record
-      ? { id: profile.id, experience: record.experience, missionsCompleted: record.missionsCompleted }
-      : { id: profile.id, experience: profile.initialExperience, missionsCompleted: 0 };
+    if (record) return [{ ...record, id: profile.id }];
+    // Only legacy saves with no roster field receive the original default staff.
+    // An explicitly partial roster is invalid and must never regain lost progress silently.
+    return profile.startingStaff && !hasExplicitRoster
+      ? [{ id: profile.id, experience: profile.initialExperience, missionsCompleted: 0 }]
+      : [];
   });
 }
 
@@ -105,34 +111,37 @@ export function createInitialScoutingState() {
   };
 }
 
-export function getScoutingRoster(scouting = createInitialScoutingState()) {
+export function getScoutingRoster(scouting = createInitialScoutingState(), currentDate = null) {
   const progress = getProgressRecords(scouting);
   const missions = Array.isArray(scouting?.activeMissions) ? scouting.activeMissions : [];
-  return SCOUTING_SCOUTS.map((profile) => {
+  return SCOUTING_SCOUTS.filter((profile) => progress.some((item) => item.id === profile.id)).map((profile) => {
     const record = progress.find((item) => item.id === profile.id);
     const activeMission = missions.find((mission) => mission?.scoutId === profile.id);
-    return {
-      id: profile.id,
-      name: profile.name,
-      region: profile.region,
-      countryIds: [...profile.countryIds],
-      roles: [...profile.roles],
-      specialty: profile.specialty,
-      experience: record.experience,
-      level: getScoutLevel(record.experience),
-      missionsCompleted: record.missionsCompleted,
-      isBusy: Boolean(activeMission),
-      activeMissionId: activeMission?.id ?? null
-    };
+    const isContracted = Boolean(record.contractExpiresOn);
+    const hasDate = isValidDate(currentDate);
+    const daysRemaining = isContracted && hasDate ? Math.max(0, dayDifference(currentDate, record.contractExpiresOn)) : null;
+    // The end date is exclusive: the scout becomes unavailable once the full 365-day term has elapsed.
+    const expired = isContracted && hasDate && currentDate >= record.contractExpiresOn;
+    return { id: profile.id, name: profile.name, region: profile.region, countryIds: [...profile.countryIds], roles: [...profile.roles], specialty: profile.specialty,
+      experience: record.experience, level: getScoutLevel(record.experience), missionsCompleted: record.missionsCompleted,
+      isBusy: Boolean(activeMission), activeMissionId: activeMission?.id ?? null, isContracted,
+      contractStartedOn: record.contractStartedOn ?? null, contractExpiresOn: record.contractExpiresOn ?? null,
+      contractDaysRemaining: daysRemaining, isContractExpired: expired,
+      canRenewContract: isContracted && hasDate && (expired || daysRemaining <= 30), contractRenewalCost: profile.renewalCost ?? null };
   });
 }
 
-export function getScoutingScoutFit(scoutId, scouting, countryId = "all", role = "all", baseAccuracy = 0) {
+export function getScoutingRecruitmentOptions(scouting = createInitialScoutingState()) {
+  const hired = new Set(getProgressRecords(scouting).map((record) => record.id));
+  return SCOUTING_SCOUTS.filter((profile) => !profile.startingStaff && !hired.has(profile.id)).map((profile) => ({ ...profile, countryIds: [...profile.countryIds], roles: [...profile.roles] }));
+}
+
+export function getScoutingScoutFit(scoutId, scouting, countryId = "all", role = "all", baseAccuracy = 0, currentDate = null) {
   if (typeof baseAccuracy !== "number" || !Number.isFinite(baseAccuracy) || baseAccuracy < 0 || baseAccuracy > 1) {
     return null;
   }
-  const scout = getScoutingRoster(scouting).find((item) => item.id === scoutId);
-  if (!scout) return null;
+  const scout = getScoutingRoster(scouting, currentDate).find((item) => item.id === scoutId);
+  if (!scout || scout.isContractExpired) return null;
 
   const countryMatch = countryId !== "all" &&
     (scout.countryIds.length === 0 || scout.countryIds.includes(countryId));
@@ -169,6 +178,55 @@ function addDays(value, days) {
 
 function dayDifference(from, to) {
   return Math.round((Date.parse(to + "T00:00:00.000Z") - Date.parse(from + "T00:00:00.000Z")) / 86400000);
+}
+
+function hasValidScoutProgress(scouting) {
+  if (scouting?.scouts === undefined) return true;
+  if (!Array.isArray(scouting.scouts) || scouting.scouts.length > SCOUTING_SCOUTS.length) return false;
+  const ids = scouting.scouts.map((record) => record?.id);
+  if (ids.some((id) => typeof id !== "string") || new Set(ids).size !== ids.length) return false;
+  const requiredStartingIds = SCOUTING_SCOUTS.filter((scout) => scout.startingStaff).map((scout) => scout.id);
+  if (!requiredStartingIds.every((id) => ids.includes(id))) return false;
+  return scouting.scouts.every((record) => {
+    if (!record || typeof record !== "object" || Array.isArray(record)) return false;
+    const profile = SCOUTING_SCOUTS.find((scout) => scout.id === record.id);
+    if (!profile || !Number.isSafeInteger(record.experience) || record.experience < 0 || !Number.isSafeInteger(record.missionsCompleted) || record.missionsCompleted < 0) return false;
+    const fields = ["contractStartedOn", "contractExpiresOn", "contractCost", "contractRenewals"];
+    if (profile.startingStaff) return fields.every((field) => record[field] === undefined);
+    return isValidDate(record.contractStartedOn) && isValidDate(record.contractExpiresOn) && record.contractExpiresOn === addDays(record.contractStartedOn, profile.contractDays) &&
+      Number.isSafeInteger(record.contractCost) && [profile.contractCost, profile.renewalCost].includes(record.contractCost) && Number.isSafeInteger(record.contractRenewals) && record.contractRenewals >= 0;
+  });
+}
+
+export function signScoutingContract(save, scoutId) {
+  if (!save?.world || !save?.agency || !isValidDate(save.world.currentDate)) return { changed: false, save, error: "بيانات المسيرة الحالية غير صالحة." };
+  const current = save.world.scouting ?? createInitialScoutingState();
+  if (!Array.isArray(current.activeMissions) || !Array.isArray(current.reports) || (current.observations !== undefined && !Array.isArray(current.observations)) || !hasValidScoutProgress(current)) return { changed: false, save, error: "سجل الكشافين غير صالح؛ لم يتم تغييره." };
+  const profile = SCOUTING_SCOUTS.find((scout) => scout.id === scoutId && !scout.startingStaff);
+  if (!profile) return { changed: false, save, error: "الكشاف المحدد غير متاح للتعاقد." };
+  const progress = getProgressRecords(current);
+  if (progress.some((record) => record.id === scoutId)) return { changed: false, save, error: "الكشاف متعاقد معه بالفعل." };
+  if (progress.length >= SCOUTING_SCOUTS.length) return { changed: false, save, error: "وصلت إلى الحد الأقصى لشبكة الكشافين." };
+  if (!Number.isFinite(save.agency.balance) || save.agency.balance < profile.contractCost) return { changed: false, save, error: "رصيد الوكالة لا يكفي لتوقيع العقد السنوي." };
+  const contractExpiresOn = addDays(save.world.currentDate, profile.contractDays);
+  const scouting = { ...current, scouts: [...progress, { id: profile.id, experience: profile.initialExperience, missionsCompleted: 0, contractStartedOn: save.world.currentDate, contractExpiresOn, contractCost: profile.contractCost, contractRenewals: 0 }] };
+  return { changed: true, scoutId, fee: profile.contractCost, contractExpiresOn, save: { ...save, agency: { ...save.agency, balance: save.agency.balance - profile.contractCost }, world: { ...save.world, scouting } } };
+}
+
+export function renewScoutingContract(save, scoutId) {
+  if (!save?.world || !save?.agency || !isValidDate(save.world.currentDate)) return { changed: false, save, error: "بيانات المسيرة الحالية غير صالحة." };
+  const current = save.world.scouting ?? createInitialScoutingState();
+  if (!Array.isArray(current.activeMissions) || !Array.isArray(current.reports) || (current.observations !== undefined && !Array.isArray(current.observations)) || !hasValidScoutProgress(current)) return { changed: false, save, error: "سجل الكشافين غير صالح؛ لم يتم تغييره." };
+  const profile = SCOUTING_SCOUTS.find((scout) => scout.id === scoutId && !scout.startingStaff);
+  const progress = getProgressRecords(current);
+  const record = progress.find((item) => item.id === scoutId);
+  if (!profile || !record?.contractExpiresOn) return { changed: false, save, error: "لا يوجد عقد قابل للتجديد لهذا الكشاف." };
+  const remaining = Math.max(0, dayDifference(save.world.currentDate, record.contractExpiresOn));
+  if (save.world.currentDate <= record.contractExpiresOn && remaining > 30) return { changed: false, save, error: "يتاح تجديد العقد خلال آخر 30 يومًا فقط." };
+  if (!Number.isFinite(save.agency.balance) || save.agency.balance < profile.renewalCost) return { changed: false, save, error: "رصيد الوكالة لا يكفي لتجديد العقد." };
+  const contractExpiresOn = addDays(save.world.currentDate, profile.contractDays);
+  const scouting = { ...current, scouts: progress.map((item) => item.id === scoutId ? { ...item, contractStartedOn: save.world.currentDate, contractExpiresOn, contractCost: profile.renewalCost, contractRenewals: (item.contractRenewals ?? 0) + 1 } : item) };
+  return { changed: true, scoutId, fee: profile.renewalCost, contractExpiresOn, save: { ...save, agency: { ...save.agency, balance: save.agency.balance - profile.renewalCost }, world: { ...save.world, scouting } } };
 }
 
 function clamp(value, min, max) {
@@ -306,7 +364,7 @@ export function startScoutingMission(save, options, players) {
   if (!Array.isArray(currentScouting.activeMissions) || !Array.isArray(currentScouting.reports) ||
       (currentScouting.observations !== undefined && !Array.isArray(currentScouting.observations)) ||
       (Array.isArray(currentScouting.observations) && currentScouting.observations.length > 300) ||
-      !Number.isSafeInteger(currentScouting.nextMissionSequence) || currentScouting.nextMissionSequence < 1) {
+      !hasValidScoutProgress(currentScouting) || !Number.isSafeInteger(currentScouting.nextMissionSequence) || currentScouting.nextMissionSequence < 1) {
     return { changed: false, save, mission: null, error: "سجل الكشافين غير صالح؛ لم يتم تغييره." };
   }
   if (currentScouting.activeMissions.length >= 3) {
@@ -314,28 +372,17 @@ export function startScoutingMission(save, options, players) {
   }
 
   const scouting = { ...currentScouting, scouts: getProgressRecords(currentScouting) };
-  const roster = getScoutingRoster(scouting);
+  const roster = getScoutingRoster(scouting, save.world.currentDate);
   const requestedScoutId = options?.scoutId;
-  const availableScouts = roster.filter((scout) => !scout.isBusy);
-  const chosenScout = requestedScoutId
-    ? availableScouts.find((scout) => scout.id === requestedScoutId)
-    : availableScouts
-      .map((scout) => getScoutingScoutFit(scout.id, scouting, countryId, role, config.accuracy))
-      .sort((a, b) => b.accuracy - a.accuracy || b.level - a.level || a.id.localeCompare(b.id))[0];
-
+  const availableScouts = roster.filter((scout) => !scout.isBusy && !scout.isContractExpired);
+  const chosenScout = requestedScoutId ? availableScouts.find((scout) => scout.id === requestedScoutId) : availableScouts
+    .map((scout) => getScoutingScoutFit(scout.id, scouting, countryId, role, config.accuracy, save.world.currentDate))
+    .filter(Boolean).sort((a,b) => b.accuracy-a.accuracy || b.level-a.level || a.id.localeCompare(b.id))[0];
   if (!chosenScout) {
-    const requestedExists = roster.some((scout) => scout.id === requestedScoutId);
-    return {
-      changed: false,
-      save,
-      mission: null,
-      error: requestedScoutId && requestedExists
-        ? "الكشاف المختار مرتبط ببعثة نشطة بالفعل."
-        : "اختار كشافًا متاحًا من الشبكة قبل إطلاق البعثة."
-    };
+    const requested = roster.find((scout) => scout.id === requestedScoutId);
+    return { changed: false, save, mission: null, error: requested?.isContractExpired ? "انتهى عقد الكشاف؛ جدده قبل إسناد بعثة جديدة." : requested?.isBusy ? "الكشاف المختار مرتبط ببعثة نشطة بالفعل." : "اختار كشافًا متاحًا من الشبكة قبل إطلاق البعثة." };
   }
-
-  const fit = getScoutingScoutFit(chosenScout.id, scouting, countryId, role, config.accuracy);
+  const fit = getScoutingScoutFit(chosenScout.id, scouting, countryId, role, config.accuracy, save.world.currentDate);
   const targets = getScoutingCandidates(players, { countryId, role, sourceId });
   if (targets.length === 0) {
     return { changed: false, save, mission: null, error: "مفيش لاعبين مطابقين لنطاق البحث ده." };
@@ -416,7 +463,8 @@ export function advanceScoutingMissions(save, players, currentDate = save?.world
   const currentScouting = save.world.scouting ?? createInitialScoutingState();
   if (!Array.isArray(currentScouting.activeMissions) || !Array.isArray(currentScouting.reports) ||
       (currentScouting.observations !== undefined && !Array.isArray(currentScouting.observations)) ||
-      (Array.isArray(currentScouting.observations) && currentScouting.observations.length > 300)) {
+      (Array.isArray(currentScouting.observations) && currentScouting.observations.length > 300) ||
+      !hasValidScoutProgress(currentScouting)) {
     throw new TypeError("سجل بعثات الكشافين غير صالح.");
   }
 

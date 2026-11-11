@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createInitialSave, isValidSave } from "../src/core/storage.js";
-import { advanceCareerDays } from "../src/engines/career-calendar.js";
+import { advanceCareerDay, advanceCareerDays } from "../src/engines/career-calendar.js";
 import { getWorldPlayerProfiles } from "../src/data/world-database.js";
 import {
   SCOUTING_MISSION_TYPES,
@@ -12,7 +12,10 @@ import {
   getPlayerScoutingHistory,
   getScoutingCandidates,
   getScoutingRoster,
+  getScoutingRecruitmentOptions,
   getScoutingScoutFit,
+  renewScoutingContract,
+  signScoutingContract,
   SCOUTING_SCOUTS,
   startScoutingMission
 } from "../src/engines/scouting.js";
@@ -24,8 +27,11 @@ test("creates a clean scouting state and defines transparent mission trade-offs"
   assert.equal(state.nextMissionSequence, 1);
   assert.deepEqual(state.activeMissions, []);
   assert.deepEqual(state.reports, []);
-  assert.deepEqual(state.scouts.map((scout) => scout.id), SCOUTING_SCOUTS.map((scout) => scout.id));
+  assert.equal(state.scouts.length, 4);
   assert.equal(new Set(state.scouts.map((scout) => scout.id)).size, 4);
+  assert.equal(SCOUTING_SCOUTS.length, 6);
+  assert.equal(getScoutingRoster(state).length, 4);
+  assert.equal(getScoutingRecruitmentOptions(state).length, 2);
   assert.equal(SCOUTING_MISSION_TYPES.local.cost, 5000);
   assert.equal(SCOUTING_MISSION_TYPES.regional.durationDays, 14);
   assert.ok(SCOUTING_MISSION_TYPES.elite.accuracy > SCOUTING_MISSION_TYPES.local.accuracy);
@@ -281,6 +287,28 @@ test("stores repeat observations by stable player ID and preserves an auditable 
   assert.equal(repeated.save.world.scouting.observations.length, 2);
 });
 
+test("rejects partial explicit scout rosters without silently recreating permanent staff", () => {
+  const complete = createInitialSave();
+  const partial = structuredClone(complete);
+  partial.world.scouting.scouts = partial.world.scouting.scouts.filter((scout) => scout.id !== "scout-north-africa");
+
+  assert.equal(isValidSave(partial), false);
+  const visibleRoster = getScoutingRoster(partial.world.scouting);
+  assert.equal(visibleRoster.length, 3);
+  assert.equal(visibleRoster.some((scout) => scout.id === "scout-north-africa"), false);
+
+  const rejectedMission = startScoutingMission(partial, {
+    type: "local", countryId: "all", role: "all"
+  }, PLAYERS);
+  assert.equal(rejectedMission.changed, false);
+  assert.match(rejectedMission.error, /سجل الكشافين غير صالح/);
+
+  const legacy = structuredClone(complete);
+  delete legacy.world.scouting.scouts;
+  assert.equal(isValidSave(legacy), true);
+  assert.equal(getScoutingRoster(legacy.world.scouting).length, 4);
+});
+
 test("accepts legacy schema-v3 scouting records without crew fields and rejects invalid crew progress", () => {
   const legacy = createInitialSave();
   delete legacy.world.scouting.scouts;
@@ -310,4 +338,85 @@ test("accepts legacy schema-v3 scouting records without crew fields and rejects 
   const malformed = JSON.parse(JSON.stringify(createInitialSave()));
   malformed.world.scouting.scouts[0].experience = -1;
   assert.equal(isValidSave(malformed), false);
+});
+
+
+test("signs a paid annual contract, prevents duplicate hires and limits renewal to the final 30 days", () => {
+  const initial = createInitialSave();
+  const recruit = getScoutingRecruitmentOptions(initial.world.scouting).find((candidate) => candidate.id === "scout-iberian-network");
+  assert.ok(recruit); assert.equal(recruit.contractCost, 18000); assert.equal(recruit.contractDays, 365);
+  const signed = signScoutingContract(initial, recruit.id);
+  assert.equal(signed.changed, true); assert.equal(signed.fee, 18000); assert.equal(signed.contractExpiresOn, "2027-07-01");
+  assert.equal(signed.save.agency.balance, 82000); assert.equal(getScoutingRoster(signed.save.world.scouting, signed.save.world.currentDate).length, 5);
+  assert.equal(getScoutingRecruitmentOptions(signed.save.world.scouting).length, 1); assert.equal(isValidSave(signed.save), true);
+  const duplicate = signScoutingContract(signed.save, recruit.id); assert.equal(duplicate.changed, false); assert.equal(duplicate.save, signed.save);
+  assert.match(duplicate.error, /متعاقد معه بالفعل/);
+  const tooEarly = renewScoutingContract(signed.save, recruit.id); assert.equal(tooEarly.changed, false); assert.equal(tooEarly.save, signed.save);
+  assert.match(tooEarly.error, /آخر 30 يومًا/);
+  const poor = { ...initial, agency: { ...initial.agency, balance: 100 } };
+  const rejected = signScoutingContract(poor, recruit.id); assert.equal(rejected.changed, false); assert.equal(rejected.save, poor);
+  assert.match(rejected.error, /لا يكفي/);
+});
+
+test("treats the contract expiry date as inactive for new assignments and allows renewal", () => {
+  const initial = createInitialSave();
+  const signed = signScoutingContract(initial, "scout-iberian-network");
+  assert.equal(signed.changed, true);
+
+  let expiryDay = signed.save;
+  for (let elapsed = 0; elapsed < 365;) {
+    const step = Math.min(31, 365 - elapsed);
+    expiryDay = advanceCareerDays(expiryDay, step);
+    elapsed += step;
+  }
+  assert.equal(expiryDay.world.currentDate, "2027-07-01");
+  const scout = getScoutingRoster(expiryDay.world.scouting, expiryDay.world.currentDate)
+    .find((item) => item.id === "scout-iberian-network");
+  assert.equal(scout.isContractExpired, true);
+  assert.equal(scout.contractDaysRemaining, 0);
+  assert.equal(scout.canRenewContract, true);
+  assert.equal(getScoutingScoutFit("scout-iberian-network", expiryDay.world.scouting, "all", "all", 0.62, expiryDay.world.currentDate), null);
+
+  const rejected = startScoutingMission(expiryDay, {
+    type: "local", countryId: "all", role: "all", scoutId: "scout-iberian-network"
+  }, PLAYERS);
+  assert.equal(rejected.changed, false);
+  assert.match(rejected.error, /انتهى عقد الكشاف/);
+
+  const renewed = renewScoutingContract(expiryDay, "scout-iberian-network");
+  assert.equal(renewed.changed, true);
+  assert.equal(renewed.contractExpiresOn, "2028-06-30");
+  assert.equal(renewed.save.agency.balance, 74000);
+  assert.equal(isValidSave(renewed.save), true);
+});
+
+test("allows a mission started before contract expiry to finish after the contract expires", () => {
+  const initial = createInitialSave(); const signed = signScoutingContract(initial, "scout-iberian-network");
+  const nearExpiry = { ...signed.save, world: { ...signed.save.world, currentDate: "2027-06-30" } };
+  const started = startScoutingMission(nearExpiry, { type: "local", countryId: "all", role: "all", scoutId: "scout-iberian-network" }, PLAYERS);
+  assert.equal(started.changed, true);
+  const due = advanceCareerDays(started.save, 7); assert.equal(due.world.currentDate, "2027-07-07");
+  const completed = advanceScoutingMissions(due, PLAYERS); assert.equal(completed.changed, true);
+  assert.equal(completed.completedReports[0].scoutId, "scout-iberian-network"); assert.equal(completed.save.world.scouting.reports.length, 1);
+  assert.equal(isValidSave(completed.save), true);
+  assert.equal(getScoutingRoster(completed.save.world.scouting, due.world.currentDate).find((scout) => scout.id === "scout-iberian-network").isContractExpired, true);
+});
+
+test("simulates scouting contracts and paid missions across two season boundaries without overspending", () => {
+  let save = createInitialSave(); const hired = signScoutingContract(save, "scout-iberian-network"); assert.equal(hired.changed, true); save = hired.save;
+  const schedule = new Map([[0,"local"],[100,"regional"],[200,"local"],[300,"elite"],[400,"local"],[500,"regional"],[600,"local"]]);
+  let completedReportCount = 0; let lowestObservedBalance = save.agency.balance;
+  for (let day = 0; day < 732; day += 1) {
+    if (day === 340) { const renewal = renewScoutingContract(save, "scout-iberian-network"); assert.equal(renewal.changed, true); assert.equal(renewal.fee, 8000); save = renewal.save; }
+    const missionType = schedule.get(day);
+    if (missionType) { const started = startScoutingMission(save, { type: missionType, countryId: "all", role: "all", scoutId: "scout-iberian-network" }, PLAYERS); assert.equal(started.changed, true, started.error); save = started.save; lowestObservedBalance = Math.min(lowestObservedBalance, save.agency.balance); }
+    save = advanceCareerDay(save); const result = advanceScoutingMissions(save, PLAYERS); save = result.save;
+    completedReportCount += result.completedReports.length; lowestObservedBalance = Math.min(lowestObservedBalance, save.agency.balance); assert.ok(save.agency.balance >= 0);
+  }
+  assert.equal(completedReportCount, 7); assert.equal(save.career.season, 3); assert.equal(save.world.currentDate, "2028-07-02");
+  assert.equal(save.agency.balance, 5000); assert.equal(lowestObservedBalance, 5000); assert.equal(save.world.scouting.reports.length, 7);
+  assert.ok(save.world.scouting.observations.length > 0); assert.equal(isValidSave(save), true);
+  const staff = getScoutingRoster(save.world.scouting, save.world.currentDate).find((scout) => scout.id === "scout-iberian-network"); assert.equal(staff.isContractExpired, true);
+  const rejected = startScoutingMission(save, { type: "local", countryId: "all", role: "all", scoutId: "scout-iberian-network" }, PLAYERS);
+  assert.equal(rejected.changed, false); assert.match(rejected.error, /انتهى عقد الكشاف/);
 });

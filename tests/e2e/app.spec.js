@@ -649,7 +649,7 @@ test.describe("Inbox archive", () => {
   test("assigns a specialist scout and persists experience after the report", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الكشافون");
-    await expect(page.locator(".scout-staff-card")).toHaveCount(4);
+    await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)")).toHaveCount(4);
 
     await page.getByRole("button", { name: /إطلاق بعثة كشف/ }).click();
     await page.getByLabel("مستوى البعثة").selectOption("local");
@@ -733,6 +733,59 @@ test.describe("Scouting discovery channels and observation history", () => {
     await page.getByRole("button", { name: "عرض التقرير" }).first().click();
     await page.getByRole("button", { name: "سجل الرصد (2)" }).click();
     await expect(page.getByRole("dialog", { name: "سجل رصد اللاعب" }).locator(".scout-history-observation")).toHaveCount(2);
+    await hasNoHorizontalOverflow(page);
+  });
+});
+
+
+test.describe("Scouting recruitment contracts", () => {
+  test("signs and persists an annual scout contract, then assigns the contracted scout", async ({ page }) => {
+    await page.goto("/"); await navigateTo(page, "الكشافون");
+    await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)")).toHaveCount(4); await expect(page.locator(".scout-recruit-card")).toHaveCount(2);
+    const recruitCard = page.locator(".scout-recruit-card").filter({ hasText: "رافاييل أورتيغا" });
+    await expect(recruitCard).toContainText("18,000"); await recruitCard.getByRole("button", { name: "توقيع عقد سنوي" }).click();
+    await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)")).toHaveCount(5); await expect(page.locator(".scout-recruit-card")).toHaveCount(1);
+    const signed = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const contract = signed.world.scouting.scouts.find((scout) => scout.id === "scout-iberian-network");
+    expect(signed.agency.balance).toBe(82000); expect(contract.contractStartedOn).toBe("2026-07-01");
+    expect(contract.contractExpiresOn).toBe("2027-07-01"); expect(contract.contractCost).toBe(18000);
+    await page.reload(); await navigateTo(page, "الكشافون"); await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)")).toHaveCount(5);
+    await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)").filter({ hasText: "رافاييل أورتيغا" })).toContainText("ينتهي في");
+    await page.getByRole("button", { name: /إطلاق بعثة كشف/ }).click();
+    await page.getByLabel("مستوى البعثة").selectOption("local"); await page.getByLabel("الدولة المستهدفة").selectOption("all");
+    await page.getByLabel("المركز المستهدف").selectOption("all"); await page.getByLabel("الكشاف المكلف").selectOption("scout-iberian-network");
+    await expect(page.locator(".scout-launch-preview")).toContainText("رافاييل أورتيغا");
+    await page.getByRole("button", { name: "تأكيد إطلاق البعثة" }).click();
+    const assigned = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(assigned.world.scouting.activeMissions[0].scoutId).toBe("scout-iberian-network"); await hasNoHorizontalOverflow(page);
+  });
+});
+
+test.describe("Scouting recruitment contracts on mobile", () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test("keeps annual scout recruitment usable and persisted on a phone viewport", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الكشافون");
+
+    await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)")).toHaveCount(4);
+    await expect(page.locator(".scout-recruit-card")).toHaveCount(2);
+
+    const recruitCard = page.locator(".scout-recruit-card").filter({ hasText: "ماتياس كروغر" });
+    await expect(recruitCard).toContainText("15,000");
+    await recruitCard.getByRole("button", { name: "توقيع عقد سنوي" }).click();
+
+    await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)")).toHaveCount(5);
+    await expect(page.locator(".scout-recruit-card")).toHaveCount(1);
+
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const contract = saved.world.scouting.scouts.find((scout) => scout.id === "scout-central-europe");
+    expect(saved.agency.balance).toBe(85000);
+    expect(contract.contractStartedOn).toBe("2026-07-01");
+    expect(contract.contractExpiresOn).toBe("2027-07-01");
+    expect(contract.contractCost).toBe(15000);
+
+    await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)").filter({ hasText: "ماتياس كروغر" })).toContainText("ينتهي في");
     await hasNoHorizontalOverflow(page);
   });
 });

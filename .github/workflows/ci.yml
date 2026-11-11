@@ -21,8 +21,10 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
+      # ubuntu-latest already provides the native Chromium libraries used by this project.
+      # Install only the browser binary so CI does not depend on apt mirror availability.
       - name: Install Chromium for browser tests
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       - name: Run unit tests
         run: npm test
       - name: Run desktop and mobile browser tests

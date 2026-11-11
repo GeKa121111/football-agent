@@ -15,7 +15,10 @@ import {
   getScoutingSourceLabel,
   getScoutingDaysRemaining,
   getScoutingRoster,
+  getScoutingRecruitmentOptions,
   getScoutingScoutFit,
+  signScoutingContract as signScoutingContractInEngine,
+  renewScoutingContract as renewScoutingContractInEngine,
   startScoutingMission
 } from "./engines/scouting.js";
 import { createPlayerPortrait } from "./ui/player-portrait.js";
@@ -587,10 +590,10 @@ function renderScouting(context) {
 
   const teamPanel = node("section", "scout-team-panel");
   const teamHeading = node("div", "scout-operations-heading");
-  const roster = getScoutingRoster(scouting);
+  const roster = getScoutingRoster(scouting, context.save.world.currentDate);
   teamHeading.append(
     node("h2", "", "طاقم الكشافين"),
-    node("span", "scout-count", roster.filter((scout) => !scout.isBusy).length + " متاح من " + roster.length)
+    node("span", "scout-count", roster.filter((scout) => !scout.isBusy && !scout.isContractExpired).length + " متاح من " + roster.length)
   );
   const teamGrid = node("div", "scout-team-grid");
   const levelThresholds = [0, 60, 140, 250, 400];
@@ -599,7 +602,7 @@ function renderScouting(context) {
     const top = node("div", "scout-staff-topline");
     top.append(
       node("strong", "", scout.name),
-      node("span", "scout-staff-status" + (scout.isBusy ? " is-busy" : " is-available"), scout.isBusy ? "في مهمة" : "متاح")
+      node("span", "scout-staff-status" + (scout.isContractExpired ? " is-expired" : scout.isBusy ? " is-busy" : " is-available"), scout.isContractExpired ? "عقد منتهٍ" : scout.isBusy ? "في مهمة" : "متاح")
     );
     const nextThreshold = levelThresholds[scout.level] ?? null;
     const currentThreshold = levelThresholds[scout.level - 1] ?? 0;
@@ -616,11 +619,33 @@ function renderScouting(context) {
       node("strong", "scout-staff-specialty", scout.specialty),
       node("p", "scout-staff-roles", (scout.roles.includes("all") ? "كل المراكز" : scout.roles.join(" · ")) + " · " + scout.experience + " نقطة خبرة"),
       track,
-      node("small", "scout-staff-record", scout.missionsCompleted + " بعثة مكتملة")
+      node("small", "scout-staff-record", scout.missionsCompleted + " بعثة مكتملة"),
+      node("small", "scout-staff-record", scout.isContracted ? (scout.isContractExpired ? "انتهى العقد في " + formatHomeDate(scout.contractExpiresOn) : "ينتهي في " + formatHomeDate(scout.contractExpiresOn) + " · متبقي " + scout.contractDaysRemaining + " يوم") : "عضو أساسي دائم")
     );
+    if (scout.canRenewContract) card.append(actionButton(scout.isContractExpired ? "تجديد العقد" : "تجديد مبكر", "button-outline scout-contract-renew-button", () => context.renewScoutingContract(scout.id)));
     teamGrid.append(card);
   });
   teamPanel.append(teamHeading, teamGrid);
+
+  const recruitOptions = getScoutingRecruitmentOptions(scouting);
+  const recruitmentPanel = node("section", "scout-team-panel scout-recruitment-panel");
+  if (recruitOptions.length > 0) {
+    const recruitHeading = node("div", "scout-operations-heading");
+    recruitHeading.append(node("h2", "", "كشافون متاحون للتعاقد"), node("span", "scout-count", recruitOptions.length + " مرشح"));
+    const recruitGrid = node("div", "scout-team-grid");
+    recruitOptions.forEach((candidate) => {
+      const card = node("article", "scout-staff-card scout-recruit-card");
+      const top = node("div", "scout-staff-topline");
+      top.append(node("strong", "", candidate.name), node("span", "scout-staff-status is-available", "متاح للتعاقد"));
+      card.append(top, node("p", "scout-staff-region", candidate.region), node("strong", "scout-staff-specialty", candidate.specialty),
+        node("p", "scout-staff-roles", candidate.roles.join(" · ") + " · " + candidate.countryIds.length + " نطاق جغرافي"),
+        node("small", "scout-staff-record", "عقد سنوي " + candidate.contractDays + " يومًا · مقدم " + formatMoney(candidate.contractCost)),
+        node("small", "scout-staff-record", "رسوم التجديد " + formatMoney(candidate.renewalCost)),
+        actionButton("توقيع عقد سنوي", "button-outline scout-sign-contract-button", () => context.signScoutingContract(candidate.id)));
+      recruitGrid.append(card);
+    });
+    recruitmentPanel.append(recruitHeading, recruitGrid);
+  }
 
   const operations = node("div", "scout-operations-grid");
   const activePanel = node("section", "scout-operations-panel");
@@ -756,7 +781,9 @@ function renderScouting(context) {
   search.addEventListener("input", refresh);
   position.addEventListener("change", refresh);
   refresh();
-  page.append(summary, scoutBanner, teamPanel, operations, toolbar, grid);
+  page.append(summary, scoutBanner, teamPanel);
+  if (recruitOptions.length > 0) page.append(recruitmentPanel);
+  page.append(operations, toolbar, grid);
   return page;
 }
 
@@ -891,6 +918,24 @@ export function mountApp(root) {
     }
   }
 
+  function signScoutingContract(scoutId) {
+    if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم نوقّع عقدًا."); return; }
+    const previousSave = state.save;
+    const result = signScoutingContractInEngine(state.save, scoutId);
+    if (!result.changed) { toast(result.error); return; }
+    state.save = result.save;
+    if (saveCareer()) { render(); toast("تم توقيع العقد السنوي مقابل " + formatMoney(result.fee) + " حتى " + formatHomeDate(result.contractExpiresOn) + "."); } else state.save = previousSave;
+  }
+
+  function renewScoutingContract(scoutId) {
+    if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم نجدد العقد."); return; }
+    const previousSave = state.save;
+    const result = renewScoutingContractInEngine(state.save, scoutId);
+    if (!result.changed) { toast(result.error); return; }
+    state.save = result.save;
+    if (saveCareer()) { render(); toast("تم تجديد العقد مقابل " + formatMoney(result.fee) + " حتى " + formatHomeDate(result.contractExpiresOn) + "."); } else state.save = previousSave;
+  }
+
   function openScoutingMission() {
     const form = node("div", "scout-launch-form");
     const typeSelect = node("select", "filter-select");
@@ -930,14 +975,15 @@ export function mountApp(root) {
 
     const scoutSelect = node("select", "filter-select");
     scoutSelect.setAttribute("aria-label", "الكشاف المكلف");
-    const scoutRoster = getScoutingRoster(state.save.world.scouting);
+    const scoutRoster = getScoutingRoster(state.save.world.scouting, state.save.world.currentDate);
     scoutRoster.forEach((scout) => {
-      const option = node("option", "", scout.name + " · مستوى " + scout.level + " · " + scout.region + (scout.isBusy ? " (مشغول)" : ""));
+      const status = scout.isContractExpired ? " (العقد منتهي)" : scout.isBusy ? " (مشغول)" : "";
+      const option = node("option", "", scout.name + " · مستوى " + scout.level + " · " + scout.region + status);
       option.value = scout.id;
-      option.disabled = scout.isBusy;
+      option.disabled = scout.isBusy || scout.isContractExpired;
       scoutSelect.append(option);
     });
-    const firstAvailableScout = scoutRoster.find((scout) => !scout.isBusy);
+    const firstAvailableScout = scoutRoster.find((scout) => !scout.isBusy && !scout.isContractExpired);
     if (firstAvailableScout) scoutSelect.value = firstAvailableScout.id;
 
     const preview = node("div", "scout-launch-preview");
@@ -966,7 +1012,8 @@ export function mountApp(root) {
         state.save.world.scouting,
         countrySelect.value,
         roleSelect.value,
-        config.accuracy
+        config.accuracy,
+        state.save.world.currentDate
       );
       preview.replaceChildren(
         node("strong", "", "تكلفة " + formatMoney(config.cost)),
@@ -985,8 +1032,8 @@ export function mountApp(root) {
         preview.append(node("small", "scout-preview-warning", "لا توجد ملفات لاعبين مطابقة لهذا النطاق."));
       } else if (state.save.agency.balance < config.cost) {
         preview.append(node("small", "scout-preview-warning", "رصيد الوكالة لا يكفي لهذا المستوى."));
-      } else if (!fit || fit.isBusy) {
-        preview.append(node("small", "scout-preview-warning", "الكشاف غير متاح؛ اختار عضوًا آخر من الشبكة."));
+      } else if (!fit || fit.isBusy || fit.isContractExpired) {
+        preview.append(node("small", "scout-preview-warning", "الكشاف غير متاح؛ راجع حالة العقد أو اختار عضوًا آخر من الشبكة."));
       }
       if (confirm) confirm.disabled = !state.canWrite || !canLaunch;
     };
@@ -1566,6 +1613,8 @@ export function mountApp(root) {
       scouting: state.save.world.scouting,
       openScoutingMission,
       openScoutingReport,
+      signScoutingContract,
+      renewScoutingContract,
       addToWatchlist
     };
     const views = {
