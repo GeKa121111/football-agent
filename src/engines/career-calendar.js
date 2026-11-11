@@ -62,6 +62,77 @@ function scheduledItems(date, season) {
     });
   }
 
+  if (month === 7 && dayOfMonth === 15) {
+    events.push({
+      id: "event-" + dateKey + "-preseason-review",
+      date: dateKey,
+      type: "preseason-review",
+      title: "مراجعة جاهزية الموسم",
+      description: "راجع جاهزية الوكالة لبداية المنافسات وحدد الملفات التي تحتاج إلى متابعة.",
+      priority: "high"
+    });
+    tasks.push({
+      id: "task-" + dateKey + "-preseason-check",
+      title: "استكمال مراجعة ما قبل الموسم",
+      description: "راجع أولويات الوكالة وتأكد من تجهيز ملفات اللاعبين والعملاء.",
+      createdDate: dateKey,
+      dueDate: toDateKey(addDays(date, 7)),
+      category: "preseason-review",
+      status: "open"
+    });
+  }
+
+  if (month === 0 && dayOfMonth === 15) {
+    events.push({
+      id: "event-" + dateKey + "-midseason-review",
+      date: dateKey,
+      type: "midseason-review",
+      title: "مراجعة منتصف الموسم",
+      description: "راجع تقدم الوكالة خلال النصف الأول وحدد الأولويات للفترة المتبقية.",
+      priority: "high"
+    });
+    tasks.push({
+      id: "task-" + dateKey + "-midseason-plan",
+      title: "تحديث خطة منتصف الموسم",
+      description: "راجع المهام المفتوحة وأهداف الوكالة وحدد ما يجب إنجازه قبل نهاية الموسم.",
+      createdDate: dateKey,
+      dueDate: toDateKey(addDays(date, 7)),
+      category: "midseason-review",
+      status: "open"
+    });
+  }
+
+  if (month === 5 && dayOfMonth === 15) {
+    events.push({
+      id: "event-" + dateKey + "-season-review",
+      date: dateKey,
+      type: "season-review",
+      title: "تقييم نهاية الموسم",
+      description: "اقترب الموسم من نهايته. راجع إنجازات الوكالة والملفات التي تحتاج إلى إغلاق.",
+      priority: "high"
+    });
+    tasks.push({
+      id: "task-" + dateKey + "-season-review",
+      title: "إعداد تقييم الموسم",
+      description: "لخص تقدم الوكالة وحدد أهم الملفات التي ستنتقل إلى الموسم الجديد.",
+      createdDate: dateKey,
+      dueDate: toDateKey(addDays(date, 13)),
+      category: "season-review",
+      status: "open"
+    });
+  }
+
+  if (month === 5 && dayOfMonth === 30) {
+    events.push({
+      id: "event-" + dateKey + "-season-closing",
+      date: dateKey,
+      type: "season-closing",
+      title: "ختام الموسم",
+      description: "انتهت دورة الموسم الحالية. راجع سجل الوكالة واستعد لافتتاح موسم جديد غدًا.",
+      priority: "high"
+    });
+  }
+
   if (weekday === 1) {
     events.push({
       id: "event-" + dateKey + "-weekly-briefing",
@@ -245,4 +316,49 @@ export function filterCareerEvents(events, { type = "all", query = "" } = {}) {
       return haystack.includes(normalizedQuery);
     })
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+}
+
+
+/**
+ * Creates the deterministic calendar records for the career's starting date.
+ * New careers should begin with the events and tasks scheduled for that date.
+ */
+export function createInitialCareerCalendar(currentDate, season = 1) {
+  if (!Number.isInteger(season) || season < 1) {
+    throw new TypeError("رقم الموسم غير صالح.");
+  }
+  const date = parseCalendarDate(currentDate);
+  const scheduled = scheduledItems(date, season);
+  return {
+    events: scheduled.events,
+    inbox: scheduled.messages,
+    tasks: scheduled.tasks
+  };
+}
+
+/**
+ * Returns scheduled events after the current game date, without mutating a save.
+ * The date horizon is capped at two in-game years to keep calendar previews small.
+ */
+export function getUpcomingCareerEvents(currentDate, currentSeason, daysAhead = 365) {
+  if (!Number.isInteger(currentSeason) || currentSeason < 1) {
+    throw new TypeError("رقم الموسم غير صالح.");
+  }
+  if (!Number.isInteger(daysAhead) || daysAhead < 1 || daysAhead > 730) {
+    throw new TypeError("نطاق التقويم يجب أن يكون بين يوم واحد و730 يومًا.");
+  }
+  let date = parseCalendarDate(currentDate);
+  let season = currentSeason;
+  const upcoming = [];
+
+  for (let offset = 1; offset <= daysAhead; offset += 1) {
+    date = addDays(date, 1);
+    if (date.getUTCMonth() === 6 && date.getUTCDate() === 1) season += 1;
+    const scheduled = scheduledItems(date, season);
+    for (const event of scheduled.events) {
+      upcoming.push({ ...event, daysUntil: offset, season });
+    }
+  }
+
+  return upcoming;
 }

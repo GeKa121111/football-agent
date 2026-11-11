@@ -1,8 +1,11 @@
+import { createInitialCareerCalendar } from "../engines/career-calendar.js";
+
 export const STORAGE_KEY = "football-agent.save";
 export const SAVE_VERSION = 2;
 export const WATCHLIST_KEY = "football-agent.watchlist";
 
 export function createInitialSave(now = new Date().toISOString()) {
+  const initialCalendar = createInitialCareerCalendar("2026-07-01", 1);
   return {
     meta: {
       version: SAVE_VERSION,
@@ -27,9 +30,7 @@ export function createInitialSave(now = new Date().toISOString()) {
       clubs: [],
       competitions: [],
       activeOffers: [],
-      events: [],
-      inbox: [],
-      tasks: []
+      ...initialCalendar
     }
   };
 }
