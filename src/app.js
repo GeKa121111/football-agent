@@ -1212,6 +1212,11 @@ export function mountApp(root) {
       representationType.append(option);
     });
     representationType.value = getPlayerRepresentationProfile(player).prefersExclusive ? "exclusive" : "non-exclusive";
+    const signingBonus = node("select", "filter-select");
+    signingBonus.setAttribute("aria-label", "مكافأة التوقيع");
+    [[0, "بدون مكافأة"], [25000, "25,000 جنيه"], [50000, "50,000 جنيه"], [100000, "100,000 جنيه"], [250000, "250,000 جنيه"], [500000, "500,000 جنيه"], [1000000, "مليون جنيه"]].forEach(([value, label]) => {
+      const option = node("option", "", label); option.value = String(value); signingBonus.append(option);
+    });
     const addField = (label, control) => {
       const wrapper = node("label", "scout-form-field representation-form-field");
       wrapper.append(node("span", "", label), control);
@@ -1220,6 +1225,7 @@ export function mountApp(root) {
     addField("نسبة عمولة الوكالة", commission);
     addField("مدة التمثيل", duration);
     addField("نوع التمثيل", representationType);
+    addField("مكافأة التوقيع المتفق عليها", signingBonus);
     form.append(
       intro,
       node("p", "representation-form-note", "سيتم تسجيل العرض، وبعدها تقدر تراجع رد اللاعب أو شروطه المضادة. لا توجد عمولة محصلة قبل وجود دخل فعلي للاعب.")
@@ -1229,7 +1235,8 @@ export function mountApp(root) {
       const result = createRepresentationOfferInEngine(state.save, player, {
         commissionRate: Number(commission.value),
         termDays: Number(duration.value),
-        representationType: representationType.value
+        representationType: representationType.value,
+        signingBonus: Number(signingBonus.value)
       });
       if (!result.changed) { toast(result.error); return; }
       state.save = result.save;
@@ -1271,6 +1278,12 @@ export function mountApp(root) {
       representationType.append(option);
     });
     representationType.value = offer.counterOffer.representationType ?? offer.representationType ?? "exclusive";
+    const signingBonus = node("select", "filter-select");
+    signingBonus.setAttribute("aria-label", "مكافأة التوقيع في العرض المضاد");
+    [[0, "بدون مكافأة"], [25000, "25,000 جنيه"], [50000, "50,000 جنيه"], [100000, "100,000 جنيه"], [250000, "250,000 جنيه"], [500000, "500,000 جنيه"], [1000000, "مليون جنيه"]].forEach(([value, label]) => {
+      const option = node("option", "", label); option.value = String(value); signingBonus.append(option);
+    });
+    signingBonus.value = String(offer.counterOffer.signingBonus ?? offer.signingBonus ?? 0);
     const addField = (label, control) => {
       const wrapper = node("label", "scout-form-field representation-form-field");
       wrapper.append(node("span", "", label), control);
@@ -1279,6 +1292,7 @@ export function mountApp(root) {
     addField("العمولة المقترحة من الوكالة", commission);
     addField("مدة العقد المقترحة", duration);
     addField("نوع التمثيل المقترح", representationType);
+    addField("مكافأة التوقيع", signingBonus);
     form.append(
       node("p", "representation-form-note", "دي الجولة " + offer.round + " من 3. اللاعب ممكن يقبل أو يرد بعرض أخير أو يرفض التفاوض.")
     );
@@ -1287,7 +1301,8 @@ export function mountApp(root) {
       const result = submitRepresentationCounterOfferInEngine(state.save, offer.id, {
         commissionRate: Number(commission.value),
         termDays: Number(duration.value),
-        representationType: representationType.value
+        representationType: representationType.value,
+        signingBonus: Number(signingBonus.value)
       });
       if (!result.changed) { toast(result.error); return; }
       state.save = result.save;
@@ -1409,6 +1424,7 @@ export function mountApp(root) {
     const termsGrid = node("div", "representation-dossier-grid");
     const termCards = [
       ["العمولة السارية", activeCommission + "%"],
+      ["مكافأة التوقيع المتفق عليها", formatMoney(contract.signingBonus ?? 0)],
       ["تاريخ التوقيع", formatHomeDate(contract.signedOn)],
       ["نهاية العقد", formatHomeDate(expiryDate)],
       ["المتبقي", remainingDays + " يوم"],
@@ -1421,6 +1437,9 @@ export function mountApp(root) {
       termsGrid.append(tile);
     });
     termsPanel.append(termsGrid);
+    if ((contract.signingBonus ?? 0) > 0) {
+      termsPanel.append(node("p", "representation-intro", "المكافأة بند متفق عليه في عقد التمثيل، وليست مبلغًا مدفوعًا أو مخصومًا من رصيد الوكالة. سيتم ربط التحصيل والصرف بالنظام المالي عند تنفيذه."));
+    }
     if (offer) {
       termsPanel.append(node("p", "representation-intro",
         "عرض التمثيل الأصلي: عمولة " + offer.commissionRate + "% · " +

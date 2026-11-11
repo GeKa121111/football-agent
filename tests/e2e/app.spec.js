@@ -279,7 +279,7 @@ test.describe("Desktop experience", () => {
     await expect(dossier.locator(".representation-dossier-hero h3")).toHaveText(contract.playerName);
     await expect(dossier.getByRole("heading", { name: "العلاقة والثقة" })).toBeVisible();
     await expect(dossier.getByRole("heading", { name: "العقد الحالي" })).toBeVisible();
-    await expect(dossier.locator(".representation-dossier-stat")).toHaveCount(6);
+    await expect(dossier.locator(".representation-dossier-stat")).toHaveCount(7);
     await expect(dossier.getByText(/تمثيل حصري|تمثيل غير حصري/).first()).toBeVisible();
     await expect(dossier.getByRole("heading", { name: "الرسائل والاجتماعات" })).toBeVisible();
     await expect(dossier.getByText("بانتظار الرد").first()).toBeVisible();
@@ -1045,4 +1045,27 @@ test.describe("Scouting recruitment contracts on mobile", () => {
     await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)").filter({ hasText: "ماتياس كروغر" })).toContainText("ينتهي في");
     await hasNoHorizontalOverflow(page);
   });
+});
+
+
+test("negotiates and displays a player signing bonus in the client dossier", async ({ page }) => {
+  await page.goto("/");
+  await navigateTo(page, "الوكالة");
+  await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+  const offerModal = page.locator(".modal-overlay");
+  await offerModal.getByLabel("نسبة العمولة").selectOption("15");
+  await offerModal.getByLabel("مدة العقد").selectOption("1095");
+  await offerModal.getByLabel("مكافأة التوقيع").selectOption("250000");
+  await offerModal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+  await page.locator(".representation-evaluate-button").click();
+  await page.locator(".representation-accept-button").click();
+
+  let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+  const contract = saved.agency.representation.contracts[0];
+  expect(contract.signingBonus).toBe(250000);
+  expect(saved.agency.balance).toBe(100000);
+
+  await page.locator(".representation-client-dossier-button").first().click();
+  await expect(page.locator(".representation-client-dossier")).toContainText("250,000");
+  await expect(page.locator(".representation-client-dossier")).toContainText("ليست مبلغًا مدفوعًا");
 });

@@ -107,6 +107,7 @@ test("player can counter a high commission and long mandate, then sign when the 
   assert.deepEqual(response.counterOffer, {
     commissionRate: sent.offer.playerPreferences.preferredCommissionRate,
     termDays: sent.offer.playerPreferences.preferredTermDays,
+    signingBonus: sent.offer.signingBonus ?? 0,
     representationType: sent.offer.playerPreferences.prefersExclusive ? "exclusive" : "non-exclusive"
   });
   assert.equal(response.save.agency.clients.length, 0);
@@ -544,4 +545,55 @@ test("calculates the agreed commission without pretending it is already collecte
   assert.equal(calculateRepresentationCommission(125000, 8), 10000);
   assert.throws(() => calculateRepresentationCommission(-1, 10), TypeError);
   assert.throws(() => calculateRepresentationCommission(1000, 20), TypeError);
+});
+
+
+test("stores an agreed signing bonus on a new representation contract without paying it early", () => {
+  const profile = player({ id: "signing-bonus-direct", age: 24, rating: 70, potential: 82 });
+  const preferences = getPlayerRepresentationProfile(profile);
+  const sent = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays,
+    representationType: preferences.prefersExclusive ? "exclusive" : "non-exclusive",
+    signingBonus: 250000
+  });
+  assert.equal(sent.changed, true);
+  assert.equal(sent.offer.signingBonus, 250000);
+  const signed = evaluateRepresentationOffer(sent.save, sent.offer.id);
+  assert.equal(signed.status, "signed");
+  assert.equal(signed.contract.signingBonus, 250000);
+  assert.equal(isValidSave(signed.save), true);
+  assert.equal(signed.save.agency.balance, sent.save.agency.balance);
+});
+
+test("keeps signing bonus through a multi-round agency counteroffer", () => {
+  const profile = player({ id: "signing-bonus-counter", age: 22, rating: 68, potential: 80 });
+  const sent = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: 15,
+    termDays: 1095,
+    signingBonus: 100000
+  });
+  const countered = evaluateRepresentationOffer(sent.save, sent.offer.id);
+  assert.equal(countered.status, "countered");
+  assert.equal(countered.counterOffer.signingBonus, 100000);
+  const preferences = getPlayerRepresentationProfile(profile);
+  const response = submitRepresentationCounterOffer(countered.save, sent.offer.id, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays,
+    representationType: preferences.prefersExclusive ? "exclusive" : "non-exclusive",
+    signingBonus: 300000
+  });
+  assert.equal(response.status, "signed");
+  assert.equal(response.contract.signingBonus, 300000);
+  assert.equal(isValidSave(response.save), true);
+});
+
+test("rejects invalid signing bonus values", () => {
+  const profile = player({ id: "signing-bonus-invalid" });
+  const tooLarge = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: 10,
+    termDays: 730,
+    signingBonus: 5000001
+  });
+  assert.equal(tooLarge.changed, false);
 });
