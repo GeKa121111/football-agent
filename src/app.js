@@ -90,12 +90,6 @@ const WORLD_COUNTS = getWorldSummary();
 import { NAV_ITEMS } from "./ui/layout/navigation.js";
 import { createAppShell } from "./ui/layout/app-shell.js";
 
-const MARKET_ITEMS = [
-  { id: "deal-01", player: "آدم منصور", age: 21, position: "جناح أيمن", from: "نادي العاصمة", to: "مفتوح للعروض", fee: "€1.8M", note: "عقده ينتهي خلال 12 شهرًا", accent: "gold" },
-  { id: "deal-02", player: "مالك شريف", age: 19, position: "وسط هجومي", from: "أكاديمية النخبة", to: "إعارة متاحة", fee: "€650K", note: "النادي يبحث عن فرصة مشاركة", accent: "cyan" },
-  { id: "deal-03", player: "سيف حمدي", age: 24, position: "مدافع", from: "المدينة الرياضي", to: "قابل للتفاوض", fee: "€2.4M", note: "مراقب من عدة أندية", accent: "purple" }
-];
-
 let modalSequence = 0;
 
 function node(tag, className = "", text) {
