@@ -1083,6 +1083,12 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 }
 
 
+/* Phase 7 — player relationship management */
+.representation-trust { color: #8ed8b7 !important; }
+.representation-contract-row .representation-contact-button { border-color: rgba(119,192,210,.3); color: #9ed7e5; }
+.representation-interaction-choice { width: 100%; justify-content: flex-start; text-align: right; padding: 12px; }
+.representation-interaction-choice + .representation-interaction-choice { margin-top: 7px; }
+
 /* Phase 7 follow-up — negotiation rounds and contract renewals */
 .representation-offer-row .representation-copy small { max-width: 68ch; }
 .representation-actions .representation-counter-button { border-color: rgba(157,136,214,.32); color: #c9b8ef; }
