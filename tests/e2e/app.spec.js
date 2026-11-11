@@ -618,9 +618,29 @@ test.describe("Mobile experience", () => {
     await expect(reportDialog).toBeVisible();
     await expect(page.locator(".scout-finding-rationale").first()).toBeVisible();
     await expect(reportDialog.getByRole("button", { name: "بدء عرض تمثيل" })).toBeVisible();
+    await expect(reportDialog.getByRole("button", { name: "إضافة لصندوق المواهب" })).toBeVisible();
 
-    // A scouting discovery can now move directly into representation outreach.
-    await reportDialog.getByRole("button", { name: "بدء عرض تمثيل" }).click();
+    // Save this discovery to the persistent talent pipeline before outreach.
+    await reportDialog.getByRole("button", { name: "إضافة لصندوق المواهب" }).click();
+    const pipelineDialog = page.getByRole("dialog", { name: "متابعة لاعب في صندوق المواهب" });
+    await expect(pipelineDialog).toBeVisible();
+    await pipelineDialog.getByLabel("مرحلة متابعة اللاعب").selectOption("shortlisted");
+    await pipelineDialog.getByLabel("موعد المتابعة القادمة").fill("2026-07-15");
+    await pipelineDialog.getByLabel("ملاحظات الوكالة").fill("مراجعة اللاعب بعد التقرير الأول");
+    await pipelineDialog.getByRole("button", { name: "حفظ متابعة المواهب" }).click();
+
+    const trackedSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(trackedSave.agency.talentPipeline.entries).toHaveLength(1);
+    expect(trackedSave.agency.talentPipeline.entries[0].playerId).toBe(completed.world.scouting.reports[0].findings[0].playerId);
+    expect(trackedSave.agency.talentPipeline.entries[0].stage).toBe("shortlisted");
+    expect(trackedSave.agency.talentPipeline.entries[0].nextFollowUpDate).toBe("2026-07-15");
+    expect(trackedSave.agency.talentPipeline.entries[0].note).toBe("مراجعة اللاعب بعد التقرير الأول");
+
+    // The same discovered player can now move into representation outreach.
+    await page.getByRole("button", { name: "عرض التقرير" }).click();
+    const reopenedReport = page.getByRole("dialog", { name: "تقرير الكشافين" });
+    await expect(reopenedReport).toBeVisible();
+    await reopenedReport.getByRole("button", { name: "بدء عرض تمثيل" }).click();
     const offerDialog = page.getByRole("dialog", { name: "عرض تمثيل جديد" });
     await expect(offerDialog).toBeVisible();
     await offerDialog.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
@@ -629,6 +649,15 @@ test.describe("Mobile experience", () => {
     expect(offerSave.agency.representation.offers[0].playerId).toBe(completed.world.scouting.reports[0].findings[0].playerId);
     expect(offerSave.agency.representation.offers[0].status).toBe("pending");
     expect(offerSave.agency.clients).toHaveLength(0);
+
+    await navigateTo(page, "الوكالة");
+    await expect(page.locator(".talent-pipeline-card")).toHaveCount(1);
+    await expect(page.locator(".talent-pipeline-stage")).toHaveText("قيد التفاوض");
+    await expect(page.locator(".talent-pipeline-followup")).toContainText("15 يوليو 2026");
+    await page.reload();
+    await navigateTo(page, "الوكالة");
+    await expect(page.locator(".talent-pipeline-card")).toHaveCount(1);
+    await expect(page.locator(".talent-pipeline-note")).toHaveText("مراجعة اللاعب بعد التقرير الأول");
 
     await page.reload();
     await navigateTo(page, "الكشافون");
