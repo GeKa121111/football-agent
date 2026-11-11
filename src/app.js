@@ -955,7 +955,7 @@ function renderAgency(context) {
         actions.append(actionButton("متابعة رد اللاعب", "button-outline representation-evaluate-button", () => context.evaluateRepresentationOffer(offer.id)));
         actions.append(actionButton("سحب العرض", "button-outline representation-reject-button", () => context.rejectRepresentationOffer(offer.id)));
       } else {
-        actions.append(actionButton("قبول شروط اللاعب", "button-primary representation-accept-button", () => context.acceptRepresentationCounter(offer.id)));
+        actions.append(actionButton(offer.kind === "renewal" ? "قبول شروط التجديد" : "قبول شروط اللاعب", "button-primary representation-accept-button", () => context.acceptRepresentationCounter(offer.id)));
         actions.append(actionButton("عرض مضاد", "button-outline representation-counter-button", () => context.openRepresentationCounter(offer.id)));
         actions.append(actionButton("رفض العرض", "button-outline representation-reject-button", () => context.rejectRepresentationOffer(offer.id)));
       }
@@ -1170,7 +1170,7 @@ export function mountApp(root) {
       option.value = String(rate);
       commission.append(option);
     }
-    commission.value = String(offer.counterOffer.commissionRate);
+    commission.value = String(offer.commissionRate);
     const duration = node("select", "filter-select");
     duration.setAttribute("aria-label", "مدة العرض المضاد");
     [[365, "سنة واحدة"], [730, "سنتان"], [1095, "ثلاث سنوات"]].forEach(([days, label]) => {
@@ -1178,7 +1178,7 @@ export function mountApp(root) {
       option.value = String(days);
       duration.append(option);
     });
-    duration.value = String(offer.counterOffer.termDays);
+    duration.value = String(offer.termDays);
     const addField = (label, control) => {
       const wrapper = node("label", "scout-form-field representation-form-field");
       wrapper.append(node("span", "", label), control);
