@@ -591,7 +591,7 @@ function renderPlayers(context) {
       grid.replaceChildren(emptyResults(
         "مفيش لاعبين مطابقين للبحث",
         "جرّب تغيير المركز أو الجنسية أو كلمات البحث.",
-        "مسح الفلاتر",
+        "مسح البحث",
         () => {
           search.value = "";
           role.value = "all";
@@ -887,7 +887,7 @@ function renderMarket(context) {
     const value = node("div", "market-value");
     value.append(node("strong", "", item.fee), node("span", "", item.note));
     card.append(badge, details, value, actionButton("عرض المثال", "button-outline", () => {
-      context.openModal("بطاقة سوق تجريبية", [
+      context.openModal("فرصة انتقال تجريبية", [
         node("p", "modal-copy", item.player + " — " + item.position),
         node("p", "modal-copy", item.note),
         node("p", "modal-note", "هذه البطاقة لأغراض التصميم فقط. لا يوجد لاعب حقيقي أو نادٍ أرسل هذا العرض، ولا يمكن تنفيذ انتقال منها.")
