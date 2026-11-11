@@ -7,6 +7,8 @@ import {
   completeCareerTask,
   markCareerMessageRead,
   filterCareerEvents,
+  getCareerEventTypeLabel,
+  getCareerEventPriorityLabel,
   filterCareerTasks,
   filterCareerMessages,
   createInitialCareerCalendar,
@@ -200,6 +202,36 @@ test("filters event history by type and Arabic or date search in newest-first or
   const sorted = filterCareerEvents(events);
   assert.equal(sorted[0].date, "2026-07-07");
   assert.equal(sorted.at(-1).date, "2026-07-06");
+});
+
+test("localizes every calendar event type and priority for archive search", () => {
+  const labels = {
+    "weekly-briefing": "الإحاطة الأسبوعية",
+    "monthly-market": "تقرير السوق الشهري",
+    "season-opening": "افتتاح الموسم",
+    "preseason-review": "مراجعة ما قبل الموسم",
+    "midseason-review": "مراجعة منتصف الموسم",
+    "season-review": "تقييم نهاية الموسم",
+    "season-closing": "ختام الموسم",
+    "task-overdue": "تأخر مهمة",
+    "task-completed": "إنجاز مهمة"
+  };
+
+  for (const [type, label] of Object.entries(labels)) {
+    assert.equal(getCareerEventTypeLabel(type), label);
+  }
+  assert.equal(getCareerEventTypeLabel("future-system-event"), "حدث آخر");
+  assert.equal(getCareerEventPriorityLabel("high"), "عالية");
+  assert.equal(getCareerEventPriorityLabel("normal"), "عادية");
+  assert.equal(getCareerEventPriorityLabel("low"), "منخفضة");
+
+  const events = [
+    { id: "preseason", date: "2026-08-15", type: "preseason-review", title: "مراجعة", description: "ملفات البداية", priority: "high" },
+    { id: "completed", date: "2026-08-16", type: "task-completed", title: "إنجاز", description: "اكتمل العمل", priority: "normal" }
+  ];
+  assert.deepEqual(filterCareerEvents(events, { query: "مراجعة ما قبل الموسم" }).map((event) => event.id), ["preseason"]);
+  assert.deepEqual(filterCareerEvents(events, { query: "عالية" }).map((event) => event.id), ["preseason"]);
+  assert.deepEqual(filterCareerEvents(events, { query: "إنجاز مهمة" }).map((event) => event.id), ["completed"]);
 });
 
 test("keeps the calendar stable across three complete season openings and leap day", () => {
