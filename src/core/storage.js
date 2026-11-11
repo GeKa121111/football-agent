@@ -85,8 +85,10 @@ function isValidActivityCollections(world) {
     isValidCalendarDate(task.createdDate) &&
     isValidCalendarDate(task.dueDate) &&
     typeof task.category === "string" && task.category.trim() &&
-    ["open", "completed"].includes(task.status) &&
-    (task.status !== "completed" || isValidCalendarDate(task.completedDate))
+    ["open", "overdue", "completed"].includes(task.status) &&
+    (task.status !== "overdue" || isValidCalendarDate(task.overdueDate)) &&
+    (task.status !== "completed" || isValidCalendarDate(task.completedDate)) &&
+    (task.completedLate === undefined || typeof task.completedLate === "boolean")
   );
 }
 

@@ -111,12 +111,38 @@ export function advanceCareerDay(save) {
   const season = save.career.season + (seasonStarted ? 1 : 0);
   const scheduled = scheduledItems(nextDate, season);
 
-  const events = [...(save.world.events ?? []), ...scheduled.events].slice(-MAX_EVENTS);
+  const overdueTasks = [];
+  const currentTasks = (save.world.tasks ?? []).map((task) => {
+    if (task.status === "open" && task.dueDate < dateKey) {
+      const overdueTask = { ...task, status: "overdue", overdueDate: dateKey };
+      overdueTasks.push(overdueTask);
+      return overdueTask;
+    }
+    return task;
+  });
+  const overdueEvents = overdueTasks.map((task) => ({
+    id: "event-" + dateKey + "-task-overdue-" + task.id,
+    date: dateKey,
+    type: "task-overdue",
+    title: "مهمة متأخرة: " + task.title,
+    description: "انتهى موعد المهمة في " + task.dueDate + ". أنجزها الآن لتحديث سجل الوكالة.",
+    priority: "high"
+  }));
+  const overdueMessages = overdueEvents.map((event) => ({
+    id: "message-" + event.id,
+    eventId: event.id,
+    date: dateKey,
+    title: event.title,
+    body: event.description,
+    read: false
+  }));
+
+  const events = [...(save.world.events ?? []), ...scheduled.events, ...overdueEvents].slice(-MAX_EVENTS);
   const retainedEventIds = new Set(events.map((event) => event.id));
-  const inbox = [...(save.world.inbox ?? []), ...scheduled.messages]
+  const inbox = [...(save.world.inbox ?? []), ...scheduled.messages, ...overdueMessages]
     .filter((message) => retainedEventIds.has(message.eventId))
     .slice(-MAX_MESSAGES);
-  const tasks = [...(save.world.tasks ?? []), ...scheduled.tasks].slice(-MAX_TASKS);
+  const tasks = [...currentTasks, ...scheduled.tasks].slice(-MAX_TASKS);
 
   return {
     ...save,
@@ -141,18 +167,36 @@ export function completeCareerTask(save, taskId) {
     return { save, changed: false };
   }
   const task = (save.world.tasks ?? []).find((item) => item.id === taskId);
-  if (!task || task.status !== "open") {
+  if (!task || !["open", "overdue"].includes(task.status)) {
     return { save, changed: false };
   }
 
+  const completedLate = task.status === "overdue";
+  const completionEvent = {
+    id: "event-" + save.world.currentDate + "-task-completed-" + taskId,
+    date: save.world.currentDate,
+    type: "task-completed",
+    title: "تم إنجاز مهمة: " + task.title,
+    description: completedLate
+      ? "اكتملت المهمة بعد موعدها المحدد. تم تسجيل الإنجاز المتأخر في سجل الوكالة."
+      : "اكتملت المهمة في موعدها وتم تحديث سجل الوكالة.",
+    priority: "normal"
+  };
+  const events = [...(save.world.events ?? []), completionEvent].slice(-MAX_EVENTS);
+  const retainedEventIds = new Set(events.map((event) => event.id));
+  const inbox = (save.world.inbox ?? [])
+    .filter((message) => retainedEventIds.has(message.eventId))
+    .slice(-MAX_MESSAGES);
   return {
     changed: true,
     save: {
       ...save,
       world: {
         ...save.world,
+        events,
+        inbox,
         tasks: save.world.tasks.map((item) => item.id === taskId
-          ? { ...item, status: "completed", completedDate: save.world.currentDate }
+          ? { ...item, status: "completed", completedDate: save.world.currentDate, completedLate }
           : item)
       }
     }
@@ -180,4 +224,25 @@ export function markCareerMessageRead(save, messageId) {
       }
     }
   };
+}
+
+
+/**
+ * Filters the retained event history without changing the persisted collection.
+ * Results are returned newest-first so the same query is stable in every view.
+ */
+export function filterCareerEvents(events, { type = "all", query = "" } = {}) {
+  if (!Array.isArray(events)) return [];
+  const normalizedQuery = String(query).trim().toLocaleLowerCase("ar");
+  return [...events]
+    .filter((event) => type === "all" || event.type === type)
+    .filter((event) => {
+      if (!normalizedQuery) return true;
+      const haystack = [event.title, event.description, event.type, event.date]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase("ar");
+      return haystack.includes(normalizedQuery);
+    })
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 }

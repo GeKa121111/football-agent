@@ -4,8 +4,23 @@ import { createInitialSave } from "../src/core/storage.js";
 import {
   advanceCareerDay,
   completeCareerTask,
-  markCareerMessageRead
+  markCareerMessageRead,
+  filterCareerEvents
 } from "../src/engines/career-calendar.js";
+import { isValidSave } from "../src/core/storage.js";
+
+function makeTask(overrides = {}) {
+  return {
+    id: "task-unit-overdue",
+    title: "مراجعة مهمة الاختبار",
+    description: "مهمة لاختبار دورة التسليم.",
+    createdDate: "2026-07-01",
+    dueDate: "2026-07-01",
+    category: "weekly-review",
+    status: "open",
+    ...overrides
+  };
+}
 
 test("advances the date, day and week without mutating the original save", () => {
   const save = createInitialSave();
@@ -91,4 +106,95 @@ test("rejects an invalid calendar date instead of silently advancing it", () => 
   const save = createInitialSave();
   save.world.currentDate = "2026-02-30";
   assert.throws(() => advanceCareerDay(save), /تاريخ المسيرة غير صالح/);
+});
+
+
+test("marks expired open tasks overdue once and creates a linked high-priority reminder", () => {
+  const save = createInitialSave();
+  save.world.tasks = [makeTask()];
+  const next = advanceCareerDay(save);
+
+  assert.equal(next.world.tasks[0].status, "overdue");
+  assert.equal(next.world.tasks[0].overdueDate, "2026-07-02");
+  const event = next.world.events.find((item) => item.type === "task-overdue");
+  const message = next.world.inbox.find((item) => item.eventId === event.id);
+  assert.equal(event.priority, "high");
+  assert.equal(message.read, false);
+  assert.equal(isValidSave(next), true);
+  assert.equal(advanceCareerDay(next).world.events.filter((item) => item.type === "task-overdue").length, 1);
+});
+
+test("allows a late task to be completed and records that it missed its due date", () => {
+  const save = createInitialSave();
+  save.world.currentDate = "2026-07-03";
+  save.world.tasks = [makeTask({ status: "overdue", overdueDate: "2026-07-02" })];
+  const result = completeCareerTask(save, save.world.tasks[0].id);
+  assert.equal(result.changed, true);
+  assert.equal(result.save.world.tasks[0].status, "completed");
+  assert.equal(result.save.world.tasks[0].completedLate, true);
+  assert.equal(result.save.world.tasks[0].completedDate, "2026-07-03");
+  assert.ok(result.save.world.events.some((event) => event.type === "task-completed"));
+  assert.equal(isValidSave(result.save), true);
+});
+
+test("filters event history by type and Arabic or date search in newest-first order", () => {
+  const save = createInitialSave();
+  save.world.currentDate = "2026-07-05";
+  const monday = advanceCareerDay(save);
+  const events = [
+    { id: "z", date: "2026-07-07", type: "monthly-market", title: "تقرير السوق", description: "مراجعة الأندية", priority: "normal" },
+    ...monday.world.events,
+    { id: "a", date: "2026-07-06", type: "weekly-briefing", title: "إحاطة أخرى", description: "الأولويات", priority: "normal" }
+  ];
+  assert.equal(filterCareerEvents(events, { type: "weekly-briefing" }).length, 2);
+  assert.equal(filterCareerEvents(events, { query: "الأندية" }).length, 1);
+  assert.equal(filterCareerEvents(events, { query: "2026-07-07" }).length, 1);
+  const sorted = filterCareerEvents(events);
+  assert.equal(sorted[0].date, "2026-07-07");
+  assert.equal(sorted.at(-1).date, "2026-07-06");
+});
+
+test("keeps the calendar stable across three complete season openings and leap day", () => {
+  let save = createInitialSave();
+  for (let day = 0; day < 1096; day += 1) save = advanceCareerDay(save);
+  assert.equal(save.world.currentDate, "2029-07-01");
+  assert.equal(save.career.season, 4);
+  assert.equal(save.career.day, 1097);
+  assert.equal(isValidSave(save), true);
+
+  const leapSave = createInitialSave();
+  leapSave.world.currentDate = "2028-02-28";
+  const leapDay = advanceCareerDay(leapSave);
+  const march = advanceCareerDay(leapDay);
+  assert.equal(leapDay.world.currentDate, "2028-02-29");
+  assert.equal(march.world.currentDate, "2028-03-01");
+});
+
+
+test("keeps inbox references valid when a completion event evicts the oldest history item", () => {
+  const save = createInitialSave();
+  save.world.events = Array.from({ length: 90 }, (_, index) => ({
+    id: "history-" + index,
+    date: "2026-07-01",
+    type: "weekly-briefing",
+    title: "حدث " + index,
+    description: "سجل تجريبي",
+    priority: "normal"
+  }));
+  save.world.inbox = [{
+    id: "message-oldest",
+    eventId: "history-0",
+    date: "2026-07-01",
+    title: "رسالة قديمة",
+    body: "مرتبطة بأقدم حدث.",
+    read: false
+  }];
+  save.world.tasks = [makeTask()];
+  const result = completeCareerTask(save, "task-unit-overdue");
+
+  assert.equal(result.changed, true);
+  assert.equal(result.save.world.events.length, 90);
+  assert.equal(result.save.world.events.some((event) => event.type === "task-completed"), true);
+  assert.equal(result.save.world.inbox.length, 0);
+  assert.equal(isValidSave(result.save), true);
 });

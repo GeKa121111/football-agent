@@ -229,7 +229,7 @@ test.describe("Mobile experience", () => {
     expect(saved.world.tasks[0].status).toBe("open");
 
     await expect(page.locator(".career-operations")).toBeVisible();
-    await expect(page.getByText("الإحاطة الأسبوعية للوكالة")).toBeVisible();
+    await expect(page.getByText("الإحاطة الأسبوعية للوكالة").first()).toBeVisible();
     await page.locator(".task-complete-button").click();
     saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(saved.world.tasks[0].status).toBe("completed");
@@ -276,5 +276,63 @@ test.describe("Mobile experience", () => {
     await expect(page.locator(".toast-message")).toContainText("ملف الحفظ غير صالح");
     const untouched = await page.evaluate(() => localStorage.getItem("football-agent.save"));
     expect(untouched).toBe("{broken json");
+  });
+});
+
+
+test.describe("Career operations follow-up", () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test("marks a task overdue, keeps it actionable and persists late completion", async ({ page }) => {
+    await page.goto("/");
+    await page.locator(".home-save-button").click();
+    await page.evaluate(() => {
+      const save = JSON.parse(localStorage.getItem("football-agent.save"));
+      save.world.tasks = [{
+        id: "task-overdue-browser-test",
+        title: "مهمة اختبار متأخرة",
+        description: "اختبار انتقال المهمة من مفتوحة إلى متأخرة.",
+        createdDate: save.world.currentDate,
+        dueDate: save.world.currentDate,
+        category: "weekly-review",
+        status: "open"
+      }];
+      localStorage.setItem("football-agent.save", JSON.stringify(save));
+    });
+    await page.reload();
+    await page.locator(".day-advance-button").click();
+
+    const overdueTask = page.locator(".career-task-row.is-overdue");
+    await expect(overdueTask).toBeVisible();
+    await expect(overdueTask).toContainText("متأخرة منذ");
+    await overdueTask.getByRole("button", { name: "إنجاز" }).click();
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.world.tasks[0].status).toBe("completed");
+    expect(saved.world.tasks[0].completedLate).toBe(true);
+  });
+
+  test("searches and filters the event history", async ({ page }) => {
+    await page.goto("/");
+    await page.locator(".home-save-button").click();
+    await page.evaluate(() => {
+      const save = JSON.parse(localStorage.getItem("football-agent.save"));
+      save.world.currentDate = "2026-07-05";
+      localStorage.setItem("football-agent.save", JSON.stringify(save));
+    });
+    await page.reload();
+    await page.locator(".day-advance-button").click();
+    await page.getByRole("button", { name: "عرض السجل الكامل" }).click();
+    const dialog = page.getByRole("dialog", { name: "سجل الأحداث" });
+    await expect(dialog).toBeVisible();
+
+    const search = dialog.getByRole("searchbox", { name: "البحث في سجل الأحداث" });
+    await search.fill("الإحاطة");
+    await expect(dialog.locator(".event-history-row")).toHaveCount(1);
+    await search.fill("مش موجود");
+    await expect(dialog.getByText("مفيش أحداث مطابقة للبحث.")).toBeVisible();
+    await search.clear();
+
+    await dialog.getByLabel("تصفية نوع الحدث").selectOption("weekly-briefing");
+    await expect(dialog.locator(".event-history-row")).toHaveCount(1);
   });
 });
