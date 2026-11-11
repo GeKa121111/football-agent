@@ -5,7 +5,8 @@ import {
   createInitialTalentPipelineState,
   getTalentProspect,
   isValidTalentPipelineState,
-  upsertTalentProspect
+  upsertTalentProspect,
+  recordTalentProspectContact
 } from "../src/engines/talent-pipeline.js";
 
 function player(overrides = {}) {
@@ -107,4 +108,125 @@ test("keeps older v4 saves valid when they do not yet contain a talent pipeline"
   const legacy = createInitialSave();
   delete legacy.agency.talentPipeline;
   assert.equal(isValidSave(legacy), true);
+});
+
+
+test("records stage changes as a chronological activity trail without duplicating unchanged stages", () => {
+  const save = createInitialSave();
+  const first = upsertTalentProspect(save, player(), {
+    sourceId: "scouting",
+    stage: "discovered",
+    stageNote: "ظهر في تقرير الكشاف."
+  });
+  assert.equal(first.changed, true);
+  assert.equal(first.entry.activity.length, 1);
+  assert.deepEqual(first.entry.activity[0], {
+    id: "talent-activity-1",
+    type: "stage",
+    date: "2026-07-01",
+    fromStage: null,
+    toStage: "discovered",
+    note: "ظهر في تقرير الكشاف."
+  });
+
+  const sameStage = upsertTalentProspect(first.save, player(), { stage: "discovered" });
+  assert.equal(sameStage.entry.activity.length, 1);
+
+  const shortlisted = upsertTalentProspect(sameStage.save, player(), { stage: "shortlisted" });
+  assert.equal(shortlisted.entry.activity.length, 2);
+  assert.equal(shortlisted.entry.activity[1].fromStage, "discovered");
+  assert.equal(shortlisted.entry.activity[1].toStage, "shortlisted");
+  assert.equal(isValidSave(shortlisted.save), true);
+});
+
+test("records pre-contract outreach, outcome and follow-up without creating a client or mandate", () => {
+  const save = createInitialSave();
+  const result = recordTalentProspectContact(save, player(), {
+    sourceIds: ["scouting"],
+    kind: "call",
+    outcome: "pending",
+    followUpDate: "2026-07-04",
+    note: "تم التواصل مع اللاعب وطلب مهلة للرد."
+  });
+
+  assert.equal(result.changed, true);
+  assert.equal(result.entry.stage, "contacted");
+  assert.equal(result.entry.lastContactDate, "2026-07-01");
+  assert.equal(result.entry.nextFollowUpDate, "2026-07-04");
+  assert.equal(result.entry.activity.length, 2);
+  assert.deepEqual(result.contact, {
+    id: "talent-activity-2",
+    type: "contact",
+    date: "2026-07-01",
+    kind: "call",
+    outcome: "pending",
+    followUpDate: "2026-07-04",
+    note: "تم التواصل مع اللاعب وطلب مهلة للرد."
+  });
+  assert.deepEqual(result.save.agency.clients, []);
+  assert.deepEqual(result.save.agency.representation.offers, []);
+  assert.deepEqual(result.save.agency.representation.contracts, []);
+  assert.deepEqual(result.save.agency.representation.interactions, []);
+  assert.equal(isValidSave(result.save), true);
+});
+
+test("allows later contact outcomes and preserves earlier activity and stable prospect identity", () => {
+  const first = recordTalentProspectContact(createInitialSave(), player(), {
+    kind: "message",
+    outcome: "pending",
+    followUpDate: "2026-07-05",
+    note: "تم إرسال رسالة."
+  });
+  const second = recordTalentProspectContact(first.save, player(), {
+    kind: "meeting",
+    outcome: "positive",
+    followUpDate: "2026-07-10",
+    note: "اللاعب مهتم بمناقشة التعاون."
+  });
+  assert.equal(second.changed, true);
+  assert.equal(second.entry.id, first.entry.id);
+  assert.equal(second.entry.activity.length, 3);
+  assert.equal(second.entry.activity[2].outcome, "positive");
+  assert.equal(second.entry.lastContactDate, "2026-07-01");
+  assert.equal(second.entry.nextFollowUpDate, "2026-07-10");
+  assert.equal(isValidSave(second.save), true);
+});
+
+test("rejects invalid contact windows and blocks outreach for active clients or open offers", () => {
+  const save = createInitialSave();
+  assert.equal(recordTalentProspectContact(save, player(), {
+    kind: "call", outcome: "pending", followUpDate: "2026-07-01"
+  }).changed, false);
+  assert.equal(recordTalentProspectContact(save, player(), {
+    kind: "fax", outcome: "positive"
+  }).changed, false);
+  assert.equal(recordTalentProspectContact(save, player(), {
+    kind: "call", outcome: "unknown"
+  }).changed, false);
+  assert.equal(recordTalentProspectContact(save, player(), {
+    kind: "call", outcome: "positive", followUpDate: "2026-06-30"
+  }).changed, false);
+
+  const clientSave = structuredClone(save);
+  clientSave.agency.clients.push(player().id);
+  assert.equal(recordTalentProspectContact(clientSave, player(), {
+    kind: "call", outcome: "positive"
+  }).changed, false);
+
+  const offerSave = structuredClone(save);
+  offerSave.agency.representation.offers.push({ playerId: player().id, status: "pending" });
+  assert.equal(recordTalentProspectContact(offerSave, player(), {
+    kind: "call", outcome: "positive"
+  }).changed, false);
+});
+
+test("accepts legacy pipeline entries without activity and rejects malformed activity trails", () => {
+  const tracked = upsertTalentProspect(createInitialSave(), player(), { sourceId: "scouting" });
+  const legacy = structuredClone(tracked.save);
+  delete legacy.agency.talentPipeline.entries[0].activity;
+  assert.equal(isValidSave(legacy), true);
+
+  const invalid = structuredClone(tracked.save);
+  invalid.agency.talentPipeline.entries[0].activity[0].toStage = "negotiating";
+  assert.equal(isValidSave(invalid), false);
 });
