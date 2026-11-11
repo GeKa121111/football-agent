@@ -20,6 +20,7 @@ export function createAppShell({
   const header = node("header", "topbar rebuild-topbar");
   const brand = node("div", "brand-lockup rebuild-brand");
   const mark = node("span", "brand-mark rebuild-brand-mark", "FA");
+  mark.setAttribute("aria-hidden", "true");
   const brandCopy = node("span", "rebuild-brand-copy");
   brandCopy.append(
     node("strong", "brand-name", "FOOTBALL AGENT"),
@@ -46,7 +47,7 @@ export function createAppShell({
     node("strong", "rebuild-sidebar-title", "مساحة الوكالة")
   );
   const nav = node("nav", "rebuild-nav");
-  nav.setAttribute("aria-label", "التنقل الرئيسي");
+  nav.setAttribute("aria-label", "التنقل الرئيسي على سطح المكتب");
   NAV_ITEMS.forEach((item) => {
     const active = activeView === item.id;
     const button = actionButton(
@@ -54,21 +55,25 @@ export function createAppShell({
       active ? "nav-link rebuild-nav-link is-active" : "nav-link rebuild-nav-link",
       () => onNavigate(item.id)
     );
+    button.dataset.view = item.id;
+    button.setAttribute("aria-label", item.label);
     if (active) button.setAttribute("aria-current", "page");
-    button.append(
-      node("span", "nav-icon rebuild-nav-icon", item.icon),
-      node("span", "rebuild-nav-copy"),
-      node("span", "rebuild-nav-arrow", "‹")
-    );
-    button.children[1].append(
+    const icon = node("span", "nav-icon rebuild-nav-icon", item.icon);
+    icon.setAttribute("aria-hidden", "true");
+    const copy = node("span", "rebuild-nav-copy");
+    copy.append(
       node("strong", "nav-label", item.label),
       node("small", "rebuild-nav-hint", item.hint)
     );
+    const arrow = node("span", "rebuild-nav-arrow", "‹");
+    arrow.setAttribute("aria-hidden", "true");
+    button.append(icon, copy, arrow);
     nav.append(button);
   });
 
   const sidebarFooter = node("div", "sidebar-bottom rebuild-sidebar-footer");
   const footerMark = node("span", "rebuild-footer-pulse");
+  footerMark.setAttribute("aria-hidden", "true");
   const footerCopy = node("span", "rebuild-footer-copy");
   footerCopy.append(
     node("strong", "", agencyName || "وكالتك"),
@@ -79,11 +84,12 @@ export function createAppShell({
 
   const main = node("main", "main-stage rebuild-main");
   main.setAttribute("id", "main-content");
+  main.setAttribute("tabindex", "-1");
   main.append(page);
   layout.append(sidebar, main);
 
   const bottomNav = node("nav", "mobile-nav rebuild-mobile-nav");
-  bottomNav.setAttribute("aria-label", "التنقل الرئيسي");
+  bottomNav.setAttribute("aria-label", "التنقل الرئيسي على الهاتف");
   NAV_ITEMS.forEach((item) => {
     const active = activeView === item.id;
     const button = actionButton(
@@ -91,16 +97,18 @@ export function createAppShell({
       active ? "mobile-nav-link rebuild-mobile-nav-link is-active" : "mobile-nav-link rebuild-mobile-nav-link",
       () => onNavigate(item.id)
     );
+    button.dataset.view = item.id;
+    button.setAttribute("aria-label", item.label);
     if (active) button.setAttribute("aria-current", "page");
-    button.append(
-      node("span", "mobile-nav-icon", item.icon),
-      node("span", "mobile-nav-label", item.label)
-    );
+    const icon = node("span", "mobile-nav-icon", item.icon);
+    icon.setAttribute("aria-hidden", "true");
+    button.append(icon, node("span", "mobile-nav-label", item.label));
     bottomNav.append(button);
   });
 
   const skipLink = node("a", "rebuild-skip-link", "تخطي إلى المحتوى");
   skipLink.href = "#main-content";
+  skipLink.setAttribute("aria-controls", "main-content");
 
   shell.append(skipLink, header, layout, bottomNav);
   return shell;
