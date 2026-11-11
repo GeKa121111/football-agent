@@ -6,6 +6,10 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function compareText(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function roundTo(value, decimals = 1) {
   const scale = 10 ** decimals;
   return Math.round(value * scale) / scale;
@@ -107,11 +111,11 @@ function assistWeight(player) {
         : 0;
 }
 
-function createTeamRuntime(team) {
+function createTeamRuntime(team, durationMinutes) {
   const players = team.lineup.map((player) => ({
     ...player,
     clubId: team.clubId,
-    minutesPlayed: 90,
+    minutesPlayed: durationMinutes,
     goals: 0,
     assists: 0,
     shots: 0,
@@ -203,11 +207,11 @@ export function simulateMatch(fixture) {
     ? [fixture.id, fixture.date ?? "", fixture.home.clubId, fixture.away.clubId].join("|")
     : String(fixture.seed);
   const random = createRandom(seed);
-  const home = createTeamRuntime(fixture.home);
-  const away = createTeamRuntime(fixture.away);
-  const events = [];
   const stoppageMinutes = 2 + Math.floor(random() * 4);
   const durationMinutes = MATCH_MINUTES + stoppageMinutes;
+  const home = createTeamRuntime(fixture.home, durationMinutes);
+  const away = createTeamRuntime(fixture.away, durationMinutes);
+  const events = [];
   const homePossessionShare = clamp(
     0.5 + (home.strength - away.strength) / 180 + 0.025,
     0.35,
@@ -326,12 +330,12 @@ export function simulateMatch(fixture) {
     b.rating - a.rating ||
     b.goals - a.goals ||
     b.assists - a.assists ||
-    a.playerId.localeCompare(b.playerId)
+    compareText(a.playerId, b.playerId)
   )[0];
 
   const timeline = events
-    .sort((a, b) => a.minute - b.minute || a.type.localeCompare(b.type) ||
-      String(a.playerId).localeCompare(String(b.playerId)))
+    .sort((a, b) => a.minute - b.minute || compareText(a.type, b.type) ||
+      compareText(String(a.playerId), String(b.playerId)))
     .map((event, index) => ({ id: fixture.id + "-event-" + (index + 1), ...event }));
 
   const toTeamSummary = (team, possession) => ({
