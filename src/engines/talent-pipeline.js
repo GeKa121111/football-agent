@@ -129,7 +129,7 @@ export function isValidTalentPipelineState(state, currentDate) {
 
 function syncTalentFollowUpTask(save, entry) {
   const tasks = [...(save.world.tasks ?? [])];
-  const pipeline = save.agency.talentPipeline ?? createInitialTalentPipelineState();
+  const pipeline = { ...(save.agency.talentPipeline ?? createInitialTalentPipelineState()) };
   const activeIndex = tasks.findIndex((task) =>
     task.category === FOLLOW_UP_TASK_CATEGORY &&
     task.prospectId === entry.id &&
