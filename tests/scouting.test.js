@@ -496,7 +496,7 @@ test("balances paid scouting across countries, roles, discovery channels and all
     assert.equal(report.role, scenario.role);
     assert.deepEqual(report.findings.map((finding) => finding.playerId).sort(), [...scenario.playerIds].sort());
 
-    const newObservations = save.world.scouting.observations.slice(totalObservations);
+    const newObservations = save.world.scouting.observations.filter((observation) => observation.reportId === report.id);
     assert.equal(newObservations.length, scenario.playerIds.length);
     assert.ok(newObservations.every((observation) => observation.sourceIds.length === 1 && observation.sourceIds[0] === scenario.sourceId));
     assert.deepEqual(newObservations.map((observation) => observation.playerId).sort(), [...scenario.playerIds].sort());
