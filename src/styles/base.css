@@ -969,3 +969,34 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   .scout-report-row { align-items: flex-start; flex-direction: column; }
   .scout-report-button { width: 100%; }
 }
+
+
+/* Phase 6 — assignable scouting staff and progression */
+.scout-team-panel {
+  margin-top: 15px;
+  padding: 15px;
+  border: 1px solid var(--panel-border);
+  border-radius: 15px;
+  background: rgba(17,24,44,.86);
+}
+.scout-team-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 9px; }
+.scout-staff-card { min-width: 0; padding: 11px; border: 1px solid rgba(166,145,216,.13); border-radius: 11px; background: rgba(9,15,30,.48); }
+.scout-staff-topline { display: flex; align-items: center; justify-content: space-between; gap: 7px; }
+.scout-staff-topline strong { color: #e6def5; font-size: 10px; }
+.scout-staff-status { flex: 0 0 auto; padding: 3px 6px; border-radius: 7px; font-size: 8px; }
+.scout-staff-status.is-available { color: #9be2b7; background: rgba(65,173,113,.11); }
+.scout-staff-status.is-busy { color: #f0bd84; background: rgba(210,139,68,.12); }
+.scout-staff-region, .scout-staff-roles { margin: 6px 0 0; color: #929db7; font-size: 8px; line-height: 1.7; }
+.scout-staff-specialty { display: block; margin-top: 7px; color: #c9c0df; font-size: 9px; line-height: 1.7; }
+.scout-staff-progress-track { height: 4px; margin-top: 9px; overflow: hidden; border-radius: 9px; background: rgba(255,255,255,.07); }
+.scout-staff-progress-bar { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#75d7df,#b69cff); }
+.scout-staff-record { display: block; margin-top: 6px; color: #7f8ba6; font-size: 8px; }
+.scout-preview-accuracy { color: #a8e4c1; font-weight: 800; }
+@media (max-width: 960px) {
+  .scout-team-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 520px) {
+  .scout-team-panel { padding: 11px; }
+  .scout-team-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .scout-staff-card { padding: 9px; }
+}

@@ -7,14 +7,132 @@ const MISSION_CONFIG = Object.freeze({
 const VALID_ROLES = Object.freeze(["all", "هجوم", "وسط", "دفاع", "حراسة"]);
 const REPORT_LIMIT = 50;
 const FINDING_LIMIT = 6;
+const SCOUT_EXPERIENCE_AWARDS = Object.freeze({ local: 20, regional: 32, elite: 45 });
+const SCOUT_LEVEL_THRESHOLDS = Object.freeze([0, 60, 140, 250, 400]);
 
 export const SCOUTING_MISSION_TYPES = MISSION_CONFIG;
+
+export const SCOUTING_SCOUTS = Object.freeze([
+  Object.freeze({
+    id: "scout-north-africa",
+    name: "عمر شريف",
+    region: "شمال أفريقيا",
+    countryIds: Object.freeze(["country-eg", "country-ma", "country-tn"]),
+    roles: Object.freeze(["هجوم", "وسط"]),
+    specialty: "المواهب الهجومية في شمال أفريقيا",
+    initialExperience: 60
+  }),
+  Object.freeze({
+    id: "scout-western-europe",
+    name: "مارتن فيشر",
+    region: "أوروبا الغربية",
+    countryIds: Object.freeze(["country-gb", "country-es", "country-de", "country-fr"]),
+    roles: Object.freeze(["وسط", "دفاع"]),
+    specialty: "لاعبو الوسط والدفاع في أوروبا",
+    initialExperience: 140
+  }),
+  Object.freeze({
+    id: "scout-mediterranean",
+    name: "يوسف بن سالم",
+    region: "حوض المتوسط",
+    countryIds: Object.freeze(["country-tn", "country-it", "country-fr"]),
+    roles: Object.freeze(["دفاع", "حراسة"]),
+    specialty: "المدافعون وحراس المرمى",
+    initialExperience: 30
+  }),
+  Object.freeze({
+    id: "scout-global-youth",
+    name: "دانيال كوستا",
+    region: "اكتشاف المواهب",
+    countryIds: Object.freeze([]),
+    roles: Object.freeze(["all"]),
+    specialty: "متابعة المواهب الشابة متعددة المراكز",
+    initialExperience: 0
+  })
+]);
+
+function initialScoutProgress() {
+  return SCOUTING_SCOUTS.map((scout) => ({
+    id: scout.id,
+    experience: scout.initialExperience,
+    missionsCompleted: 0
+  }));
+}
+
+function getProgressRecords(scouting) {
+  const saved = Array.isArray(scouting?.scouts) ? scouting.scouts : [];
+  return SCOUTING_SCOUTS.map((profile) => {
+    const record = saved.find((scout) => scout?.id === profile.id);
+    return record
+      ? { id: profile.id, experience: record.experience, missionsCompleted: record.missionsCompleted }
+      : { id: profile.id, experience: profile.initialExperience, missionsCompleted: 0 };
+  });
+}
+
+function getScoutLevel(experience) {
+  let level = 1;
+  for (let index = 1; index < SCOUT_LEVEL_THRESHOLDS.length; index += 1) {
+    if (experience >= SCOUT_LEVEL_THRESHOLDS[index]) level = index + 1;
+  }
+  return level;
+}
 
 export function createInitialScoutingState() {
   return {
     nextMissionSequence: 1,
     activeMissions: [],
-    reports: []
+    reports: [],
+    scouts: initialScoutProgress()
+  };
+}
+
+export function getScoutingRoster(scouting = createInitialScoutingState()) {
+  const progress = getProgressRecords(scouting);
+  const missions = Array.isArray(scouting?.activeMissions) ? scouting.activeMissions : [];
+  return SCOUTING_SCOUTS.map((profile) => {
+    const record = progress.find((item) => item.id === profile.id);
+    const activeMission = missions.find((mission) => mission?.scoutId === profile.id);
+    return {
+      id: profile.id,
+      name: profile.name,
+      region: profile.region,
+      countryIds: [...profile.countryIds],
+      roles: [...profile.roles],
+      specialty: profile.specialty,
+      experience: record.experience,
+      level: getScoutLevel(record.experience),
+      missionsCompleted: record.missionsCompleted,
+      isBusy: Boolean(activeMission),
+      activeMissionId: activeMission?.id ?? null
+    };
+  });
+}
+
+export function getScoutingScoutFit(scoutId, scouting, countryId = "all", role = "all", baseAccuracy = 0) {
+  if (typeof baseAccuracy !== "number" || !Number.isFinite(baseAccuracy) || baseAccuracy < 0 || baseAccuracy > 1) {
+    return null;
+  }
+  const scout = getScoutingRoster(scouting).find((item) => item.id === scoutId);
+  if (!scout) return null;
+
+  const countryMatch = countryId !== "all" &&
+    (scout.countryIds.length === 0 || scout.countryIds.includes(countryId));
+  const roleMatch = role !== "all" &&
+    (scout.roles.includes("all") || scout.roles.includes(role));
+  const levelBonus = (scout.level - 1) * 0.0125;
+  const countryBonus = countryMatch ? 0.025 : 0;
+  const roleBonus = roleMatch ? 0.025 : 0;
+  const accuracy = Math.round(Math.min(0.97, baseAccuracy + levelBonus + countryBonus + roleBonus) * 1000) / 1000;
+
+  return {
+    ...scout,
+    countryMatch,
+    roleMatch,
+    levelBonus,
+    countryBonus,
+    roleBonus,
+    accuracyBonus: Math.round((accuracy - baseAccuracy) * 1000) / 1000,
+    accuracy
   };
 }
 
@@ -121,6 +239,11 @@ function createReport(mission, players) {
     missionName: mission.name,
     countryId: mission.countryId,
     role: mission.role,
+    scoutId: mission.scoutId,
+    scoutName: mission.scoutName,
+    scoutLevel: mission.scoutLevel,
+    accuracyBonus: mission.scoutAccuracyBonus,
+    experienceAwarded: mission.scoutId ? SCOUT_EXPERIENCE_AWARDS[mission.type] : 0,
     startDate: mission.startDate,
     completedDate: mission.dueDate,
     durationDays: mission.durationDays,
@@ -132,7 +255,7 @@ function createReport(mission, players) {
 }
 
 /**
- * Starts a scouting mission after validating its scope, available budget and concurrency.
+ * Starts a scouting mission after validating its scope, budget, scout assignment and concurrency.
  * Returns a new save snapshot; the input save is never mutated.
  */
 export function startScoutingMission(save, options, players) {
@@ -146,20 +269,42 @@ export function startScoutingMission(save, options, players) {
 
   const countryId = options?.countryId ?? "all";
   const role = options?.role ?? "all";
-  if (typeof countryId !== "string" || !countryId.trim() ||
-      !VALID_ROLES.includes(role)) {
+  if (typeof countryId !== "string" || !countryId.trim() || !VALID_ROLES.includes(role)) {
     return { changed: false, save, mission: null, error: "نطاق البحث المحدد غير صالح." };
   }
 
-  const scouting = save.world.scouting ?? createInitialScoutingState();
-  if (!Array.isArray(scouting.activeMissions) || !Array.isArray(scouting.reports) ||
-      !Number.isSafeInteger(scouting.nextMissionSequence) || scouting.nextMissionSequence < 1) {
+  const currentScouting = save.world.scouting ?? createInitialScoutingState();
+  if (!Array.isArray(currentScouting.activeMissions) || !Array.isArray(currentScouting.reports) ||
+      !Number.isSafeInteger(currentScouting.nextMissionSequence) || currentScouting.nextMissionSequence < 1) {
     return { changed: false, save, mission: null, error: "سجل الكشافين غير صالح؛ لم يتم تغييره." };
   }
-  if (scouting.activeMissions.length >= 3) {
+  if (currentScouting.activeMissions.length >= 3) {
     return { changed: false, save, mission: null, error: "وصلت للحد الأقصى: 3 بعثات نشطة في نفس الوقت." };
   }
 
+  const scouting = { ...currentScouting, scouts: getProgressRecords(currentScouting) };
+  const roster = getScoutingRoster(scouting);
+  const requestedScoutId = options?.scoutId;
+  const availableScouts = roster.filter((scout) => !scout.isBusy);
+  const chosenScout = requestedScoutId
+    ? availableScouts.find((scout) => scout.id === requestedScoutId)
+    : availableScouts
+      .map((scout) => getScoutingScoutFit(scout.id, scouting, countryId, role, config.accuracy))
+      .sort((a, b) => b.accuracy - a.accuracy || b.level - a.level || a.id.localeCompare(b.id))[0];
+
+  if (!chosenScout) {
+    const requestedExists = roster.some((scout) => scout.id === requestedScoutId);
+    return {
+      changed: false,
+      save,
+      mission: null,
+      error: requestedScoutId && requestedExists
+        ? "الكشاف المختار مرتبط ببعثة نشطة بالفعل."
+        : "اختار كشافًا متاحًا من الشبكة قبل إطلاق البعثة."
+    };
+  }
+
+  const fit = getScoutingScoutFit(chosenScout.id, scouting, countryId, role, config.accuracy);
   const targets = getMissionTargets(players, countryId, role);
   if (targets.length === 0) {
     return { changed: false, save, mission: null, error: "مفيش لاعبين مطابقين لنطاق البحث ده." };
@@ -176,15 +321,21 @@ export function startScoutingMission(save, options, players) {
     name: config.label,
     countryId,
     role,
+    scoutId: fit.id,
+    scoutName: fit.name,
+    scoutLevel: fit.level,
+    scoutAccuracyBonus: fit.accuracyBonus,
+    baseAccuracy: config.accuracy,
     startDate: save.world.currentDate,
     dueDate: addDays(save.world.currentDate, config.durationDays),
     durationDays: config.durationDays,
     cost: config.cost,
-    accuracy: config.accuracy,
+    accuracy: fit.accuracy,
     targetCount: targets.length
   };
 
   const nextScouting = {
+    ...scouting,
     nextMissionSequence: sequence + 1,
     activeMissions: [...scouting.activeMissions, mission],
     reports: [...scouting.reports]
@@ -202,29 +353,43 @@ export function startScoutingMission(save, options, players) {
 }
 
 /**
- * Completes every due mission and stores a deterministic, explainable report.
+ * Completes every due mission, generates deterministic reports and rewards the assigned scouts.
  * Call after the career calendar has advanced to its new currentDate.
  */
 export function advanceScoutingMissions(save, players, currentDate = save?.world?.currentDate) {
   if (!save?.world || !isValidDate(currentDate)) {
     throw new TypeError("تاريخ إكمال بعثات الكشافين غير صالح.");
   }
-  const scouting = save.world.scouting ?? createInitialScoutingState();
-  if (!Array.isArray(scouting.activeMissions) || !Array.isArray(scouting.reports)) {
+  const currentScouting = save.world.scouting ?? createInitialScoutingState();
+  if (!Array.isArray(currentScouting.activeMissions) || !Array.isArray(currentScouting.reports)) {
     throw new TypeError("سجل بعثات الكشافين غير صالح.");
   }
 
-  const dueMissions = scouting.activeMissions.filter((mission) => mission.dueDate <= currentDate);
+  const dueMissions = currentScouting.activeMissions.filter((mission) => mission.dueDate <= currentDate);
   if (dueMissions.length === 0) {
     return { changed: false, save, completedReports: [] };
   }
 
   const dueIds = new Set(dueMissions.map((mission) => mission.id));
   const completedReports = dueMissions.map((mission) => createReport(mission, players));
+  const nextActiveMissions = currentScouting.activeMissions.filter((mission) => !dueIds.has(mission.id));
+  const progress = new Map(getProgressRecords(currentScouting).map((scout) => [scout.id, scout]));
+  for (const report of completedReports) {
+    if (!report.scoutId) continue;
+    const record = progress.get(report.scoutId);
+    if (!record) continue;
+    progress.set(report.scoutId, {
+      ...record,
+      experience: record.experience + report.experienceAwarded,
+      missionsCompleted: record.missionsCompleted + 1
+    });
+  }
+
   const nextScouting = {
-    ...scouting,
-    activeMissions: scouting.activeMissions.filter((mission) => !dueIds.has(mission.id)),
-    reports: [...completedReports, ...scouting.reports].slice(0, REPORT_LIMIT)
+    ...currentScouting,
+    scouts: [...progress.values()],
+    activeMissions: nextActiveMissions,
+    reports: [...completedReports, ...currentScouting.reports].slice(0, REPORT_LIMIT)
   };
 
   return {

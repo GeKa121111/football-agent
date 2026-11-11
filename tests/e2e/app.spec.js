@@ -645,4 +645,40 @@ test.describe("Inbox archive", () => {
     expect(saved.world.inbox.filter((message) => message.read).length).toBe(9);
     await hasNoHorizontalOverflow(page);
   });
+
+  test("assigns a specialist scout and persists experience after the report", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الكشافون");
+    await expect(page.locator(".scout-staff-card")).toHaveCount(4);
+
+    await page.getByRole("button", { name: /إطلاق بعثة كشف/ }).click();
+    await page.getByLabel("مستوى البعثة").selectOption("local");
+    await page.getByLabel("الدولة المستهدفة").selectOption("country-eg");
+    await page.getByLabel("المركز المستهدف").selectOption("هجوم");
+    await page.getByLabel("الكشاف المكلف").selectOption("scout-north-africa");
+    await expect(page.locator(".scout-launch-preview")).toContainText("الدقة بعد خبرة الكشاف");
+    await page.getByRole("button", { name: "تأكيد إطلاق البعثة" }).click();
+
+    const started = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(started.world.scouting.activeMissions[0].scoutId).toBe("scout-north-africa");
+    expect(started.world.scouting.activeMissions[0].accuracy).toBeGreaterThan(0.62);
+
+    await navigateTo(page, "الرئيسية");
+    for (let day = 0; day < 7; day += 1) {
+      await page.locator(".day-advance-button").click();
+    }
+
+    const completed = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const scout = completed.world.scouting.scouts.find((item) => item.id === "scout-north-africa");
+    expect(completed.world.scouting.reports[0].scoutId).toBe("scout-north-africa");
+    expect(completed.world.scouting.reports[0].experienceAwarded).toBe(20);
+    expect(scout.experience).toBe(80);
+    expect(scout.missionsCompleted).toBe(1);
+
+    await navigateTo(page, "الكشافون");
+    await expect(page.locator(".scout-staff-card").filter({ hasText: "عمر شريف" })).toContainText("1 بعثة مكتملة");
+    await expect(page.locator(".scout-report-row")).toContainText("عمر شريف");
+    await hasNoHorizontalOverflow(page);
+  });
+
 });

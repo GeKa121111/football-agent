@@ -10,6 +10,8 @@ import {
   SCOUTING_MISSION_TYPES,
   advanceScoutingMissions,
   getScoutingDaysRemaining,
+  getScoutingRoster,
+  getScoutingScoutFit,
   startScoutingMission
 } from "./engines/scouting.js";
 import { createPlayerPortrait } from "./ui/player-portrait.js";
@@ -579,6 +581,43 @@ function renderScouting(context) {
     actionButton("＋ إطلاق بعثة كشف", "button-primary scout-launch-button", context.openScoutingMission)
   );
 
+  const teamPanel = node("section", "scout-team-panel");
+  const teamHeading = node("div", "scout-operations-heading");
+  const roster = getScoutingRoster(scouting);
+  teamHeading.append(
+    node("h2", "", "طاقم الكشافين"),
+    node("span", "scout-count", roster.filter((scout) => !scout.isBusy).length + " متاح من " + roster.length)
+  );
+  const teamGrid = node("div", "scout-team-grid");
+  const levelThresholds = [0, 60, 140, 250, 400];
+  roster.forEach((scout) => {
+    const card = node("article", "scout-staff-card");
+    const top = node("div", "scout-staff-topline");
+    top.append(
+      node("strong", "", scout.name),
+      node("span", "scout-staff-status" + (scout.isBusy ? " is-busy" : " is-available"), scout.isBusy ? "في مهمة" : "متاح")
+    );
+    const nextThreshold = levelThresholds[scout.level] ?? null;
+    const currentThreshold = levelThresholds[scout.level - 1] ?? 0;
+    const progress = nextThreshold === null
+      ? 100
+      : Math.max(0, Math.min(100, ((scout.experience - currentThreshold) / (nextThreshold - currentThreshold)) * 100));
+    const track = node("div", "scout-staff-progress-track");
+    const bar = node("span", "scout-staff-progress-bar");
+    bar.style.width = progress + "%";
+    track.append(bar);
+    card.append(
+      top,
+      node("p", "scout-staff-region", scout.region + " · المستوى " + scout.level),
+      node("strong", "scout-staff-specialty", scout.specialty),
+      node("p", "scout-staff-roles", (scout.roles.includes("all") ? "كل المراكز" : scout.roles.join(" · ")) + " · " + scout.experience + " نقطة خبرة"),
+      track,
+      node("small", "scout-staff-record", scout.missionsCompleted + " بعثة مكتملة")
+    );
+    teamGrid.append(card);
+  });
+  teamPanel.append(teamHeading, teamGrid);
+
   const operations = node("div", "scout-operations-grid");
   const activePanel = node("section", "scout-operations-panel");
   const activeHeading = node("div", "scout-operations-heading");
@@ -602,7 +641,8 @@ function renderScouting(context) {
       );
       const scope = WORLD_DATABASE.countries.find((country) => country.id === mission.countryId)?.nameAr ?? "كل الدول";
       const roleLabel = mission.role === "all" ? "كل المراكز" : mission.role;
-      const details = node("p", "scout-mission-details", scope + " · " + roleLabel + " · " + mission.targetCount + " لاعب محتمل");
+      const assignment = mission.scoutName ? " · الكشاف " + mission.scoutName + " (مستوى " + mission.scoutLevel + ")" : "";
+      const details = node("p", "scout-mission-details", scope + " · " + roleLabel + " · " + mission.targetCount + " لاعب محتمل" + assignment);
       const track = node("div", "scout-progress-track");
       const bar = node("span", "scout-progress-bar");
       bar.style.width = progress + "%";
@@ -635,7 +675,7 @@ function renderScouting(context) {
       const copy = node("div", "scout-report-copy");
       copy.append(
         node("strong", "", report.missionName),
-        node("span", "", formatHomeDate(report.completedDate) + " · " + report.candidateCount + " موهبة · دقة " + Math.round(report.accuracy * 100) + "%")
+        node("span", "", formatHomeDate(report.completedDate) + " · " + report.candidateCount + " موهبة · دقة " + Math.round(report.accuracy * 100) + "%" + (report.scoutName ? " · " + report.scoutName : ""))
       );
       row.append(copy, actionButton("عرض التقرير", "button-outline scout-report-button", () => context.openScoutingReport(report)));
       reportList.append(row);
@@ -712,7 +752,7 @@ function renderScouting(context) {
   search.addEventListener("input", refresh);
   position.addEventListener("change", refresh);
   refresh();
-  page.append(summary, scoutBanner, operations, toolbar, grid);
+  page.append(summary, scoutBanner, teamPanel, operations, toolbar, grid);
   return page;
 }
 
@@ -852,7 +892,7 @@ export function mountApp(root) {
     const typeSelect = node("select", "filter-select");
     typeSelect.setAttribute("aria-label", "مستوى البعثة");
     Object.entries(SCOUTING_MISSION_TYPES).forEach(([value, config]) => {
-      const option = node("option", "", config.label + " · " + formatMoney(config.cost) + " · " + config.durationDays + " أيام · دقة " + Math.round(config.accuracy * 100) + "%");
+      const option = node("option", "", config.label + " · " + formatMoney(config.cost) + " · " + config.durationDays + " أيام · دقة أساسية " + Math.round(config.accuracy * 100) + "%");
       option.value = value;
       typeSelect.append(option);
     });
@@ -876,6 +916,18 @@ export function mountApp(root) {
       roleSelect.append(option);
     });
 
+    const scoutSelect = node("select", "filter-select");
+    scoutSelect.setAttribute("aria-label", "الكشاف المكلف");
+    const scoutRoster = getScoutingRoster(state.save.world.scouting);
+    scoutRoster.forEach((scout) => {
+      const option = node("option", "", scout.name + " · مستوى " + scout.level + " · " + scout.region + (scout.isBusy ? " (مشغول)" : ""));
+      option.value = scout.id;
+      option.disabled = scout.isBusy;
+      scoutSelect.append(option);
+    });
+    const firstAvailableScout = scoutRoster.find((scout) => !scout.isBusy);
+    if (firstAvailableScout) scoutSelect.value = firstAvailableScout.id;
+
     const preview = node("div", "scout-launch-preview");
     const addField = (label, control) => {
       const wrapper = node("label", "scout-form-field");
@@ -885,28 +937,48 @@ export function mountApp(root) {
     addField("مستوى الاستثمار", typeSelect);
     addField("الدولة", countrySelect);
     addField("المركز", roleSelect);
+    addField("الكشاف المكلف", scoutSelect);
 
+    let canLaunch = false;
+    let confirm = null;
     const refreshPreview = () => {
       const config = SCOUTING_MISSION_TYPES[typeSelect.value];
       const targets = WORLD_PLAYERS.filter((player) =>
         (countrySelect.value === "all" || player.countryId === countrySelect.value) &&
         (roleSelect.value === "all" || player.role === roleSelect.value)
       );
+      const fit = getScoutingScoutFit(
+        scoutSelect.value,
+        state.save.world.scouting,
+        countrySelect.value,
+        roleSelect.value,
+        config.accuracy
+      );
       preview.replaceChildren(
         node("strong", "", "تكلفة " + formatMoney(config.cost)),
-        node("span", "", "مدة " + config.durationDays + " أيام · دقة تقديرية " + Math.round(config.accuracy * 100) + "%"),
+        node("span", "", "مدة " + config.durationDays + " أيام · الدقة الأساسية " + Math.round(config.accuracy * 100) + "%"),
         node("span", "", targets.length + " لاعب ضمن نطاق البحث · رصيدك " + formatMoney(state.save.agency.balance))
       );
+      if (fit) {
+        preview.append(
+          node("span", "", "الكشاف: " + fit.name + " · مستوى " + fit.level + " · " + fit.specialty),
+          node("span", "scout-preview-accuracy", "الدقة بعد خبرة الكشاف: " + Math.round(fit.accuracy * 100) + "%")
+        );
+      }
+      canLaunch = Boolean(fit && !fit.isBusy && targets.length > 0 && state.save.agency.balance >= config.cost);
       if (targets.length === 0) {
         preview.append(node("small", "scout-preview-warning", "لا توجد ملفات لاعبين مطابقة لهذا النطاق."));
       } else if (state.save.agency.balance < config.cost) {
         preview.append(node("small", "scout-preview-warning", "رصيد الوكالة لا يكفي لهذا المستوى."));
+      } else if (!fit || fit.isBusy) {
+        preview.append(node("small", "scout-preview-warning", "الكشاف غير متاح؛ اختار عضوًا آخر من الشبكة."));
       }
+      if (confirm) confirm.disabled = !state.canWrite || !canLaunch;
     };
-    [typeSelect, countrySelect, roleSelect].forEach((control) => control.addEventListener("change", refreshPreview));
+    [typeSelect, countrySelect, roleSelect, scoutSelect].forEach((control) => control.addEventListener("change", refreshPreview));
     refreshPreview();
 
-    const confirm = actionButton("تأكيد إطلاق البعثة", "button-primary scout-confirm-button", () => {
+    confirm = actionButton("تأكيد إطلاق البعثة", "button-primary scout-confirm-button", () => {
       if (!state.canWrite) {
         toast("ملف الحفظ غير قابل للتعديل؛ لم نبدأ بعثة.");
         return;
@@ -915,7 +987,8 @@ export function mountApp(root) {
       const result = startScoutingMission(state.save, {
         type: typeSelect.value,
         countryId: countrySelect.value,
-        role: roleSelect.value
+        role: roleSelect.value,
+        scoutId: scoutSelect.value
       }, WORLD_PLAYERS);
       if (!result.changed) {
         toast(result.error);
@@ -925,15 +998,15 @@ export function mountApp(root) {
       if (saveCareer()) {
         root.querySelector(".modal-overlay .icon-button")?.click();
         render();
-        toast("بدأت " + result.mission.name + " بنجاح. موعد التقرير " + formatHomeDate(result.mission.dueDate) + ".");
+        toast("بدأت " + result.mission.name + " مع الكشاف " + result.mission.scoutName + ". موعد التقرير " + formatHomeDate(result.mission.dueDate) + ".");
       } else {
         state.save = previousSave;
       }
     });
-    confirm.disabled = !state.canWrite;
+    confirm.disabled = !state.canWrite || !canLaunch;
     form.append(preview, confirm);
     openModal("إطلاق بعثة كشف", [
-      node("p", "modal-copy", "كل مستوى يغيّر التكلفة والمدة ودقة التقدير. لا يمكن تشغيل أكثر من 3 بعثات في نفس الوقت."),
+      node("p", "modal-copy", "كل كشاف له خبرة وتخصص مختلف؛ الكشاف المشغول لا يمكن تكليفه ببعثة ثانية. لا يمكن تشغيل أكثر من 3 بعثات في نفس الوقت."),
       form
     ], "إلغاء");
   }
@@ -947,6 +1020,12 @@ export function mountApp(root) {
       node("span", "", "التكلفة: " + formatMoney(report.cost) + " · المدة: " + report.durationDays + " أيام"),
       node("span", "", "دقة البعثة: " + Math.round(report.accuracy * 100) + "% · ملفات في النطاق: " + report.candidateCount)
     );
+    if (report.scoutName) {
+      overview.append(node("span", "", "الكشاف المسؤول: " + report.scoutName + " · المستوى " + report.scoutLevel));
+    }
+    if (report.experienceAwarded) {
+      overview.append(node("span", "", "خبرة مكتسبة للكشاف: +" + report.experienceAwarded + " نقطة"));
+    }
     content.append(overview);
     const list = node("div", "scout-report-findings");
     if (report.findings.length === 0) {
