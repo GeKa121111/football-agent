@@ -390,7 +390,7 @@ export function isValidRepresentationState(representation, currentDate, clients 
           !isCalendarDate(event.date) || event.date > currentDate ||
           !Number.isInteger(event.delta) || event.delta < -10 || event.delta > 10 ||
           typeof event.note !== "string" || !event.note.trim() ||
-          (index > 0 && events[index - 1].date > event.date)
+          (index > 0 && (!isRecord(events[index - 1]) || events[index - 1].date > event.date))
         ))) ||
         !Number.isInteger(contract.relationshipScore) || contract.relationshipScore < 0 || contract.relationshipScore > 100 ||
         !CONTRACT_STATUSES.has(contract.status)) return false;
