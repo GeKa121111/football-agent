@@ -286,7 +286,7 @@ test.describe("Mobile experience", () => {
       read: false
     }));
 
-    await page.locator(".message-read-button").first().click();
+    await page.locator(".message-read-button").last().click();
     saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(saved.world.inbox[0].read).toBe(true);
     expect(saved.world.inbox.some((message) =>
