@@ -1,3 +1,5 @@
+import { SCOUTING_SCOUTS, getScoutingRoster } from "./scouting.js";
+
 const VALID_SOURCES = new Set(["scouting", "watchlist", "manual"]);
 const VALID_STAGES = new Set(["discovered", "shortlisted", "contacted", "archived"]);
 const MAX_ENTRIES = 300;
@@ -5,8 +7,6 @@ const MAX_NOTE_LENGTH = 500;
 const MAX_ACTIVITY_EVENTS = 200;
 const VALID_CONTACT_KINDS = new Set(["call", "message", "meeting"]);
 const VALID_CONTACT_OUTCOMES = new Set(["pending", "positive", "neutral", "negative", "no_response"]);
-import { SCOUTING_SCOUTS, getScoutingRoster } from "./scouting.js";
-
 const FOLLOW_UP_TASK_CATEGORY = "talent-follow-up";
 export const MAX_PROSPECTS_PER_SCOUT = 6;
 const VALID_ASSIGNMENT_REASONS = new Set(["manual", "contract-signed"]);
