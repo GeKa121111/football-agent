@@ -127,6 +127,16 @@ function formatHomeDate(value) {
   }).format(date);
 }
 
+
+function formatSeasonLabel(value) {
+  const date = new Date(value + "T12:00:00Z");
+  if (!Number.isFinite(date.getTime())) return "2026 / 2027";
+  const startYear = date.getUTCMonth() >= 6
+    ? date.getUTCFullYear()
+    : date.getUTCFullYear() - 1;
+  return startYear + " / " + (startYear + 1);
+}
+
 function formatHomeNumber(value) {
   return new Intl.NumberFormat("ar-EG").format(Number(value) || 0);
 }
@@ -861,7 +871,7 @@ export function mountApp(root) {
     const header = node("header", "topbar");
     const brand = node("div", "brand-lockup");
     brand.append(node("span", "brand-mark", "FA"), node("span", "brand-name", "FOOTBALL AGENT"));
-    const season = node("span", "season-pill", "موسم 2026 / 2027");
+    const season = node("span", "season-pill", "موسم " + formatSeasonLabel(state.save.world.currentDate));
     const saveButton = actionButton(state.isSaved ? "✓  محفوظ" : "حفظ المسيرة", "save-chip", saveCareer);
     header.append(brand, season, saveButton);
 
