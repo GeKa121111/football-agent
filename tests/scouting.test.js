@@ -512,3 +512,33 @@ test("balances paid scouting across countries, roles, discovery channels and all
   assert.equal(save.world.scouting.activeMissions.length, 0);
   assert.equal(isValidSave(save), true);
 });
+
+
+test("enforces exact budget boundaries for local, regional and elite missions", () => {
+  for (const [type, config] of Object.entries(SCOUTING_MISSION_TYPES)) {
+    const underBudget = {
+      ...createInitialSave(),
+      agency: { ...createInitialSave().agency, balance: config.cost - 1 }
+    };
+    const rejected = startScoutingMission(underBudget, {
+      type, countryId: "all", role: "all"
+    }, PLAYERS);
+    assert.equal(rejected.changed, false, type + " mission must reject a one-pound shortfall");
+    assert.equal(rejected.save, underBudget);
+    assert.equal(rejected.save.agency.balance, config.cost - 1);
+
+    const exactBudgetBase = createInitialSave();
+    const exactBudget = {
+      ...exactBudgetBase,
+      agency: { ...exactBudgetBase.agency, balance: config.cost }
+    };
+    const accepted = startScoutingMission(exactBudget, {
+      type, countryId: "all", role: "all"
+    }, PLAYERS);
+    assert.equal(accepted.changed, true, type + " mission must accept an exact budget");
+    assert.equal(accepted.mission.cost, config.cost);
+    assert.equal(accepted.mission.durationDays, config.durationDays);
+    assert.equal(accepted.save.agency.balance, 0);
+    assert.equal(isValidSave(accepted.save), true);
+  }
+});
