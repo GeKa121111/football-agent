@@ -258,7 +258,7 @@ export function recordTalentProspectContact(save, player, options = {}) {
   const tracked = upsertTalentProspect(save, player, {
     sourceIds,
     stage: "contacted",
-    note,
+    note: existing?.note ?? note,
     nextFollowUpDate: followUpDate,
     stageNote: "تم تسجيل أول تواصل مع اللاعب."
   });
