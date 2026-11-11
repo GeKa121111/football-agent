@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createInitialSave, isValidSave } from "../src/core/storage.js";
+import { advanceCareerDays } from "../src/engines/career-calendar.js";
 import { getWorldPlayerProfiles } from "../src/data/world-database.js";
 import {
   SCOUTING_MISSION_TYPES,
@@ -183,10 +184,8 @@ test("rewards scout experience once when a mission completes and keeps the save 
     scoutId: "scout-north-africa"
   }, PLAYERS);
   const before = started.save.world.scouting.scouts.find((scout) => scout.id === "scout-north-africa");
-  const dueSave = {
-    ...started.save,
-    world: { ...started.save.world, currentDate: started.mission.dueDate }
-  };
+  const dueSave = advanceCareerDays(started.save, started.mission.durationDays);
+  assert.equal(dueSave.world.currentDate, started.mission.dueDate);
 
   const completed = advanceScoutingMissions(dueSave, PLAYERS);
   const report = completed.completedReports[0];
