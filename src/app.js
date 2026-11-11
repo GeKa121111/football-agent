@@ -394,6 +394,8 @@ export function mountApp(root) {
     let toastElement = root.querySelector(".toast-message");
     if (!toastElement) {
       toastElement = node("div", "toast-message");
+      toastElement.setAttribute("role", "status");
+      toastElement.setAttribute("aria-live", "polite");
       root.append(toastElement);
     }
     toastElement.textContent = message;
@@ -426,6 +428,9 @@ export function mountApp(root) {
     try {
       state.save = writeSave(state.save);
       state.isSaved = true;
+      root.querySelectorAll(".save-chip, .save-button").forEach((button) => {
+        button.textContent = "✓  محفوظ";
+      });
       toast("تم حفظ مسيرتك بنجاح.");
     } catch (error) {
       toast("تعذر الحفظ: " + error.message);
