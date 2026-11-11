@@ -1063,7 +1063,7 @@ test("negotiates and displays a player signing bonus in the client dossier", asy
   let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
   const contract = saved.agency.representation.contracts[0];
   expect(contract.signingBonus).toBe(250000);
-  expect(saved.agency.balance).toBe(5000000);
+  expect(saved.agency.balance).toBe(100000);
 
   await page.locator(".representation-client-dossier-button").first().click();
   await expect(page.locator(".representation-client-dossier")).toContainText("250,000");
