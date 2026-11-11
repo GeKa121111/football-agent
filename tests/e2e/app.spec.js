@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { advanceCareerDays } from "../../src/engines/career-calendar.js";
+import { advanceRepresentationState } from "../../src/engines/representation.js";
 
 async function navigateTo(page, view) {
   const mobileNav = page.locator(".mobile-nav");
@@ -29,7 +30,7 @@ function advanceSaveToDate(save, targetDate) {
     advanced = advanceCareerDays(advanced, step);
     days -= step;
   }
-  return advanced;
+  return advanceRepresentationState(advanced, targetDate).save;
 }
 
 test.describe("Desktop experience", () => {
