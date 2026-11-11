@@ -105,6 +105,8 @@ test("player profiles are enriched from related club, league and nationality rec
   assert.equal(profiles[0].club, "الأهلي");
   assert.equal(profiles[0].country, "مصر");
   assert.equal(profiles[0].league, "الدوري المصري الممتاز");
+  assert.equal(profiles[0].clubShortName, "الأهلي");
+  assert.equal(profiles[0].clubId, "club-al-ahly");
   assert.equal(profiles[0].value, "€1.2M");
   assert.ok(profiles.every((player) => player.appearance && player.kit && player.hair));
 });
