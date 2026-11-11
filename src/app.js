@@ -812,7 +812,8 @@ function renderFootball(context) {
         club.goalsAgainst,
         club.points
       ].forEach((value, index) => {
-        row.append(node("span", index === 1 ? "football-standings-club" : "", formatHomeNumber(value)));
+        row.append(node("span", index === 1 ? "football-standings-club" : "",
+          index === 1 ? String(value) : formatHomeNumber(value)));
       });
       return row;
     });
