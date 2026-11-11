@@ -1,0 +1,397 @@
+import { WORLD_DATABASE } from "../data/world-database.js";
+import { getRepresentationContractExpiry } from "./representation.js";
+
+export const TRANSFER_OFFER_VALIDITY_DAYS = 14;
+export const MAX_TRANSFER_OFFERS = 100;
+export const MAX_TRANSFER_MOVES = 200;
+export const MAX_TRANSFER_HISTORY = 500;
+export const MAX_TRANSFER_LEDGER = 300;
+export const TRANSFER_CONTRACT_YEARS = Object.freeze([1, 2, 3, 4, 5]);
+export const TRANSFER_LOAN_MONTHS = Object.freeze([3, 6, 9, 12, 18, 24]);
+const MAX_EUR = 2_000_000_000;
+const OFFER_STATUSES = new Set(["pending", "countered", "agreed", "completed", "rejected", "expired"]);
+const HISTORY_TYPES = new Set(["offer-sent", "club-countered", "agency-countered", "offer-agreed", "offer-rejected", "offer-expired", "transfer-completed", "loan-returned"]);
+
+function isRecord(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
+function validId(value) { return typeof value === "string" && value.trim().length > 0; }
+function validMoney(value) { return Number.isSafeInteger(value) && value >= 0 && value <= MAX_EUR; }
+function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
+function dateCompare(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
+function sequenceOf(id, prefix) {
+  const match = new RegExp("^" + prefix + "-(\\d+)$").exec(id);
+  return match ? Number(match[1]) : 0;
+}
+export function isTransferCalendarDate(value) {
+  if (typeof value !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  const date = new Date(value + "T00:00:00.000Z");
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+function addDays(value, days) {
+  const date = new Date(value + "T00:00:00.000Z");
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+function addMonths(value, months) {
+  const [year, month, day] = value.split("-").map(Number);
+  const target = month - 1 + months;
+  const targetYear = year + Math.floor(target / 12);
+  const targetMonth = ((target % 12) + 12) % 12;
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(targetYear, targetMonth, Math.min(day, lastDay))).toISOString().slice(0, 10);
+}
+function getPlayer(database, playerId) {
+  return [...(database.players ?? []), ...(database.squadPlayers ?? [])].find((player) => player.id === playerId) ?? null;
+}
+function getClub(database, clubId) { return database.clubs.find((club) => club.id === clubId) ?? null; }
+function getActiveRepresentationContract(save, playerId, date) {
+  return (save?.agency?.representation?.contracts ?? []).find((contract) =>
+    contract.playerId === playerId && contract.status === "active" &&
+    isTransferCalendarDate(contract.expiresOn) && date < getRepresentationContractExpiry(contract)
+  ) ?? null;
+}
+
+export function getTransferWindow(currentDate) {
+  if (!isTransferCalendarDate(currentDate)) return { active: false, window: null, nextWindow: null };
+  const year = Number(currentDate.slice(0, 4));
+  const windows = [
+    { id: year + "-winter", type: "winter", startDate: year + "-01-01", endDate: year + "-01-31" },
+    { id: year + "-summer", type: "summer", startDate: year + "-07-01", endDate: year + "-08-31" },
+    { id: (year + 1) + "-winter", type: "winter", startDate: (year + 1) + "-01-01", endDate: (year + 1) + "-01-31" },
+    { id: (year + 1) + "-summer", type: "summer", startDate: (year + 1) + "-07-01", endDate: (year + 1) + "-08-31" }
+  ];
+  const active = windows.find((item) => currentDate >= item.startDate && currentDate <= item.endDate) ?? null;
+  const nextWindow = windows.find((item) => item.startDate > currentDate) ?? null;
+  return {
+    active: Boolean(active),
+    window: active ? { ...active, daysRemaining: Math.round((Date.parse(active.endDate + "T00:00:00Z") - Date.parse(currentDate + "T00:00:00Z")) / 86400000) + 1 } : null,
+    nextWindow
+  };
+}
+
+export function createInitialTransferState() {
+  return { nextOfferSequence: 1, nextMoveSequence: 1, nextHistorySequence: 1, nextLedgerSequence: 1,
+    earnedCommissionEur: 0, offers: [], moves: [], ledger: [], history: [] };
+}
+
+export function getPlayerCurrentClubId(playerId, fallbackClubId, transferState, currentDate = "9999-12-31") {
+  if (!validId(playerId) || !Array.isArray(transferState?.moves)) return fallbackClubId ?? null;
+  const moves = transferState.moves
+    .filter((move) => move.playerId === playerId && move.status === "active" && move.effectiveDate <= currentDate)
+    .sort((a, b) => dateCompare(a.effectiveDate, b.effectiveDate) || sequenceOf(a.id, "transfer-move") - sequenceOf(b.id, "transfer-move"));
+  let clubId = fallbackClubId ?? null;
+  for (const move of moves) clubId = move.toClubId;
+  return clubId;
+}
+
+function replaceOffer(state, offerId, patch) {
+  return { ...state, offers: state.offers.map((offer) => offer.id === offerId ? { ...offer, ...patch } : offer) };
+}
+function appendHistory(state, type, offer, date, note, references = {}) {
+  const item = { id: "transfer-history-" + state.nextHistorySequence, type, offerId: offer.id,
+    playerId: offer.playerId, playerName: offer.playerName, date, note, ...references };
+  return { ...state, nextHistorySequence: state.nextHistorySequence + 1,
+    history: [item, ...state.history].slice(0, MAX_TRANSFER_HISTORY) };
+}
+function validTerms(type, terms) {
+  if (!isRecord(terms) || !validMoney(terms.weeklyWageEur) || !validMoney(terms.signingBonusEur)) return false;
+  return type === "permanent"
+    ? validMoney(terms.feeEur) && TRANSFER_CONTRACT_YEARS.includes(terms.contractYears)
+    : type === "loan" && validMoney(terms.loanFeeEur) && validMoney(terms.optionToBuyEur) && TRANSFER_LOAN_MONTHS.includes(terms.loanMonths);
+}
+function normalizeTerms(type, terms) {
+  const base = { weeklyWageEur: terms.weeklyWageEur, signingBonusEur: terms.signingBonusEur };
+  return type === "permanent"
+    ? { ...base, feeEur: terms.feeEur, contractYears: terms.contractYears }
+    : { ...base, loanFeeEur: terms.loanFeeEur, loanMonths: terms.loanMonths, optionToBuyEur: terms.optionToBuyEur };
+}
+
+export function createTransferOffer(save, playerId, destinationClubId, type, terms,
+  currentDate = save?.world?.currentDate, database = WORLD_DATABASE) {
+  const state = save?.world?.transfers;
+  if (!isRecord(state) || !Array.isArray(state.offers) || !Array.isArray(state.moves) || !Array.isArray(state.history))
+    return { changed: false, save, error: "محرك الانتقالات غير موجود في ملف الحفظ." };
+  if (!isTransferCalendarDate(currentDate)) return { changed: false, save, error: "تاريخ المسيرة غير صالح." };
+  const window = getTransferWindow(currentDate);
+  if (!window.active) return { changed: false, save, error: "نافذة الانتقالات مغلقة. أقرب نافذة: " + (window.nextWindow?.startDate ?? "غير محددة") + "." };
+  if (!validId(playerId) || !validId(destinationClubId) || !["permanent", "loan"].includes(type) || !validTerms(type, terms))
+    return { changed: false, save, error: "بيانات عرض الانتقال غير مكتملة أو غير صالحة." };
+  const player = getPlayer(database, playerId);
+  const club = getClub(database, destinationClubId);
+  if (!player || !club) return { changed: false, save, error: "اللاعب أو النادي المستهدف غير موجود في قاعدة العالم." };
+  const fromClubId = getPlayerCurrentClubId(playerId, player.clubId, state, currentDate);
+  if (fromClubId === destinationClubId) return { changed: false, save, error: "اللاعب موجود بالفعل في النادي المستهدف." };
+  if (!save.agency.clients.includes(playerId) || !getActiveRepresentationContract(save, playerId, currentDate))
+    return { changed: false, save, error: "لا يمكن التفاوض على انتقال لاعب قبل توقيع عقد تمثيل نشط معه." };
+  if (state.offers.some((offer) => offer.playerId === playerId && ["pending", "countered", "agreed"].includes(offer.status)))
+    return { changed: false, save, error: "يوجد بالفعل ملف انتقال مفتوح لهذا اللاعب." };
+  if (state.moves.some((move) => move.playerId === playerId && move.type === "loan" && move.status === "active"))
+    return { changed: false, save, error: "اللاعب معار حاليًا ولا يمكن بدء انتقال آخر." };
+  if (state.offers.length >= MAX_TRANSFER_OFFERS || state.history.length >= MAX_TRANSFER_HISTORY ||
+      !Number.isSafeInteger(state.nextOfferSequence) || state.nextOfferSequence < 1)
+    return { changed: false, save, error: "وصل سجل الانتقالات إلى الحد المتاح." };
+  const offer = {
+    id: "transfer-offer-" + state.nextOfferSequence, playerId, playerName: player.name, type,
+    fromClubId, toClubId: destinationClubId, toClubName: club.nameAr,
+    marketValueEur: Number.isSafeInteger(player.marketValueEur) ? player.marketValueEur : 0,
+    terms: normalizeTerms(type, terms), status: "pending", round: 1,
+    createdDate: currentDate, expiresDate: addDays(currentDate, TRANSFER_OFFER_VALIDITY_DAYS),
+    counterOffer: null, agreedDate: null, completedDate: null, moveId: null
+  };
+  let next = { ...state, nextOfferSequence: state.nextOfferSequence + 1, offers: [offer, ...state.offers] };
+  next = appendHistory(next, "offer-sent", offer, currentDate,
+    (type === "loan" ? "تم إرسال طلب إعارة إلى " : "تم إرسال عرض انتقال إلى ") + club.nameAr + ".");
+  return { changed: true, status: "pending", offer, save: { ...save, world: { ...save.world, transfers: next } } };
+}
+
+export function evaluateTransferOffer(save, offerId, currentDate = save?.world?.currentDate, database = WORLD_DATABASE) {
+  const state = save?.world?.transfers;
+  const offer = state?.offers?.find((item) => item.id === offerId);
+  if (!offer || !["pending", "countered"].includes(offer.status)) return { changed: false, save, error: "عرض الانتقال غير متاح للرد." };
+  if (!isTransferCalendarDate(currentDate)) return { changed: false, save, error: "تاريخ المسيرة غير صالح." };
+  if (currentDate > offer.expiresDate) return expireTransferOffer(save, offer, currentDate);
+  if (!getTransferWindow(currentDate).active) return { changed: false, save, error: "انتهت نافذة الانتقالات قبل إتمام التفاوض." };
+  const player = getPlayer(database, offer.playerId);
+  const club = getClub(database, offer.toClubId);
+  if (!player || !club) return { changed: false, save, error: "بيانات اللاعب أو النادي غير متاحة." };
+  const marketValue = Number.isSafeInteger(player.marketValueEur) ? player.marketValueEur : 0;
+  const clubProfile = Number.isInteger(club.simulationProfile) ? clamp(club.simulationProfile, 40, 99) : 65;
+  const wageCeiling = Math.round(clubProfile * 650);
+  const nextRound = offer.round + 1;
+  let counter = null;
+  if (offer.type === "permanent") {
+    const minFee = Math.round(marketValue * 0.9);
+    if (offer.terms.feeEur >= minFee && offer.terms.weeklyWageEur <= wageCeiling) {
+      let next = replaceOffer(state, offer.id, { status: "agreed", round: Math.min(4, nextRound),
+        agreedDate: currentDate, agreedTerms: offer.terms, counterOffer: null });
+      next = appendHistory(next, "offer-agreed", offer, currentDate, "وافق النادي على شروط الانتقال.");
+      return { changed: true, status: "agreed", offer: next.offers.find((item) => item.id === offer.id),
+        save: { ...save, world: { ...save.world, transfers: next } } };
+    }
+    counter = { ...offer.terms, feeEur: Math.max(offer.terms.feeEur, minFee),
+      weeklyWageEur: Math.min(offer.terms.weeklyWageEur, wageCeiling) };
+  } else {
+    const minLoanFee = Math.round(marketValue * 0.015);
+    if (offer.terms.loanFeeEur >= minLoanFee && offer.terms.weeklyWageEur <= wageCeiling) {
+      let next = replaceOffer(state, offer.id, { status: "agreed", round: Math.min(4, nextRound),
+        agreedDate: currentDate, agreedTerms: offer.terms, counterOffer: null });
+      next = appendHistory(next, "offer-agreed", offer, currentDate, "وافق النادي على شروط الإعارة.");
+      return { changed: true, status: "agreed", offer: next.offers.find((item) => item.id === offer.id),
+        save: { ...save, world: { ...save.world, transfers: next } } };
+    }
+    counter = { ...offer.terms, loanFeeEur: Math.max(offer.terms.loanFeeEur, minLoanFee),
+      weeklyWageEur: Math.min(offer.terms.weeklyWageEur, wageCeiling) };
+  }
+  if (offer.round >= 3) {
+    let next = replaceOffer(state, offer.id, { status: "rejected", round: 4, counterOffer: null });
+    next = appendHistory(next, "offer-rejected", offer, currentDate, "رفض النادي العرض بعد استنفاد جولات التفاوض.");
+    return { changed: true, status: "rejected", save: { ...save, world: { ...save.world, transfers: next } } };
+  }
+  let next = replaceOffer(state, offer.id, { status: "countered", round: nextRound, counterOffer: counter });
+  next = appendHistory(next, "club-countered", offer, currentDate, "أرسل النادي شروطًا مضادة للجولة " + nextRound + ".");
+  return { changed: true, status: "countered", offer: next.offers.find((item) => item.id === offer.id),
+    counterOffer: counter, save: { ...save, world: { ...save.world, transfers: next } } };
+}
+
+export function submitTransferCounterOffer(save, offerId, terms, currentDate = save?.world?.currentDate) {
+  const state = save?.world?.transfers;
+  const offer = state?.offers?.find((item) => item.id === offerId);
+  if (!offer || offer.status !== "countered") return { changed: false, save, error: "لا توجد شروط مضادة مفتوحة لهذا العرض." };
+  if (!isTransferCalendarDate(currentDate) || currentDate > offer.expiresDate || !getTransferWindow(currentDate).active)
+    return { changed: false, save, error: "لا يمكن إرسال رد خارج مدة العرض أو نافذة الانتقالات." };
+  if (!validTerms(offer.type, terms)) return { changed: false, save, error: "شروط الرد المالي أو مدة العقد غير صالحة." };
+  if (offer.round >= 4) return { changed: false, save, error: "تم استنفاد جولات التفاوض الأربع." };
+  let next = replaceOffer(state, offer.id, { status: "pending", round: offer.round + 1,
+    terms: normalizeTerms(offer.type, terms), counterOffer: null });
+  next = appendHistory(next, "agency-countered", offer, currentDate, "أرسلت الوكالة شروطًا مضادة للنادي.");
+  return { changed: true, status: "pending", offer: next.offers.find((item) => item.id === offer.id),
+    save: { ...save, world: { ...save.world, transfers: next } } };
+}
+
+export function acceptTransferCounterOffer(save, offerId, currentDate = save?.world?.currentDate) {
+  const state = save?.world?.transfers;
+  const offer = state?.offers?.find((item) => item.id === offerId);
+  if (!offer || offer.status !== "countered" || !offer.counterOffer) return { changed: false, save, error: "لا يوجد عرض مضاد صالح لقبوله." };
+  if (!isTransferCalendarDate(currentDate) || currentDate > offer.expiresDate || !getTransferWindow(currentDate).active)
+    return { changed: false, save, error: "انتهت صلاحية العرض أو نافذة الانتقالات." };
+  let next = replaceOffer(state, offer.id, { status: "agreed", agreedDate: currentDate,
+    agreedTerms: offer.counterOffer, counterOffer: null });
+  next = appendHistory(next, "offer-agreed", offer, currentDate, "وافقت الوكالة على الشروط المضادة للنادي.");
+  return { changed: true, status: "agreed", offer: next.offers.find((item) => item.id === offer.id),
+    save: { ...save, world: { ...save.world, transfers: next } } };
+}
+
+export function rejectTransferOffer(save, offerId, currentDate = save?.world?.currentDate) {
+  const state = save?.world?.transfers;
+  const offer = state?.offers?.find((item) => item.id === offerId);
+  if (!offer || !["pending", "countered", "agreed"].includes(offer.status)) return { changed: false, save, error: "العرض غير متاح للإلغاء." };
+  if (!isTransferCalendarDate(currentDate) || currentDate < offer.createdDate) return { changed: false, save, error: "تاريخ الإلغاء غير صالح." };
+  let next = replaceOffer(state, offer.id, { status: "rejected", counterOffer: null, rejectedDate: currentDate });
+  next = appendHistory(next, "offer-rejected", offer, currentDate, "ألغت الوكالة التفاوض على الانتقال.");
+  return { changed: true, status: "rejected", save: { ...save, world: { ...save.world, transfers: next } } };
+}
+
+function expireTransferOffer(save, offer, currentDate) {
+  let next = replaceOffer(save.world.transfers, offer.id, { status: "expired", counterOffer: null, expiredDate: currentDate });
+  next = appendHistory(next, "offer-expired", offer, currentDate, "انتهت صلاحية عرض الانتقال دون اتفاق.");
+  return { changed: true, status: "expired", expiredOffers: [offer.id], save: { ...save, world: { ...save.world, transfers: next } } };
+}
+
+export function completeTransfer(save, offerId, currentDate = save?.world?.currentDate) {
+  const state = save?.world?.transfers;
+  const offer = state?.offers?.find((item) => item.id === offerId);
+  if (!offer || offer.status !== "agreed" || !offer.agreedTerms) return { changed: false, save, error: "لا يمكن تنفيذ صفقة قبل اتفاق الطرفين على الشروط." };
+  if (!isTransferCalendarDate(currentDate) || currentDate < offer.createdDate || !getTransferWindow(currentDate).active)
+    return { changed: false, save, error: "تنفيذ الصفقة متاح فقط داخل نافذة الانتقالات." };
+  if (state.moves.some((move) => move.playerId === offer.playerId && move.type === "loan" && move.status === "active"))
+    return { changed: false, save, error: "اللاعب لديه إعارة نشطة بالفعل." };
+  const mandate = getActiveRepresentationContract(save, offer.playerId, currentDate);
+  if (!mandate) return { changed: false, save, error: "انتهى عقد التمثيل قبل إتمام الصفقة." };
+  if (state.moves.length >= MAX_TRANSFER_MOVES || state.ledger.length >= MAX_TRANSFER_LEDGER ||
+      state.history.length >= MAX_TRANSFER_HISTORY) return { changed: false, save, error: "وصل سجل الصفقات أو العمولات إلى الحد المتاح." };
+  const terms = offer.agreedTerms;
+  const commissionEur = Math.round(terms.signingBonusEur * mandate.commissionRate / 100);
+  if (state.earnedCommissionEur + commissionEur > MAX_EUR) return { changed: false, save, error: "سجل عمولات الوكالة تجاوز الحد المالي المسموح." };
+  const moveId = "transfer-move-" + state.nextMoveSequence;
+  const move = {
+    id: moveId, offerId: offer.id, playerId: offer.playerId, playerName: offer.playerName,
+    type: offer.type, fromClubId: offer.fromClubId, toClubId: offer.toClubId,
+    effectiveDate: currentDate, status: "active",
+    feeEur: offer.type === "permanent" ? terms.feeEur : 0,
+    loanFeeEur: offer.type === "loan" ? terms.loanFeeEur : 0,
+    optionToBuyEur: offer.type === "loan" ? terms.optionToBuyEur : 0,
+    weeklyWageEur: terms.weeklyWageEur,
+    contractYears: offer.type === "permanent" ? terms.contractYears : null,
+    returnDate: offer.type === "loan" ? addMonths(currentDate, terms.loanMonths) : null
+  };
+  let next = {
+    ...state, nextMoveSequence: state.nextMoveSequence + 1, moves: [move, ...state.moves],
+    offers: state.offers.map((item) => item.id === offer.id ? { ...item, status: "completed", completedDate: currentDate, moveId } : item)
+  };
+  if (commissionEur > 0) {
+    const entry = { id: "transfer-ledger-" + next.nextLedgerSequence, type: "agent-commission",
+      offerId: offer.id, moveId, playerId: offer.playerId, date: currentDate, currency: "EUR",
+      amountEur: commissionEur, commissionRate: mandate.commissionRate, basisEur: terms.signingBonusEur };
+    next = { ...next, nextLedgerSequence: next.nextLedgerSequence + 1,
+      earnedCommissionEur: next.earnedCommissionEur + commissionEur, ledger: [entry, ...next.ledger] };
+  }
+  next = appendHistory(next, "transfer-completed", offer, currentDate,
+    (offer.type === "loan" ? "اكتملت إعارة اللاعب إلى " : "اكتمل انتقال اللاعب إلى ") + offer.toClubName + ".", { moveId });
+  return { changed: true, status: "completed", move, commissionEur,
+    save: { ...save, world: { ...save.world, transfers: next } } };
+}
+
+export function advanceTransferState(save, currentDate = save?.world?.currentDate) {
+  const state = save?.world?.transfers;
+  if (!isRecord(state) || !isTransferCalendarDate(currentDate)) return { save, expiredOffers: [], returnedLoans: [] };
+  let nextSave = save;
+  const expiredOffers = [];
+  const returnedLoans = [];
+  for (const offer of state.offers) {
+    if (["pending", "countered"].includes(offer.status) && currentDate > offer.expiresDate) {
+      const result = expireTransferOffer(nextSave, offer, currentDate);
+      nextSave = result.save;
+      expiredOffers.push(offer.id);
+    }
+  }
+  let next = nextSave.world.transfers;
+  for (const move of next.moves) {
+    if (move.type === "loan" && move.status === "active" && currentDate >= move.returnDate) {
+      next = { ...next, moves: next.moves.map((item) => item.id === move.id ? { ...item, status: "returned", returnedDate: currentDate } : item) };
+      next = { ...next, history: [{ id: "transfer-history-" + next.nextHistorySequence,
+        type: "loan-returned", offerId: move.offerId, moveId: move.id, playerId: move.playerId,
+        playerName: move.playerName, date: currentDate, note: "انتهت مدة الإعارة وعاد اللاعب إلى ناديه الأصلي." },
+        ...next.history].slice(0, MAX_TRANSFER_HISTORY), nextHistorySequence: next.nextHistorySequence + 1 };
+      returnedLoans.push(move.id);
+    }
+  }
+  if (next !== nextSave.world.transfers) nextSave = { ...nextSave, world: { ...nextSave.world, transfers: next } };
+  return { save: nextSave, expiredOffers, returnedLoans };
+}
+
+export function isValidTransferState(state, currentDate, clients = [], representation = null) {
+  if (!isRecord(state) || !isTransferCalendarDate(currentDate) || !Array.isArray(clients) ||
+      !["nextOfferSequence", "nextMoveSequence", "nextHistorySequence", "nextLedgerSequence"].every((key) => Number.isSafeInteger(state[key]) && state[key] >= 1) ||
+      !validMoney(state.earnedCommissionEur) ||
+      !Array.isArray(state.offers) || state.offers.length > MAX_TRANSFER_OFFERS ||
+      !Array.isArray(state.moves) || state.moves.length > MAX_TRANSFER_MOVES ||
+      !Array.isArray(state.history) || state.history.length > MAX_TRANSFER_HISTORY ||
+      !Array.isArray(state.ledger) || state.ledger.length > MAX_TRANSFER_LEDGER) return false;
+  const collections = [state.offers, state.moves, state.history, state.ledger];
+  if (collections.some((items) => items.some((item) => !isRecord(item) || !validId(item.id)) ||
+      new Set(items.map((item) => item.id)).size !== items.length)) return false;
+  const offers = new Map();
+  let highestOffer = 0;
+  for (const offer of state.offers) {
+    if (!sequenceOf(offer.id, "transfer-offer") || !validId(offer.playerId) || !validId(offer.playerName) ||
+        !["permanent", "loan"].includes(offer.type) || !validId(offer.fromClubId) || !validId(offer.toClubId) ||
+        offer.fromClubId === offer.toClubId || !validId(offer.toClubName) || !validMoney(offer.marketValueEur) ||
+        !validTerms(offer.type, offer.terms) || !OFFER_STATUSES.has(offer.status) ||
+        !Number.isInteger(offer.round) || offer.round < 1 || offer.round > 4 ||
+        !isTransferCalendarDate(offer.createdDate) || !isTransferCalendarDate(offer.expiresDate) ||
+        offer.createdDate > currentDate || offer.expiresDate !== addDays(offer.createdDate, TRANSFER_OFFER_VALIDITY_DAYS) ||
+        (offer.counterOffer !== null && !validTerms(offer.type, offer.counterOffer))) return false;
+    if (offer.status === "countered" && !offer.counterOffer) return false;
+    if (["agreed", "completed"].includes(offer.status) && (!validTerms(offer.type, offer.agreedTerms) || !isTransferCalendarDate(offer.agreedDate))) return false;
+    if (offer.status === "completed" && (!validId(offer.moveId) || !isTransferCalendarDate(offer.completedDate))) return false;
+    if (offer.status !== "completed" && offer.moveId !== null) return false;
+    if (!clients.includes(offer.playerId) && !["rejected", "expired"].includes(offer.status)) return false;
+    offers.set(offer.id, offer);
+    highestOffer = Math.max(highestOffer, sequenceOf(offer.id, "transfer-offer"));
+  }
+  if (state.nextOfferSequence <= highestOffer) return false;
+
+  const moves = new Map();
+  let highestMove = 0;
+  const activeLoans = new Set();
+  for (const move of state.moves) {
+    const offer = offers.get(move.offerId);
+    if (!sequenceOf(move.id, "transfer-move") || !offer || offer.status !== "completed" ||
+        offer.moveId !== move.id || offer.playerId !== move.playerId || offer.type !== move.type ||
+        !validId(move.playerId) || !validId(move.playerName) || !["permanent", "loan"].includes(move.type) ||
+        !validId(move.fromClubId) || !validId(move.toClubId) || move.fromClubId === move.toClubId ||
+        !isTransferCalendarDate(move.effectiveDate) || move.effectiveDate > currentDate ||
+        !["active", "returned"].includes(move.status) || !validMoney(move.feeEur) ||
+        !validMoney(move.loanFeeEur) || !validMoney(move.optionToBuyEur) || !validMoney(move.weeklyWageEur)) return false;
+    if (move.type === "loan") {
+      if (move.feeEur !== 0 || move.contractYears !== null || !isTransferCalendarDate(move.returnDate) ||
+          move.returnDate <= move.effectiveDate ||
+          (move.status === "returned" && (!isTransferCalendarDate(move.returnedDate) || move.returnedDate < move.returnDate || move.returnedDate > currentDate))) return false;
+      if (move.status === "active") {
+        if (activeLoans.has(move.playerId)) return false;
+        activeLoans.add(move.playerId);
+      }
+    } else if (move.returnDate !== null || move.loanFeeEur !== 0 || move.optionToBuyEur !== 0 ||
+        !Number.isInteger(move.contractYears) || move.contractYears < 1 || move.contractYears > 5) return false;
+    moves.set(move.id, move);
+    highestMove = Math.max(highestMove, sequenceOf(move.id, "transfer-move"));
+  }
+  if (state.nextMoveSequence <= highestMove) return false;
+  for (const offer of state.offers) if (offer.status === "completed" && !moves.has(offer.moveId)) return false;
+
+  let ledgerTotal = 0;
+  let highestLedger = 0;
+  for (const entry of state.ledger) {
+    const offer = offers.get(entry.offerId);
+    const move = moves.get(entry.moveId);
+    if (!sequenceOf(entry.id, "transfer-ledger") || !offer || !move || entry.playerId !== move.playerId ||
+        entry.type !== "agent-commission" || !isTransferCalendarDate(entry.date) || entry.date > currentDate ||
+        entry.currency !== "EUR" || !validMoney(entry.amountEur) ||
+        !Number.isInteger(entry.commissionRate) || entry.commissionRate < 5 || entry.commissionRate > 15 ||
+        !validMoney(entry.basisEur) || entry.amountEur !== Math.round(entry.basisEur * entry.commissionRate / 100)) return false;
+    const contract = representation?.contracts?.find((item) => item.playerId === entry.playerId);
+    if (contract && contract.commissionRate !== entry.commissionRate) return false;
+    ledgerTotal += entry.amountEur;
+    highestLedger = Math.max(highestLedger, sequenceOf(entry.id, "transfer-ledger"));
+  }
+  if (state.nextLedgerSequence <= highestLedger || ledgerTotal !== state.earnedCommissionEur) return false;
+
+  let highestHistory = 0;
+  for (const item of state.history) {
+    if (!sequenceOf(item.id, "transfer-history") || !HISTORY_TYPES.has(item.type) ||
+        !offers.has(item.offerId) || !validId(item.playerId) || !validId(item.playerName) ||
+        !isTransferCalendarDate(item.date) || item.date > currentDate || typeof item.note !== "string" || !item.note.trim() ||
+        (item.moveId !== undefined && !moves.has(item.moveId))) return false;
+    highestHistory = Math.max(highestHistory, sequenceOf(item.id, "transfer-history"));
+  }
+  return state.nextHistorySequence > highestHistory;
+}
