@@ -458,7 +458,7 @@ test.describe("Mobile experience", () => {
     await page.goto("/");
     await navigateTo(page, "اللاعبون");
     await page.getByRole("searchbox", { name: "البحث عن لاعب" }).fill("ياسين عادل");
-    await page.locator(".player-card").getByRole("button", { name: "عرض الملف" }).click();
+    await page.locator(".player-card").getByRole("button", { name: "ملف اللاعب" }).click();
 
     const dossier = page.getByRole("dialog", { name: "ملف اللاعب" });
     await expect(dossier.locator(".player-profile-identity h3")).toHaveText("ياسين عادل");
