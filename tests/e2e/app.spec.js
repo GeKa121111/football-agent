@@ -577,8 +577,6 @@ test.describe("Mobile experience", () => {
   });
 
   test("runs a paid scouting mission and persists its completed report", async ({ page }) => {
-    const pageErrors = [];
-    page.on("pageerror", (error) => pageErrors.push(error.message));
     await page.goto("/");
     await navigateTo(page, "الكشافون");
     await page.getByRole("button", { name: /إطلاق بعثة كشف/ }).click();
@@ -657,15 +655,6 @@ test.describe("Mobile experience", () => {
     await expect(page.locator(".agency-screen")).toBeVisible();
     await expect(page.locator(".talent-pipeline-panel")).toBeVisible();
     await expect(page.locator(".talent-pipeline-panel .representation-heading > .representation-count")).toHaveText("1 ملف موحّد");
-    const pipelineUiDebug = await page.evaluate(() => ({
-      filter: document.querySelector(".talent-pipeline-panel [aria-label=\"تصفية مرحلة المواهب\"]")?.value,
-      gridText: document.querySelector(".talent-pipeline-grid")?.innerText,
-      gridHtml: document.querySelector(".talent-pipeline-grid")?.innerHTML,
-      pipeline: JSON.parse(localStorage.getItem("football-agent.save"))?.agency?.talentPipeline,
-      offers: JSON.parse(localStorage.getItem("football-agent.save"))?.agency?.representation?.offers
-    }));
-    console.log("TALENT_PIPELINE_DEBUG", JSON.stringify(pipelineUiDebug));
-    console.log("TALENT_PIPELINE_PAGE_ERRORS", JSON.stringify(pageErrors));
     await expect(page.locator(".talent-pipeline-card")).toHaveCount(1);
     await expect(page.locator(".talent-pipeline-stage")).toHaveText("قيد التفاوض");
     await expect(page.locator(".talent-pipeline-followup")).toContainText("يوليو");
