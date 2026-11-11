@@ -651,6 +651,8 @@ test.describe("Mobile experience", () => {
     expect(offerSave.agency.clients).toHaveLength(0);
 
     await navigateTo(page, "الوكالة");
+    await expect(page.locator(".agency-screen")).toBeVisible();
+    await expect(page.locator(".talent-pipeline-panel")).toBeVisible();
     await expect(page.locator(".talent-pipeline-card")).toHaveCount(1);
     await expect(page.locator(".talent-pipeline-stage")).toHaveText("قيد التفاوض");
     await expect(page.locator(".talent-pipeline-followup")).toContainText("يوليو");
