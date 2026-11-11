@@ -358,7 +358,8 @@ export function isValidTransferState(state, currentDate, clients = [], represent
       const agreedWindow = isTransferCalendarDate(offer.agreedDate) ? getTransferWindow(offer.agreedDate).window : null;
       if (!validTerms(offer.type, offer.agreedTerms) || !agreedWindow ||
           offer.agreedDate < offer.createdDate || offer.agreedDate > currentDate ||
-          agreedWindow.id !== createdWindow.id || currentDate > agreedWindow.endDate) return false;
+          agreedWindow.id !== createdWindow.id ||
+          (offer.status === "agreed" && currentDate > agreedWindow.endDate)) return false;
     }
     if (["pending", "countered"].includes(offer.status) &&
         (currentDate > offer.expiresDate || currentDate > createdWindow.endDate)) return false;
