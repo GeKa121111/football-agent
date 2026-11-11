@@ -116,6 +116,8 @@ test.describe("Desktop experience", () => {
     await navigateTo(page, "المباريات");
     await expect(page.locator(".football-screen")).toBeVisible();
     await expect(page.locator(".football-fixture-card")).toHaveCount(12);
+    await expect(page.locator(".football-standings-table .football-standings-row")).toHaveCount(3);
+    await expect(page.getByLabel("اختيار المسابقة للترتيب")).toBeVisible();
     await expect(page.getByLabel("لاعب خطة التدريب")).toBeVisible();
 
     await page.getByLabel("لاعب خطة التدريب").selectOption("demo-yassin-adel");
@@ -137,6 +139,9 @@ test.describe("Desktop experience", () => {
     const playedSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(playedSave.world.football.results.length).toBeGreaterThan(0);
     expect(playedSave.world.events.some((event) => event.type === "football-match-played")).toBe(true);
+    const standingsTable = page.locator(".football-standings-table");
+    await expect(standingsTable).toContainText("الأهلي");
+    await expect(standingsTable).toContainText("الزمالك");
     await hasNoHorizontalOverflow(page);
   });
 
