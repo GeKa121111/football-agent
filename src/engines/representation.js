@@ -413,13 +413,17 @@ export function isValidRepresentationState(representation, currentDate, clients 
           renewal.signedOn > currentDate ||
           renewal.signedOn > renewal.startsOn) return false;
       const renewalOffer = offersById.get(renewal.offerId);
+      const acceptedRenewalTerms = renewalOffer?.resolution?.includes("counter-accepted")
+        ? renewalOffer.counterOffer
+        : renewalOffer;
       if (!renewalOffer || renewalOffer.kind !== "renewal" ||
           renewalOffer.status !== "accepted" ||
           renewalOffer.renewalContractId !== contract.id ||
           renewalOffer.contractId !== contract.id ||
           renewalOffer.playerId !== contract.playerId ||
-          renewalOffer.commissionRate !== renewal.commissionRate ||
-          renewalOffer.termDays !== renewal.termDays) return false;
+          !acceptedRenewalTerms ||
+          acceptedRenewalTerms.commissionRate !== renewal.commissionRate ||
+          acceptedRenewalTerms.termDays !== renewal.termDays) return false;
       renewalOfferIds.add(renewal.offerId);
       expectedRenewalStart = renewal.expiresOn;
     }
@@ -444,6 +448,13 @@ export function isValidRepresentationState(representation, currentDate, clients 
   }
 
   for (const offer of representation.offers) {
+    if (offer.kind === "renewal") {
+      const renewalContract = contractsById.get(offer.renewalContractId);
+      if (!renewalContract || renewalContract.playerId !== offer.playerId) return false;
+      if (["pending", "countered"].includes(offer.status) &&
+          (renewalContract.status !== "active" ||
+           currentDate >= getRepresentationContractExpiry(renewalContract))) return false;
+    }
     if (offer.status === "accepted") {
       const contract = contractsById.get(offer.contractId);
       if (!contract || contract.playerId !== offer.playerId) return false;
