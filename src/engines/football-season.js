@@ -79,12 +79,15 @@ function createRoundRobinRounds(clubIds) {
  * explicitly marked anonymous simulation-only players, never inserted into
  * the searchable world-player database.
  */
-export function buildSimulationTeam(clubId, database = WORLD_DATABASE) {
+export function buildSimulationTeam(clubId, database = WORLD_DATABASE, playerDevelopment = null) {
   const club = database.clubs.find((item) => item.id === clubId);
   if (!club) throw new TypeError("النادي غير موجود في قاعدة العالم: " + clubId);
 
+  const injuredPlayerIds = new Set((playerDevelopment?.players ?? [])
+    .filter((player) => player.injuryDays > 0)
+    .map((player) => player.playerId));
   const realPlayers = database.players
-    .filter((player) => player.clubId === clubId)
+    .filter((player) => player.clubId === clubId && !injuredPlayerIds.has(player.id))
     .sort((a, b) => compareText(a.id, b.id));
   const unused = new Set(realPlayers.map((player) => player.id));
   const lineup = ROLE_SLOTS.map((role, slotIndex) => {
@@ -286,8 +289,8 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
   const matchMessages = [];
 
   for (const fixture of todayFixtures) {
-    const home = buildSimulationTeam(fixture.homeClubId, database);
-    const away = buildSimulationTeam(fixture.awayClubId, database);
+    const home = buildSimulationTeam(fixture.homeClubId, database, playerDevelopment);
+    const away = buildSimulationTeam(fixture.awayClubId, database, playerDevelopment);
     const simulated = simulateMatch({
       id: fixture.id,
       date: fixture.date,
@@ -425,4 +428,60 @@ export function getRecentFootballResults(state, limit = 10) {
   return [...state.results]
     .sort((a, b) => compareText(b.date, a.date) || compareText(b.id, a.id))
     .slice(0, limit);
+}
+
+/** Builds a deterministic competition table from persisted match results. */
+export function getCompetitionStandings(state, competitionId, database = WORLD_DATABASE) {
+  const competition = database.competitions.find((item) => item.id === competitionId);
+  if (!competition || !Array.isArray(state?.results)) return [];
+  const clubById = new Map(database.clubs.map((club) => [club.id, club]));
+  const standings = new Map(competition.clubIds.map((clubId) => [clubId, {
+    clubId,
+    clubName: clubById.get(clubId)?.nameAr ?? clubId,
+    played: 0,
+    wins: 0,
+    draws: 0,
+    losses: 0,
+    goalsFor: 0,
+    goalsAgainst: 0,
+    goalDifference: 0,
+    points: 0
+  }]));
+
+  for (const result of state.results) {
+    if (result.competitionId !== competitionId) continue;
+    const home = standings.get(result.home.clubId);
+    const away = standings.get(result.away.clubId);
+    if (!home || !away) continue;
+    home.played += 1;
+    away.played += 1;
+    home.goalsFor += result.home.goals;
+    home.goalsAgainst += result.away.goals;
+    away.goalsFor += result.away.goals;
+    away.goalsAgainst += result.home.goals;
+    if (result.home.goals > result.away.goals) {
+      home.wins += 1;
+      away.losses += 1;
+      home.points += 3;
+    } else if (result.away.goals > result.home.goals) {
+      away.wins += 1;
+      home.losses += 1;
+      away.points += 3;
+    } else {
+      home.draws += 1;
+      away.draws += 1;
+      home.points += 1;
+      away.points += 1;
+    }
+  }
+
+  return [...standings.values()]
+    .map((row) => ({ ...row, goalDifference: row.goalsFor - row.goalsAgainst }))
+    .sort((a, b) =>
+      b.points - a.points ||
+      b.goalDifference - a.goalDifference ||
+      b.goalsFor - a.goalsFor ||
+      compareText(a.clubId, b.clubId)
+    )
+    .map((row, index) => ({ ...row, position: index + 1 }));
 }
