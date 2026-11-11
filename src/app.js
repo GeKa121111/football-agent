@@ -985,7 +985,7 @@ function getTalentPipelineRecords(context) {
     const savedEntry = (pipeline?.entries ?? []).find((entry) => entry.playerId === playerId);
     const offerSnapshot = representation.offers.find((item) => item.playerId === playerId);
     const contractSnapshot = representation.contracts.find((item) => item.playerId === playerId);
-    const sourcePlayer = context.players.find((candidate) => candidate.id === playerId);
+    const sourcePlayer = context.players?.find((candidate) => candidate.id === playerId) ?? WORLD_PLAYERS.find((candidate) => candidate.id === playerId);
     const snapshot = savedEntry ?? offerSnapshot ?? contractSnapshot;
     const player = sourcePlayer ?? (snapshot ? {
       id: playerId,
@@ -1121,6 +1121,7 @@ function renderTalentPipeline(context) {
     option.value = value;
     filter.append(option);
   });
+  filter.value = "active";
   const resultCount = node("span", "representation-count", "");
   resultCount.setAttribute("aria-live", "polite");
   toolbar.append(search, filter, resultCount);
