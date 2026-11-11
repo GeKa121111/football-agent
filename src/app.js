@@ -8,7 +8,8 @@ import {
 import { WORLD_DATABASE, getWorldPlayerProfiles, getWorldSummary } from "./data/world-database.js";
 import {
   getUpcomingFootballFixtures,
-  getRecentFootballResults
+  getRecentFootballResults,
+  getCompetitionStandings
 } from "./engines/football-season.js";
 import {
   TRAINING_FOCUSES,
@@ -776,6 +777,53 @@ function renderFootball(context) {
     });
     schedulePanel.append(fixtureList);
   }
+
+  const standingsPanel = node("section", "surface-card football-panel");
+  const standingsHeading = node("div", "football-panel-heading");
+  const standingsTitle = node("h2", "", "جدول الترتيب");
+  const competitionSelect = node("select", "filter-select");
+  competitionSelect.setAttribute("aria-label", "اختيار المسابقة للترتيب");
+  [...WORLD_DATABASE.competitions]
+    .sort((a, b) => a.nameAr.localeCompare(b.nameAr, "ar"))
+    .forEach((competition) => {
+      const option = node("option", "", competition.nameAr);
+      option.value = competition.id;
+      competitionSelect.append(option);
+    });
+  standingsHeading.append(standingsTitle, competitionSelect);
+  standingsPanel.append(standingsHeading);
+  const standingsTable = node("div", "football-standings-table");
+  const renderStandings = () => {
+    const standings = getCompetitionStandings(football, competitionSelect.value);
+    const header = node("div", "football-standings-row is-header");
+    ["#", "النادي", "لعب", "ف", "ت", "خ", "له", "عليه", "النقاط"].forEach((label) => {
+      header.append(node("span", "", label));
+    });
+    const rows = standings.map((club) => {
+      const row = node("div", "football-standings-row");
+      [
+        club.position,
+        club.clubName,
+        club.played,
+        club.wins,
+        club.draws,
+        club.losses,
+        club.goalsFor,
+        club.goalsAgainst,
+        club.points
+      ].forEach((value, index) => {
+        row.append(node("span", index === 1 ? "football-standings-club" : "", formatHomeNumber(value)));
+      });
+      return row;
+    });
+    standingsTable.replaceChildren(header, ...rows);
+    if (standings.every((club) => club.played === 0)) {
+      standingsTable.append(node("p", "representation-empty", "الترتيب هيتحدث تلقائيًا بعد لعب أول مباراة في المسابقة."));
+    }
+  };
+  competitionSelect.addEventListener("change", renderStandings);
+  renderStandings();
+  standingsPanel.append(standingsTable);
 
   const resultsPanel = node("section", "surface-card football-panel");
   const resultsHeading = node("div", "football-panel-heading");
