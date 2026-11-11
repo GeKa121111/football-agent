@@ -371,7 +371,7 @@ function renderPlayers(context) {
 
     count.textContent = query
       ? filtered.length + " نتائج"
-      : WORLD_PLAYERS.length + " ملفات تجريبية";
+      : WORLD_PLAYERS.length + " لاعبًا في قاعدة البيانات";
 
     if (filtered.length === 0) {
       grid.replaceChildren(emptyResults(
@@ -422,7 +422,7 @@ function renderScouting(context) {
   search.setAttribute("aria-label", "البحث في المواهب");
   const position = node("select", "filter-select");
   position.setAttribute("aria-label", "تصفية حسب المركز");
-  [["all", "كل المراكز"], ["هجوم", "الهجوم"], ["وسط", "الوسط"], ["دفاع", "الدفاع"]].forEach(([value, label]) => {
+  [["all", "كل المراكز"], ["هجوم", "الهجوم"], ["وسط", "الوسط"], ["دفاع", "الدفاع"], ["حراسة", "حراسة المرمى"]].forEach(([value, label]) => {
     const option = node("option", "", label);
     option.value = value;
     position.append(option);
