@@ -449,8 +449,9 @@ export function isValidRepresentationState(representation, currentDate, clients 
     if (offer.kind === "renewal") {
       const renewalContract = contractsById.get(offer.renewalContractId);
       if (!renewalContract || renewalContract.playerId !== offer.playerId) return false;
-      const effectiveExpiry = getRepresentationContractExpiry(renewalContract);
-      const renewalWindowDays = Math.round((Date.parse(effectiveExpiry + "T00:00:00.000Z") -
+      const renewalRecord = (renewalContract.renewals ?? []).find((item) => item.offerId === offer.id);
+      const renewalWindowAnchor = renewalRecord?.startsOn ?? getRepresentationContractExpiry(renewalContract);
+      const renewalWindowDays = Math.round((Date.parse(renewalWindowAnchor + "T00:00:00.000Z") -
         Date.parse(offer.createdDate + "T00:00:00.000Z")) / 86400000);
       if (renewalWindowDays < 1 || renewalWindowDays > 90) return false;
       if (["pending", "countered"].includes(offer.status)) {
