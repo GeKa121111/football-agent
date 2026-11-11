@@ -223,7 +223,7 @@ test("migrates version 1 saves without losing career or agency progress", () => 
 });
 
 
-test("migrates version 2 saves to scouting schema v3 without rewriting on read", () => {
+test("migrates version 2 saves to schema v4 without rewriting on read", () => {
   const legacy = createInitialSave("2026-07-01T00:00:00.000Z");
   legacy.meta.version = 2;
   delete legacy.world.scouting;
@@ -242,6 +242,33 @@ test("migrates version 2 saves to scouting schema v3 without rewriting on read",
     reports: []
   });
   assert.equal(storage.getItem(STORAGE_KEY), raw);
+});
+
+test("migrates version 3 saves to representation schema v4 without rewriting on read", () => {
+  const legacy = createInitialSave("2026-07-01T00:00:00.000Z");
+  legacy.meta.version = 3;
+  legacy.agency.balance = 456789;
+  legacy.agency.clients = ["legacy-client"];
+  delete legacy.agency.representation;
+  const raw = JSON.stringify(legacy);
+  const storage = memoryStorage({ [STORAGE_KEY]: raw });
+
+  const result = readSave(storage);
+  assert.equal(result.status, "loaded");
+  assert.equal(result.migrated, true);
+  assert.equal(result.save.meta.version, SAVE_VERSION);
+  assert.equal(result.save.agency.balance, 456789);
+  assert.deepEqual(result.save.agency.clients, ["legacy-client"]);
+  assert.deepEqual(result.save.agency.representation, {
+    nextOfferSequence: 1,
+    nextContractSequence: 1,
+    nextHistorySequence: 1,
+    offers: [],
+    contracts: [],
+    history: []
+  });
+  assert.equal(isValidSave(result.save), true);
+  assert.equal(storage.getItem(STORAGE_KEY), raw, "reading must not rewrite the user's schema-v3 save");
 });
 
 test("validates active scouting mission dates, costs and accuracy", () => {

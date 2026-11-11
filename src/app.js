@@ -23,6 +23,14 @@ import {
 } from "./engines/scouting.js";
 import { createPlayerPortrait } from "./ui/player-portrait.js";
 import {
+  createRepresentationOffer as createRepresentationOfferInEngine,
+  evaluateRepresentationOffer as evaluateRepresentationOfferInEngine,
+  acceptRepresentationCounterOffer as acceptRepresentationCounterOfferInEngine,
+  rejectRepresentationOffer as rejectRepresentationOfferInEngine,
+  terminateRepresentationContract as terminateRepresentationContractInEngine,
+  advanceRepresentationState
+} from "./engines/representation.js";
+import {
   advanceCareerDay,
   advanceCareerDays,
   completeCareerTask as completeTaskInEngine,
@@ -830,32 +838,167 @@ function renderAgency(context) {
   page.append(
     node("p", "eyebrow", "إدارة أعمالك"),
     node("h1", "page-title", "الوكالة"),
-    node("p", "page-subtitle", "كل شيء يبدأ من مكتب صغير وسمعة تُبنى صفقة وراء صفقة.")
+    node("p", "page-subtitle", "ابنِ قائمة عملائك، تفاوض على شروط التمثيل، وتابع عقود كل لاعب.")
   );
+
+  const agency = context.save.agency;
+  const representation = agency.representation;
+  const activeContracts = representation.contracts.filter((contract) => contract.status === "active");
+  const openOffers = representation.offers.filter((offer) => ["pending", "countered"].includes(offer.status));
+  const prospects = context.players
+    .filter((player) => !agency.clients.includes(player.id) &&
+      !openOffers.some((offer) => offer.playerId === player.id))
+    .sort((a, b) => b.potential - a.potential || b.rating - a.rating);
+
   const overview = node("section", "agency-overview");
   const monogram = node("div", "agency-monogram", "FA");
   const summary = node("div", "agency-summary");
   summary.append(
     node("span", "agency-label", "وكالتك"),
-    node("h2", "", context.save.agency.name),
-    node("p", "", "وكالة مستقلة  ·  المستوى التأسيسي")
+    node("h2", "", agency.name),
+    node("p", "", "وكالة مستقلة · إدارة التمثيل والعلاقات")
   );
   overview.append(monogram, summary, actionButton("حفظ التقدم", "button-primary", context.saveCareer));
+
   const cards = node("div", "metrics-grid agency-metrics");
   cards.append(
-    metricCard("الرصيد", formatMoney(context.save.agency.balance), "الأموال المتاحة", "◈", "purple"),
-    metricCard("العملاء", context.save.agency.clients.length, "لاعبون متعاقدون", "◎", "cyan"),
-    metricCard("السمعة", context.save.agency.reputation + " / 100", "سمعة الوكالة", "✦", "gold")
+    metricCard("الرصيد", formatMoney(agency.balance), "الأموال المتاحة", "◈", "purple"),
+    metricCard("العملاء", agency.clients.length, "لاعبون ممثلون", "◎", "cyan"),
+    metricCard("العقود النشطة", activeContracts.length, "عقود تمثيل سارية", "▤", "gold")
   );
+
+  const contractsPanel = node("section", "surface-card representation-panel");
+  const contractsHeading = node("div", "representation-heading");
+  contractsHeading.append(
+    node("h2", "", "عملاء الوكالة"),
+    node("span", "representation-count", activeContracts.length + " عقد نشط")
+  );
+  contractsPanel.append(contractsHeading);
+  const contractList = node("div", "representation-list");
+  if (activeContracts.length === 0) {
+    contractList.append(node("p", "representation-empty", "لسه مفيش عقود تمثيل موقعة. اختار لاعب وابدأ التفاوض."));
+  } else {
+    activeContracts.forEach((contract) => {
+      const row = node("article", "representation-row representation-contract-row");
+      const copy = node("div", "representation-copy");
+      copy.append(
+        node("strong", "", contract.playerName),
+        node("span", "", contract.position + " · " + contract.club + " · " + contract.age + " سنة"),
+        node("small", "", "عمولتك " + contract.commissionRate + "% · حتى " + formatHomeDate(contract.expiresOn))
+      );
+      row.append(
+        copy,
+        actionButton("إنهاء التمثيل", "button-outline representation-terminate-button", () => context.terminateRepresentationContract(contract.id))
+      );
+      contractList.append(row);
+    });
+  }
+  contractsPanel.append(contractList);
+
+  const offersPanel = node("section", "surface-card representation-panel");
+  const offersHeading = node("div", "representation-heading");
+  offersHeading.append(
+    node("h2", "", "التفاوض والعروض"),
+    node("span", "representation-count", openOffers.length + " عرض مفتوح")
+  );
+  offersPanel.append(offersHeading);
+  const offerList = node("div", "representation-list");
+  if (openOffers.length === 0) {
+    offerList.append(node("p", "representation-empty", "لا توجد عروض معلقة. العروض الجديدة هتظهر هنا لمتابعة رد اللاعب."));
+  } else {
+    openOffers.forEach((offer) => {
+      const row = node("article", offer.status === "countered"
+        ? "representation-row representation-offer-row is-countered"
+        : "representation-row representation-offer-row");
+      const copy = node("div", "representation-copy");
+      copy.append(
+        node("strong", "", offer.playerName),
+        node("span", "", "عرضك: عمولة " + offer.commissionRate + "% · " + Math.round(offer.termDays / 365) + " سنة"),
+        node("small", "", offer.status === "countered"
+          ? "اللاعب يطلب: عمولة " + offer.counterOffer.commissionRate + "% · " + Math.round(offer.counterOffer.termDays / 365) + " سنة"
+          : "بانتظار رد اللاعب · صالح حتى " + formatHomeDate(offer.expiresDate))
+      );
+      const actions = node("div", "representation-actions");
+      if (offer.status === "pending") {
+        actions.append(actionButton("متابعة رد اللاعب", "button-outline representation-evaluate-button", () => context.evaluateRepresentationOffer(offer.id)));
+        actions.append(actionButton("سحب العرض", "button-outline representation-reject-button", () => context.rejectRepresentationOffer(offer.id)));
+      } else {
+        actions.append(actionButton("قبول شروط اللاعب", "button-primary representation-accept-button", () => context.acceptRepresentationCounter(offer.id)));
+        actions.append(actionButton("رفض العرض", "button-outline representation-reject-button", () => context.rejectRepresentationOffer(offer.id)));
+      }
+      row.append(copy, actions);
+      offerList.append(row);
+    });
+  }
+  offersPanel.append(offerList);
+
+  const prospectsPanel = node("section", "surface-card representation-panel");
+  const prospectsHeading = node("div", "representation-heading");
+  prospectsHeading.append(
+    node("h2", "", "استقطاب لاعبين"),
+    node("span", "representation-count", prospects.length + " لاعب متاح")
+  );
+  prospectsPanel.append(
+    prospectsHeading,
+    node("p", "representation-intro", "قدّم عرض تمثيل وحدد نسبة العمولة ومدة العقد. اللاعب قد يقبل أو يطلب تعديل الشروط.")
+  );
+  const prospectGrid = node("div", "representation-prospect-grid");
+  prospects.forEach((player) => {
+    const card = node("article", "representation-prospect-card");
+    const copy = node("div", "representation-copy");
+    copy.append(
+      node("strong", "", player.name),
+      node("span", "", player.position + " · " + player.club),
+      node("small", "", player.age + " سنة · تقييم " + player.rating + " · إمكانيات " + player.potential)
+    );
+    card.append(copy, actionButton("عرض تمثيل", "button-outline representation-offer-button", () => context.openRepresentationOffer(player)));
+    prospectGrid.append(card);
+  });
+  if (prospects.length === 0) prospectGrid.append(node("p", "representation-empty", "كل اللاعبين المتاحين لديهم عروض مفتوحة أو عقود تمثيل."));
+  prospectsPanel.append(prospectGrid);
+
+  const historyPanel = node("section", "surface-card representation-panel");
+  const historyHeading = node("div", "representation-heading");
+  historyHeading.append(
+    node("h2", "", "سجل التعاملات"),
+    node("span", "representation-count", representation.history.length + " سجل")
+  );
+  historyPanel.append(historyHeading);
+  if (representation.history.length === 0) {
+    historyPanel.append(node("p", "representation-empty", "كل عرض أو تفاوض أو توقيع هيتسجل هنا."));
+  } else {
+    const historyList = node("div", "representation-history-list");
+    representation.history.slice(0, 8).forEach((entry) => {
+      const row = node("div", "representation-history-row");
+      const labels = {
+        "offer-sent": "إرسال عرض",
+        "player-countered": "عرض مضاد من اللاعب",
+        "offer-accepted": "قبول العرض",
+        "offer-rejected": "رفض العرض",
+        "offer-expired": "انتهاء صلاحية العرض",
+        "contract-signed": "توقيع عقد",
+        "contract-terminated": "إنهاء عقد",
+        "contract-expired": "انتهاء عقد"
+      };
+      row.append(
+        node("strong", "", labels[entry.type] ?? entry.type),
+        node("span", "", entry.playerName + " · " + formatHomeDate(entry.date)),
+        node("small", "", entry.note)
+      );
+      historyList.append(row);
+    });
+    historyPanel.append(historyList);
+  }
+
   const roadmap = node("section", "surface-card roadmap-card");
   roadmap.append(
     node("h2", "", "تطور الوكالة"),
     roadmapRow("تأسيس الوكالة", "تم إعداد البنية الأساسية", true),
-    roadmapRow("بناء الهوية البصرية", "المرحلة الحالية", true),
-    roadmapRow("تكوين شبكة العملاء", "قيد التطوير", false),
-    roadmapRow("التوسع في سوق الانتقالات", "قادم", false)
+    roadmapRow("اكتشاف المواهب", "شبكة الكشافين والبعثات معتمدة", true),
+    roadmapRow("عقود التمثيل", "المرحلة الحالية", true),
+    roadmapRow("سوق الانتقالات والتفاوض مع الأندية", "المرحلة الثامنة", false)
   );
-  page.append(overview, cards, roadmap);
+  page.append(overview, cards, contractsPanel, offersPanel, prospectsPanel, historyPanel, roadmap);
   return page;
 }
 
@@ -925,6 +1068,106 @@ export function mountApp(root) {
     if (!result.changed) { toast(result.error); return; }
     state.save = result.save;
     if (saveCareer()) { render(); toast("تم توقيع العقد السنوي مقابل " + formatMoney(result.fee) + " حتى " + formatHomeDate(result.contractExpiresOn) + "."); } else state.save = previousSave;
+  }
+
+  function openRepresentationOffer(player) {
+    if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم نرسل عرضًا."); return; }
+    const form = node("div", "representation-offer-form");
+    const intro = node("p", "modal-copy", "عرض تمثيل للاعب " + player.name + ". العمولة نسبة من دخل اللاعب المستقبلي، وليست خصمًا فوريًا من رصيد الوكالة.");
+    const commission = node("select", "filter-select");
+    commission.setAttribute("aria-label", "نسبة العمولة");
+    for (let rate = 5; rate <= 15; rate += 1) {
+      const option = node("option", "", rate + "%");
+      option.value = String(rate);
+      commission.append(option);
+    }
+    commission.value = "10";
+    const duration = node("select", "filter-select");
+    duration.setAttribute("aria-label", "مدة العقد");
+    [[365, "سنة واحدة"], [730, "سنتان"], [1095, "ثلاث سنوات"]].forEach(([days, label]) => {
+      const option = node("option", "", label);
+      option.value = String(days);
+      duration.append(option);
+    });
+    duration.value = player.age <= 20 ? "365" : "730";
+    const addField = (label, control) => {
+      const wrapper = node("label", "scout-form-field representation-form-field");
+      wrapper.append(node("span", "", label), control);
+      form.append(wrapper);
+    };
+    addField("نسبة عمولة الوكالة", commission);
+    addField("مدة التمثيل", duration);
+    form.append(
+      intro,
+      node("p", "representation-form-note", "سيتم تسجيل العرض، وبعدها تقدر تراجع رد اللاعب أو شروطه المضادة. لا توجد عمولة محصلة قبل وجود دخل فعلي للاعب.")
+    );
+    const submit = actionButton("إرسال عرض التمثيل", "scout-confirm-button representation-send-button", () => {
+      const previousSave = state.save;
+      const result = createRepresentationOfferInEngine(state.save, player, {
+        commissionRate: Number(commission.value),
+        termDays: Number(duration.value)
+      });
+      if (!result.changed) { toast(result.error); return; }
+      state.save = result.save;
+      if (saveCareer()) {
+        render();
+        toast("تم إرسال عرض التمثيل إلى " + player.name + ".");
+      } else state.save = previousSave;
+    });
+    form.append(submit);
+    openModal("عرض تمثيل جديد", [form], "إغلاق");
+  }
+
+  function evaluateRepresentationOffer(offerId) {
+    if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم نتابع التفاوض."); return; }
+    const previousSave = state.save;
+    const result = evaluateRepresentationOfferInEngine(state.save, offerId);
+    if (!result.changed) { toast(result.error); return; }
+    state.save = result.save;
+    if (saveCareer()) {
+      render();
+      toast(result.status === "countered"
+        ? "اللاعب قدم عرضًا مضادًا. راجع شروطه في قسم التفاوض."
+        : result.status === "expired"
+          ? "انتهت صلاحية العرض وتم أرشفته."
+          : "اللاعب وافق، وتم توقيع عقد التمثيل.");
+    } else state.save = previousSave;
+  }
+
+  function acceptRepresentationCounter(offerId) {
+    if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم نقبل العرض المضاد."); return; }
+    const previousSave = state.save;
+    const result = acceptRepresentationCounterOfferInEngine(state.save, offerId);
+    if (!result.changed) { toast(result.error); return; }
+    state.save = result.save;
+    if (saveCareer()) {
+      render();
+      toast("تم قبول شروط اللاعب وتوقيع عقد التمثيل.");
+    } else state.save = previousSave;
+  }
+
+  function rejectRepresentationOffer(offerId) {
+    if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم نرفض العرض."); return; }
+    const previousSave = state.save;
+    const result = rejectRepresentationOfferInEngine(state.save, offerId);
+    if (!result.changed) { toast(result.error); return; }
+    state.save = result.save;
+    if (saveCareer()) {
+      render();
+      toast("تم إغلاق عرض التمثيل دون إضافة عميل.");
+    } else state.save = previousSave;
+  }
+
+  function terminateRepresentationContract(contractId) {
+    if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم ننهِ العقد."); return; }
+    const previousSave = state.save;
+    const result = terminateRepresentationContractInEngine(state.save, contractId);
+    if (!result.changed) { toast(result.error); return; }
+    state.save = result.save;
+    if (saveCareer()) {
+      render();
+      toast("تم إنهاء عقد التمثيل وحفظه في سجل التعاملات.");
+    } else state.save = previousSave;
   }
 
   function renewScoutingContract(scoutId) {
@@ -1200,11 +1443,14 @@ export function mountApp(root) {
     try {
       const advancedSave = advanceCareerDay(state.save);
       const scoutingResult = advanceScoutingMissions(advancedSave, WORLD_PLAYERS);
-      state.save = scoutingResult.save;
+      const representationResult = advanceRepresentationState(scoutingResult.save, scoutingResult.save.world.currentDate);
+      state.save = representationResult.save;
       if (saveCareer()) {
         render();
         if (scoutingResult.completedReports.length > 0) {
           toast("اكتملت بعثة كشف ووصل تقرير جديد إلى مكتبك.");
+        } else if (representationResult.expiredContracts.length > 0 || representationResult.expiredOffers.length > 0) {
+          toast("انتهت صلاحية عقد أو عرض تمثيل وتم تحديث سجل الوكالة.");
         }
       } else state.save = previousSave;
     } catch (error) {
@@ -1224,12 +1470,15 @@ export function mountApp(root) {
     try {
       const advancedSave = advanceCareerDays(state.save, 7);
       const scoutingResult = advanceScoutingMissions(advancedSave, WORLD_PLAYERS);
-      state.save = scoutingResult.save;
+      const representationResult = advanceRepresentationState(scoutingResult.save, scoutingResult.save.world.currentDate);
+      state.save = representationResult.save;
       if (saveCareer()) {
         render();
         toast(scoutingResult.completedReports.length > 0
           ? "تم تقدم أسبوع واكتمل تقرير بعثة كشف جديدة."
-          : "تم تقدم 7 أيام بالترتيب، مع معالجة المواعيد والأحداث والمهام اليومية.");
+          : representationResult.expiredContracts.length > 0 || representationResult.expiredOffers.length > 0
+            ? "تم تقدم 7 أيام وأُرشف عقد أو عرض انتهت صلاحيته."
+            : "تم تقدم 7 أيام بالترتيب، مع معالجة المواعيد والأحداث والمهام اليومية.");
       } else {
         state.save = previousSave;
       }
@@ -1560,7 +1809,7 @@ export function mountApp(root) {
     wrapper.append(art, summary);
     openModal("ملف اللاعب", [
       wrapper,
-      node("p", "modal-note", "ملف لاعب خيالي ضمن بيانات البداية. التعاقد وإدارة الملف ستُفعّلان في المراحل القادمة."),
+      node("p", "modal-note", "ملف لاعب خيالي ضمن بيانات البداية. يمكنك تقديم عرض تمثيل له من قسم الوكالة."),
       actionButton(state.watchlist.has(player.id) ? "✓  في قائمة المتابعة" : "＋  أضف لقائمة المتابعة", "watch-button", () => {
         if (addToWatchlist(player)) {
           root.querySelector(".modal-overlay .icon-button")?.click();
@@ -1615,7 +1864,13 @@ export function mountApp(root) {
       openScoutingReport,
       signScoutingContract,
       renewScoutingContract,
-      addToWatchlist
+      addToWatchlist,
+      players: WORLD_PLAYERS,
+      openRepresentationOffer,
+      evaluateRepresentationOffer,
+      acceptRepresentationCounter,
+      rejectRepresentationOffer,
+      terminateRepresentationContract
     };
     const views = {
       dashboard: renderDashboard,
