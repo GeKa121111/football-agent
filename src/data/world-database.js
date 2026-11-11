@@ -129,7 +129,83 @@ const PLAYER_SEEDS = [
   { id: "seed-ar-boca-defender", name: "Nicolás Duarte", age: 22, countryId: "country-ar", clubId: "club-boca", position: "قلب دفاع", role: "دفاع", rating: 75, potential: 85, marketValueEur: 2700000, status: "جاهز للتطور", shirtNumber: 2, contractUntil: "2028-06-30", foot: "right", discoverySourceIds: ["club-network", "agent-referral"] }
 ];
 
+const SQUAD_ROLE_TARGETS = [
+  { role: "حراسة", count: 2, positions: ["حارس مرمى"] },
+  { role: "دفاع", count: 6, positions: ["قلب دفاع", "ظهير أيمن", "ظهير أيسر", "قلب دفاع", "ظهير أيسر", "ظهير أيمن"] },
+  { role: "وسط", count: 6, positions: ["وسط دفاعي", "وسط مركزي", "وسط هجومي", "صانع ألعاب", "وسط مركزي", "وسط دفاعي"] },
+  { role: "هجوم", count: 4, positions: ["مهاجم", "جناح أيمن", "جناح أيسر", "مهاجم"] }
+];
+
+const SQUAD_NAME_POOLS = {
+  "country-eg": { first: ["مروان", "عمر", "مصطفى", "أحمد", "حسن", "كريم", "إبراهيم", "حمزة", "محمود", "علي"], last: ["حمدي", "سعيد", "منصور", "النجار", "فتحي", "إسماعيل", "فاروق", "عبدالله", "صالح", "مراد"] },
+  "country-ma": { first: ["ياسين", "أيوب", "سفيان", "بلال", "إلياس", "مهدي", "أشرف", "أنس", "زكرياء", "حمزة"], last: ["العلوي", "المرابط", "بناني", "السالمي", "الزهراني", "أيت", "بوخريص", "الحسيني", "الكتاني", "الودغيري"] },
+  "country-tn": { first: ["مالك", "سيف", "فارس", "معز", "ريان", "هيثم", "نادر", "بلال", "أمين", "حازم"], last: ["الجبالي", "بن يوسف", "الطرابلسي", "الشابي", "الغربي", "العرفاوي", "الهمامي", "بن عمار", "المهيري", "الزواوي"] },
+  "country-gb": { first: ["Jack", "Alfie", "Harry", "Mason", "Theo", "Leo", "Archie", "Finley", "Rory", "Callum"], last: ["Parker", "Cooper", "Fletcher", "Hughes", "Bennett", "Morris", "Reed", "Foster", "Brooks", "Palmer"] },
+  "country-es": { first: ["Álvaro", "Sergio", "Pablo", "Mario", "Hugo", "Izan", "Marcos", "Raúl", "Enzo", "Nico"], last: ["Navarro", "Romero", "Castillo", "Santos", "Molina", "Ortega", "Delgado", "Vargas", "Reyes", "Cano"] },
+  "country-de": { first: ["Lukas", "Finn", "Paul", "Ben", "Jonas", "Noah", "Max", "Leon", "Elias", "Luca"], last: ["Schneider", "Hoffmann", "Schulz", "Koch", "Bauer", "Richter", "Klein", "Wolf", "Neumann", "Schwarz"] },
+  "country-fr": { first: ["Lucas", "Louis", "Jules", "Hugo", "Arthur", "Gabriel", "Raphaël", "Nathan", "Maël", "Evan"], last: ["Roux", "Vincent", "Leroy", "Bonnet", "François", "Garnier", "Chevalier", "Faure", "André", "Mercier"] },
+  "country-it": { first: ["Alessio", "Tommaso", "Gabriele", "Riccardo", "Edoardo", "Samuele", "Davide", "Filippo", "Pietro", "Lorenzo"], last: ["Romano", "Gallo", "Costa", "Fontana", "Marino", "Greco", "Conti", "De Luca", "Mancini", "Lombardi"] },
+  "country-nl": { first: ["Daan", "Sem", "Bram", "Luuk", "Mees", "Gijs", "Milan", "Thijs", "Jesse", "Ties"], last: ["Visser", "Smit", "Meijer", "Mulder", "Bos", "Vos", "Peters", "Hendriks", "Dekker", "Brouwer"] },
+  "country-pt": { first: ["Diogo", "João", "Francisco", "Guilherme", "Martim", "Afonso", "Duarte", "Tomás", "Rodrigo", "David"], last: ["Ferreira", "Gomes", "Carvalho", "Ribeiro", "Martins", "Lopes", "Sousa", "Fernandes", "Pinto", "Teixeira"] },
+  "country-br": { first: ["Rafael", "Gabriel", "João", "Pedro", "Matheus", "Enzo", "Breno", "Vitor", "Igor", "Caio"], last: ["Oliveira", "Souza", "Santos", "Lima", "Araújo", "Barbosa", "Cardoso", "Pereira", "Mendes", "Teixeira"] },
+  "country-ar": { first: ["Santiago", "Thiago", "Benjamín", "Franco", "Lautaro", "Joaquín", "Facundo", "Agustín", "Bruno", "Valentín"], last: ["Gutiérrez", "Pereyra", "Méndez", "Herrera", "Silva", "Medina", "Castro", "Suárez", "Acosta", "Vega"] }
+};
+
+function createSupplementalSquadSeeds() {
+  const generated = [];
+  CLUBS.forEach((club, clubIndex) => {
+    const existing = PLAYER_SEEDS.filter((player) => player.clubId === club.id);
+    const usedNumbers = new Set(existing.map((player) => player.shirtNumber));
+    const names = SQUAD_NAME_POOLS[club.countryId];
+    let serial = 0;
+
+    for (const target of SQUAD_ROLE_TARGETS) {
+      const existingCount = existing.filter((player) => player.role === target.role).length;
+      for (let slot = existingCount; slot < target.count; slot += 1) {
+        const first = names.first[(serial + clubIndex * 2) % names.first.length];
+        const surname = names.last[(Math.floor(serial / names.first.length) + clubIndex * 3) % names.last.length];
+        const shirtNumber = Array.from({ length: 99 }, (_, index) => index + 1)
+          .find((number) => !usedNumbers.has(number));
+        if (!shirtNumber) throw new TypeError("لا توجد أرقام قمصان متاحة للنادي: " + club.id);
+        usedNumbers.add(shirtNumber);
+
+        const roleAdjustment = target.role === "هجوم" ? 1 : target.role === "حراسة" ? -2 : 0;
+        const rating = Math.max(55, Math.min(88,
+          club.simulationProfile - 8 - ((clubIndex * 3 + serial * 7) % 12) + roleAdjustment
+        ));
+        const potential = Math.min(97, rating + 3 + ((serial * 5 + clubIndex) % 15));
+        generated.push({
+          id: "squad-" + club.id + "-player-" + String(shirtNumber).padStart(2, "0"),
+          name: first + " " + surname,
+          age: 18 + ((clubIndex * 7 + serial * 5) % 13),
+          countryId: club.countryId,
+          clubId: club.id,
+          position: target.positions[slot % target.positions.length],
+          role: target.role,
+          rating,
+          potential,
+          marketValueEur: Math.round(Math.max(150000, rating * rating * 420 + (potential - rating) * 110000)),
+          status: ["موهبة صاعدة", "تحت المراقبة", "متاح للكشف", "جاهز للتطور"][(serial + clubIndex) % 4],
+          shirtNumber,
+          contractUntil: (2027 + (serial % 3)) + "-06-30",
+          foot: (serial + clubIndex) % 2 === 0 ? "right" : "left"
+        });
+        serial += 1;
+      }
+    }
+  });
+  return generated;
+}
+
 const players = PLAYER_SEEDS.map((player) => {
+  const club = CLUBS.find((item) => item.id === player.clubId);
+  return {
+    ...player,
+    ...createPortraitAssignment(player, club)
+  };
+});
+
+const squadPlayers = createSupplementalSquadSeeds().map((player) => {
   const club = CLUBS.find((item) => item.id === player.clubId);
   return {
     ...player,
@@ -140,16 +216,17 @@ const players = PLAYER_SEEDS.map((player) => {
 export const WORLD_DATABASE = deepFreeze({
   meta: {
     id: "football-agent-world-seed",
-    version: 2,
+    version: 3,
     season: "2026-2027",
     sourceType: "curated-fictional-world-seed",
-    sourceNote: "12 دولة و12 دوريًا و24 ناديًا و48 ملف لاعب خياليًا؛ أربعة لاعبين لكل دولة ولاعبان لكل نادٍ مع تغطية الأدوار العامة الأربعة. أسماء الأندية والمسابقات مرجعية، واللاعبون ليسوا قوائم حقيقية أو بيانات مباشرة."
+    sourceNote: "12 دولة و12 دوريًا و24 ناديًا و432 لاعبًا خياليًا ضمن قوائم من 18 لاعبًا لكل نادٍ؛ 48 لاعبًا في مكتبة المواهب و384 لاعبًا في قوائم التشكيلات. أسماء الأندية والمسابقات مرجعية، واللاعبون ليسوا قوائم حقيقية أو بيانات مباشرة."
   },
   countries: COUNTRIES,
   leagues: LEAGUES,
   competitions: COMPETITIONS,
   clubs: CLUBS,
-  players
+  players,
+  squadPlayers
 });
 
 function deepFreeze(value) {
@@ -172,6 +249,7 @@ function isCalendarDate(value) {
 export function validateWorldDatabase(database = WORLD_DATABASE) {
   const errors = [];
   const collections = ["countries", "leagues", "competitions", "clubs", "players"];
+  if (database?.squadPlayers !== undefined && !Array.isArray(database.squadPlayers)) errors.push("قوائم التشكيلات يجب أن تكون مصفوفة.");
   if (!database || typeof database !== "object") return { valid: false, errors: ["قاعدة البيانات غير صالحة."] };
   for (const name of collections) {
     if (!Array.isArray(database[name])) errors.push("المجموعة غير موجودة أو ليست مصفوفة: " + name);
@@ -179,10 +257,13 @@ export function validateWorldDatabase(database = WORLD_DATABASE) {
   if (errors.length) return { valid: false, errors };
 
   const [countries, leagues, competitions, clubs, players] = collections.map((name) => database[name]);
-  for (const [name, items] of Object.entries({ countries, leagues, competitions, clubs, players })) {
+  const squadPlayers = Array.isArray(database.squadPlayers) ? database.squadPlayers : [];
+  const allPlayers = [...players, ...squadPlayers];
+  for (const [name, items] of Object.entries({ countries, leagues, competitions, clubs, players, squadPlayers })) {
     if (!hasUniqueIds(items)) errors.push("معرفات " + name + " مفقودة أو مكررة.");
   }
-  const portraitValidation = validatePortraitAssignments(players);
+  if (!hasUniqueIds(allPlayers)) errors.push("معرفات اللاعبين وقوائم التشكيلات مكررة أو مفقودة.");
+  const portraitValidation = validatePortraitAssignments(allPlayers);
   errors.push(...portraitValidation.errors);
 
   const countryById = new Map(countries.map((item) => [item.id, item]));
@@ -240,7 +321,7 @@ export function validateWorldDatabase(database = WORLD_DATABASE) {
 
   const allowedRoles = new Set(["هجوم", "وسط", "دفاع", "حراسة"]);
   const allowedDiscoverySources = new Set(["academy", "club-network", "youth-tournament", "agent-referral"]);
-  for (const player of players) {
+  for (const player of allPlayers) {
     if (!countryById.has(player.countryId)) errors.push("اللاعب " + player.id + " يشير إلى جنسية غير موجودة.");
     const currentClub = clubById.get(player.clubId);
     if (!currentClub) errors.push("اللاعب " + player.id + " يشير إلى نادٍ غير موجود.");
@@ -253,10 +334,25 @@ export function validateWorldDatabase(database = WORLD_DATABASE) {
     if (!allowedRoles.has(player.role)) errors.push("مركز اللاعب العام غير معروف: " + player.id);
     if (typeof player.position !== "string" || !player.position.trim()) errors.push("المركز التفصيلي مفقود: " + player.id);
     if (!isCalendarDate(player.contractUntil)) errors.push("تاريخ انتهاء العقد غير صالح: " + player.id);
-    if (!Array.isArray(player.discoverySourceIds) || player.discoverySourceIds.length === 0 ||
+    if (players.includes(player) && (!Array.isArray(player.discoverySourceIds) || player.discoverySourceIds.length === 0 ||
         new Set(player.discoverySourceIds).size !== player.discoverySourceIds.length ||
-        !player.discoverySourceIds.every((sourceId) => allowedDiscoverySources.has(sourceId))) {
+        !player.discoverySourceIds.every((sourceId) => allowedDiscoverySources.has(sourceId)))) {
       errors.push("قنوات اكتشاف المواهب غير صالحة: " + player.id);
+    }
+  }
+
+  if (database.squadPlayers !== undefined) {
+    const expectedRoles = new Map([["حراسة", 2], ["دفاع", 6], ["وسط", 6], ["هجوم", 4]]);
+    for (const club of clubs) {
+      const roster = allPlayers.filter((player) => player.clubId === club.id);
+      if (roster.length !== 18) errors.push("قائمة النادي يجب أن تضم 18 لاعبًا: " + club.id);
+      const shirtNumbers = roster.map((player) => player.shirtNumber);
+      if (new Set(shirtNumbers).size !== shirtNumbers.length) errors.push("أرقام قمصان مكررة داخل النادي: " + club.id);
+      for (const [role, expectedCount] of expectedRoles) {
+        if (roster.filter((player) => player.role === role).length !== expectedCount) {
+          errors.push("توزيع المراكز غير مكتمل في قائمة النادي: " + club.id + " / " + role);
+        }
+      }
     }
   }
 
@@ -298,8 +394,15 @@ export function getWorldSummary(database = WORLD_DATABASE) {
     competitions: database.competitions.length,
     clubs: database.clubs.length,
     players: database.players.length,
-    portraitAssets: database.players.filter((player) => Boolean(player.portraitAssetId)).length
+    squadPlayers: database.squadPlayers?.length ?? 0,
+    rosterPlayers: database.players.length + (database.squadPlayers?.length ?? 0),
+    portraitAssets: database.players.filter((player) => Boolean(player.portraitAssetId)).length,
+    rosterPortraitAssets: [...database.players, ...(database.squadPlayers ?? [])].filter((player) => Boolean(player.portraitAssetId)).length
   };
+}
+
+export function getWorldSquadPlayers(database = WORLD_DATABASE) {
+  return [...database.players, ...(database.squadPlayers ?? [])];
 }
 
 export function findWorldPlayer(playerId, database = WORLD_DATABASE) {
