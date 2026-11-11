@@ -138,7 +138,7 @@ function playerCard(player, onDetails) {
   const footer = node("div", "player-card-footer");
   footer.append(
     node("span", "scout-status", player.status),
-    actionButton("عرض الملف", "text-button", () => onDetails(player))
+    actionButton("ملف اللاعب", "text-button", () => onDetails(player))
   );
   card.append(visual, info, footer);
   return card;
