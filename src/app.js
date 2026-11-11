@@ -12,7 +12,8 @@ import {
   completeCareerTask as completeTaskInEngine,
   markCareerMessageRead,
   filterCareerEvents,
-  getUpcomingCareerEvents
+  getUpcomingCareerEvents,
+  filterCareerTasks
 } from "./engines/career-calendar.js";
 
 const WORLD_PLAYERS = getWorldPlayerProfiles();
@@ -176,7 +177,8 @@ function renderCareerOperations(context) {
   const tasksHeading = node("div", "career-operations-heading");
   tasksHeading.append(
     node("h2", "", "مهام الوكالة"),
-    node("span", "career-count", formatHomeNumber(openTasks.length - overdueCount) + " معلقة · " + formatHomeNumber(overdueCount) + " متأخرة")
+    node("span", "career-count", formatHomeNumber(openTasks.length - overdueCount) + " معلقة · " + formatHomeNumber(overdueCount) + " متأخرة"),
+    actionButton("سجل المهام", "career-history-button", context.openTaskHistory)
   );
   tasksPanel.append(tasksHeading);
 
@@ -911,6 +913,69 @@ export function mountApp(root) {
     search.focus();
   }
 
+  function openTaskHistory() {
+    const tasks = state.save.world.tasks ?? [];
+    const controls = node("div", "event-history-controls");
+    const search = node("input", "event-history-search");
+    search.type = "search";
+    search.placeholder = "ابحث في اسم المهمة أو تفاصيلها...";
+    search.setAttribute("aria-label", "البحث في سجل المهام");
+
+    const statusFilter = node("select", "event-history-filter");
+    statusFilter.setAttribute("aria-label", "تصفية حالة المهمة");
+    [
+      ["all", "كل الحالات"],
+      ["open", "مفتوحة"],
+      ["overdue", "متأخرة"],
+      ["completed", "مكتملة"]
+    ].forEach(([value, label]) => {
+      const option = node("option", "", label);
+      option.value = value;
+      statusFilter.append(option);
+    });
+    controls.append(search, statusFilter);
+
+    const count = node("p", "event-history-count");
+    const list = node("div", "event-history-results");
+    const content = node("div", "event-history-content");
+    const statusLabels = { open: "مفتوحة", overdue: "متأخرة", completed: "مكتملة" };
+    content.append(controls, count, list);
+
+    const refresh = () => {
+      const filtered = filterCareerTasks(tasks, { status: statusFilter.value, query: search.value });
+      count.textContent = formatHomeNumber(filtered.length) + " مهمة";
+      list.replaceChildren();
+      if (filtered.length === 0) {
+        list.append(node("p", "career-activity-empty", "مفيش مهام مطابقة للبحث أو التصفية."));
+        return;
+      }
+      filtered.forEach((task) => {
+        const row = node("article", "event-history-row task-history-row");
+        const copy = node("div", "career-activity-copy");
+        const detail = task.status === "completed"
+          ? "أُنجزت في: " + formatHomeDate(task.completedDate) + (task.completedLate ? " · أُنجزت متأخرًا" : " · أُنجزت في الموعد")
+          : task.status === "overdue"
+            ? "متأخرة منذ: " + formatHomeDate(task.dueDate)
+            : "موعد التسليم: " + formatHomeDate(task.dueDate);
+        copy.append(
+          node("strong", "", task.title),
+          node("span", "", task.description),
+          node("small", "", "أُنشئت: " + formatHomeDate(task.createdDate) + " · " + detail)
+        );
+        const status = node("span", "task-history-status status-" + task.status, statusLabels[task.status] ?? task.status);
+        if (task.status === "completed" && task.completedLate) status.textContent = "مكتملة — متأخرًا";
+        row.append(copy, status);
+        list.append(row);
+      });
+    };
+
+    search.addEventListener("input", refresh);
+    statusFilter.addEventListener("change", refresh);
+    refresh();
+    openModal("سجل المهام", [content], "إغلاق");
+    search.focus();
+  }
+
   function openInbox() {
     const messages = [...state.save.world.inbox].slice(-12).reverse();
     const content = messages.length
@@ -1045,6 +1110,7 @@ export function mountApp(root) {
       openModal,
       openInbox,
       openEventHistory,
+      openTaskHistory,
       openSeasonCalendar,
       upcomingEvents: getUpcomingCareerEvents(state.save.world.currentDate, state.save.career.season, 365),
       saveCareer,
