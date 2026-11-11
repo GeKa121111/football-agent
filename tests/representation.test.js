@@ -122,7 +122,7 @@ test("player can counter a high commission and long mandate, then sign when the 
 });
 
 test("player accepts an offer that fits the player's commission and term limits", () => {
-  const profile = player({ age: 22, rating: 68, potential: 80 });
+  const profile = player({ id: "test-player-22", age: 22, rating: 68, potential: 80 });
   const preferences = getPlayerRepresentationProfile(profile);
   const sent = createRepresentationOffer(createInitialSave(), profile, {
     commissionRate: preferences.preferredCommissionRate,
