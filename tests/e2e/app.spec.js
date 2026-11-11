@@ -455,7 +455,7 @@ test.describe("Mobile experience", () => {
     await expect(page.locator(".representation-prospect-card")).toHaveCount(1);
     await expect(page.locator(".representation-prospect-card")).toContainText("ياسين عادل");
     await search.fill("لا يوجد لاعب بهذا الاسم");
-    await expect(page.locator(".empty-results")).toBeVisible();
+    await expect(page.locator(".representation-prospect-grid .empty-results")).toBeVisible();
     await page.getByRole("button", { name: "مسح البحث" }).click();
     await expect(page.locator(".representation-prospect-card")).toHaveCount(48);
     await hasNoHorizontalOverflow(page);
