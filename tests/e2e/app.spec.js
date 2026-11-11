@@ -197,6 +197,53 @@ test.describe("Mobile experience", () => {
     expect(restored.world.currentDate).toBe("2026-07-02");
   });
 
+
+  test("migrates a legacy save and persists weekly events, inbox and task actions", async ({ page }) => {
+    await page.goto("/");
+    const legacySave = {
+      meta: { version: 1, createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" },
+      career: { day: 5, week: 1, season: 1 },
+      agency: { id: "agency-player", name: "وكالة محفوظة", balance: 543210, reputation: 12, clients: ["client-existing"] },
+      world: { currentDate: "2026-07-05", players: [], clubs: [], competitions: [], activeOffers: [] }
+    };
+    await page.evaluate((save) => {
+      localStorage.setItem("football-agent.save", JSON.stringify(save));
+    }, legacySave);
+    await page.reload();
+
+    const untouchedLegacy = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(untouchedLegacy.meta.version).toBe(1);
+    await expect(page.locator(".agent-name")).toHaveText("وكالة محفوظة");
+
+    await page.locator(".day-advance-button").click();
+    let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.meta.version).toBe(2);
+    expect(saved.career.day).toBe(6);
+    expect(saved.career.week).toBe(1);
+    expect(saved.career.season).toBe(1);
+    expect(saved.agency.balance).toBe(543210);
+    expect(saved.agency.clients).toEqual(["client-existing"]);
+    expect(saved.world.currentDate).toBe("2026-07-06");
+    expect(saved.world.events[0].type).toBe("weekly-briefing");
+    expect(saved.world.inbox[0].eventId).toBe(saved.world.events[0].id);
+    expect(saved.world.tasks[0].status).toBe("open");
+
+    await expect(page.locator(".career-operations")).toBeVisible();
+    await expect(page.getByText("الإحاطة الأسبوعية للوكالة")).toBeVisible();
+    await page.locator(".task-complete-button").click();
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.world.tasks[0].status).toBe("completed");
+    expect(saved.world.tasks[0].completedDate).toBe("2026-07-06");
+
+    await page.locator(".message-read-button").click();
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.world.inbox[0].read).toBe(true);
+    await page.reload();
+    await expect(page.locator(".career-operations")).toBeVisible();
+    await expect(page.getByText("تمت القراءة")).toBeVisible();
+    await hasNoHorizontalOverflow(page);
+  });
+
   test("never overwrites a corrupt save when starting a new day", async ({ page }) => {
     await page.goto("/");
     await page.evaluate(() => localStorage.setItem("football-agent.save", "{broken json"));
