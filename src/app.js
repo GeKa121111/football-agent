@@ -316,8 +316,8 @@ function renderDashboard(context) {
     node("span", "feature-news-count", formatHomeNumber(unreadMessages))
   );
   newsFeature.children[1].append(
-    node("strong", "", "الأخبار"),
-    node("small", "", "آخر مستجدات عالم الكرة")
+    node("strong", "", "الرسائل"),
+    node("small", "", "أحداث وتقارير الوكالة")
   );
   featureGrid.append(playersFeature, newsFeature);
 
