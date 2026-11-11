@@ -379,12 +379,14 @@ function roadmapRow(title, detail, active) {
 export function mountApp(root) {
   const loaded = readSave();
   const save = loaded.status === "loaded" ? loaded.save : createInitialSave();
+  const loadedWatchlist = readWatchlist();
   const state = {
     view: "dashboard",
     save,
     isSaved: loaded.status === "loaded",
     canWrite: loaded.status === "new" || loaded.status === "loaded",
-    watchlist: new Set(readWatchlist().ids),
+    watchlist: new Set(loadedWatchlist.ids),
+    canPersistWatchlist: loadedWatchlist.status === "new" || loadedWatchlist.status === "loaded",
     toastMessage: "",
     toastTimer: null
   };
@@ -409,6 +411,12 @@ export function mountApp(root) {
   function addToWatchlist(player) {
     if (state.watchlist.has(player.id)) return true;
     state.watchlist.add(player.id);
+
+    if (!state.canPersistWatchlist) {
+      toast("تمت الإضافة لهذه الجلسة فقط؛ لم نكتب فوق ملف قائمة متابعة غير صالح أو غير متاح.");
+      return true;
+    }
+
     try {
       writeWatchlist([...state.watchlist]);
       toast("تمت إضافة " + player.name + " لقائمة المتابعة.");
@@ -511,7 +519,7 @@ export function mountApp(root) {
       node("p", "modal-note", "بطاقة معاينة تصميمية. التعاقد وإدارة الملف ستُفعّل ضمن المراحل القادمة."),
       actionButton(state.watchlist.has(player.id) ? "✓  في قائمة المتابعة" : "＋  أضف لقائمة المتابعة", "watch-button", () => {
         if (addToWatchlist(player)) {
-          root.querySelector(".modal-overlay")?.remove();
+          root.querySelector(".modal-overlay .icon-button")?.click();
         }
       })
     ]);
@@ -562,6 +570,13 @@ export function mountApp(root) {
 
     shell.append(header, layout, bottomNav);
     root.replaceChildren(shell);
+    if (loadedWatchlist.status === "corrupt" || loadedWatchlist.status === "unavailable") {
+      const warning = node("div", "save-warning");
+      warning.textContent = loadedWatchlist.status === "corrupt"
+        ? "تنبيه: ملف قائمة المتابعة غير صالح. لن نستبدله تلقائيًا."
+        : "تنبيه: قائمة المتابعة غير متاحة في هذه الجلسة.";
+      root.append(warning);
+    }
     if (loaded.status === "corrupt" || loaded.status === "unsupported" || loaded.status === "unavailable") {
       const warning = node("div", "save-warning");
       warning.textContent = loaded.status === "unsupported"
