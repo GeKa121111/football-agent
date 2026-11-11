@@ -7,6 +7,11 @@ import {
 } from "./core/storage.js";
 import { getWorldPlayerProfiles, getWorldSummary } from "./data/world-database.js";
 import { createPlayerPortrait } from "./ui/player-portrait.js";
+import {
+  advanceCareerDay,
+  completeCareerTask as completeTaskInEngine,
+  markCareerMessageRead
+} from "./engines/career-calendar.js";
 
 const WORLD_PLAYERS = getWorldPlayerProfiles();
 const WORLD_COUNTS = getWorldSummary();
@@ -122,6 +127,16 @@ function formatHomeDate(value) {
   }).format(date);
 }
 
+
+function formatSeasonLabel(value) {
+  const date = new Date(value + "T12:00:00Z");
+  if (!Number.isFinite(date.getTime())) return "2026 / 2027";
+  const startYear = date.getUTCMonth() >= 6
+    ? date.getUTCFullYear()
+    : date.getUTCFullYear() - 1;
+  return startYear + " / " + (startYear + 1);
+}
+
 function formatHomeNumber(value) {
   return new Intl.NumberFormat("ar-EG").format(Number(value) || 0);
 }
@@ -143,6 +158,75 @@ function homeTile(context, icon, title, subtitle, tone, destination) {
     node("span", "home-tile-subtitle", subtitle)
   );
   return tile;
+}
+
+
+function renderCareerOperations(context) {
+  const section = node("section", "career-operations");
+  const tasksPanel = node("section", "career-operations-panel");
+  const openTasks = context.save.world.tasks
+    .filter((task) => task.status === "open")
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const tasksHeading = node("div", "career-operations-heading");
+  tasksHeading.append(
+    node("h2", "", "مهام الوكالة"),
+    node("span", "career-count", formatHomeNumber(openTasks.length) + " معلقة")
+  );
+  tasksPanel.append(tasksHeading);
+
+  if (openTasks.length === 0) {
+    tasksPanel.append(node("p", "career-activity-empty", "مفيش مهام معلقة حاليًا. هتظهر مهام جديدة مع بداية الأسابيع والمواسم."));
+  } else {
+    const taskList = node("div", "career-task-list");
+    openTasks.slice(0, 4).forEach((task) => {
+      const row = node("article", "career-task-row");
+      const copy = node("div", "career-activity-copy");
+      copy.append(
+        node("strong", "", task.title),
+        node("span", "", task.description),
+        node("small", "", "موعد التسليم: " + formatHomeDate(task.dueDate))
+      );
+      row.append(copy, actionButton("إنجاز", "task-complete-button", () => context.completeTask(task.id)));
+      taskList.append(row);
+    });
+    tasksPanel.append(taskList);
+  }
+
+  const inboxPanel = node("section", "career-operations-panel");
+  const messages = [...context.save.world.inbox].slice(-4).reverse();
+  const unread = context.save.world.inbox.filter((message) => !message.read).length;
+  const inboxHeading = node("div", "career-operations-heading");
+  inboxHeading.append(
+    node("h2", "", "صندوق الوارد"),
+    node("span", "career-count", formatHomeNumber(unread) + " غير مقروءة")
+  );
+  inboxPanel.append(inboxHeading);
+
+  if (messages.length === 0) {
+    inboxPanel.append(node("p", "career-activity-empty", "لسه مفيش رسائل. الإحاطات والتقارير هتوصلك مع تقدم التقويم."));
+  } else {
+    const messageList = node("div", "career-message-list");
+    messages.forEach((message) => {
+      const row = node("article", message.read ? "career-message-row is-read" : "career-message-row is-unread");
+      const copy = node("div", "career-activity-copy");
+      copy.append(
+        node("strong", "", message.title),
+        node("span", "", message.body),
+        node("small", "", formatHomeDate(message.date))
+      );
+      row.append(copy);
+      if (!message.read) {
+        row.append(actionButton("مقروءة", "message-read-button", () => context.markMessageRead(message.id)));
+      } else {
+        row.append(node("span", "message-read-state", "تمت القراءة"));
+      }
+      messageList.append(row);
+    });
+    inboxPanel.append(messageList);
+  }
+
+  section.append(tasksPanel, inboxPanel);
+  return section;
 }
 
 function renderDashboard(context) {
@@ -234,18 +318,16 @@ function renderDashboard(context) {
     node("strong", "", "اللاعبون"),
     node("small", "", "اكتشف ملفات المواهب")
   );
-  const newsFeature = actionButton("", "home-feature-card feature-news", () => context.openModal("أخبار الوكالة", [
-    node("p", "modal-copy", "هنا هتظهر أخبار اللاعبين والأندية والانتقالات والأحداث المؤثرة في عالمك."),
-    node("p", "modal-note", "مركز الأخبار قيد التطوير.")
-  ], "تمام"));
+  const unreadMessages = context.save.world.inbox.filter((message) => !message.read).length;
+  const newsFeature = actionButton("", "home-feature-card feature-news", context.openInbox);
   newsFeature.append(
     node("span", "feature-card-icon", "▤"),
     node("span", "feature-card-copy"),
-    node("span", "feature-news-count", "3")
+    node("span", "feature-news-count", formatHomeNumber(unreadMessages))
   );
   newsFeature.children[1].append(
-    node("strong", "", "الأخبار"),
-    node("small", "", "آخر مستجدات عالم الكرة")
+    node("strong", "", "الرسائل"),
+    node("small", "", "أحداث وتقارير الوكالة")
   );
   featureGrid.append(playersFeature, newsFeature);
 
@@ -305,7 +387,7 @@ function renderDashboard(context) {
     actionButton("حفظ", "home-save-button", context.saveCareer)
   );
 
-  page.append(stadium, profile, dayPanel, featureGrid, storeBanner, menuHeading, menu, saveFooter);
+  page.append(stadium, profile, dayPanel, renderCareerOperations(context), featureGrid, storeBanner, menuHeading, menu, saveFooter);
   return page;
 }
 
@@ -573,7 +655,7 @@ export function mountApp(root) {
   const state = {
     view: "dashboard",
     save,
-    isSaved: loaded.status === "loaded",
+    isSaved: loaded.status === "loaded" && !loaded.migrated,
     canWrite: loaded.status === "new" || loaded.status === "loaded",
     watchlist: new Set(loadedWatchlist.ids),
     canPersistWatchlist: loadedWatchlist.status === "new" || loadedWatchlist.status === "loaded",
@@ -621,7 +703,7 @@ export function mountApp(root) {
   function saveCareer() {
     if (!state.canWrite) {
       toast(loaded.status === "unsupported" ? "ملف الحفظ من إصدار أحدث؛ لم نغيّره." : "ملف الحفظ غير صالح؛ لم نكتب فوقه.");
-      return;
+      return false;
     }
     try {
       state.save = writeSave(state.save);
@@ -630,8 +712,10 @@ export function mountApp(root) {
         button.textContent = "✓  محفوظ";
       });
       toast("تم حفظ مسيرتك بنجاح.");
+      return true;
     } catch (error) {
       toast("تعذر الحفظ: " + error.message);
+      return false;
     }
   }
 
@@ -643,23 +727,59 @@ export function mountApp(root) {
       return;
     }
 
-    const currentDate = new Date(state.save.world.currentDate + "T12:00:00Z");
-    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-    const day = state.save.career.day + 1;
-    state.save = {
-      ...state.save,
-      career: {
-        ...state.save.career,
-        day,
-        week: Math.ceil(day / 7)
-      },
-      world: {
-        ...state.save.world,
-        currentDate: currentDate.toISOString().slice(0, 10)
-      }
-    };
-    saveCareer();
-    render();
+    const previousSave = state.save;
+    try {
+      state.save = advanceCareerDay(state.save);
+      if (saveCareer()) render();
+      else state.save = previousSave;
+    } catch (error) {
+      toast("تعذر تقدم التقويم: " + error.message);
+    }
+  }
+
+  function completeTask(taskId) {
+    if (!state.canWrite) {
+      toast("ملف الحفظ غير قابل للتعديل؛ لم نغيّره.");
+      return;
+    }
+    const result = completeTaskInEngine(state.save, taskId);
+    if (!result.changed) return;
+    const previousSave = state.save;
+    state.save = result.save;
+    if (saveCareer()) render();
+    else state.save = previousSave;
+  }
+
+  function markMessageRead(messageId) {
+    if (!state.canWrite) {
+      toast("ملف الحفظ غير قابل للتعديل؛ لم نغيّره.");
+      return;
+    }
+    const result = markCareerMessageRead(state.save, messageId);
+    if (!result.changed) return;
+    const previousSave = state.save;
+    state.save = result.save;
+    if (saveCareer()) render();
+    else state.save = previousSave;
+  }
+
+  function openInbox() {
+    const messages = [...state.save.world.inbox].slice(-12).reverse();
+    const content = messages.length
+      ? messages.map((message) => {
+        const item = node("article", "inbox-modal-item");
+        item.append(
+          node("strong", "", message.title),
+          node("p", "modal-copy", message.body),
+          node("span", "modal-note", formatHomeDate(message.date))
+        );
+        if (!message.read) {
+          item.append(actionButton("تحديد كمقروء", "message-read-button", () => markMessageRead(message.id)));
+        }
+        return item;
+      })
+      : [node("p", "modal-copy", "صندوق الوارد فارغ حاليًا. هتظهر فيه الإحاطات والتقارير مع تقدم الأيام.")];
+    openModal("صندوق الوارد", content, "إغلاق");
   }
 
   function navigate(view) {
@@ -751,7 +871,7 @@ export function mountApp(root) {
     const header = node("header", "topbar");
     const brand = node("div", "brand-lockup");
     brand.append(node("span", "brand-mark", "FA"), node("span", "brand-name", "FOOTBALL AGENT"));
-    const season = node("span", "season-pill", "موسم 2026 / 2027");
+    const season = node("span", "season-pill", "موسم " + formatSeasonLabel(state.save.world.currentDate));
     const saveButton = actionButton(state.isSaved ? "✓  محفوظ" : "حفظ المسيرة", "save-chip", saveCareer);
     header.append(brand, season, saveButton);
 
@@ -770,7 +890,7 @@ export function mountApp(root) {
     sidebar.append(sideBottom);
 
     const main = node("main", "main-stage");
-    const context = { save: state.save, navigate, openPlayer, openModal, saveCareer, advanceDay, toast, watchlist: state.watchlist, addToWatchlist };
+    const context = { save: state.save, navigate, openPlayer, openModal, openInbox, saveCareer, advanceDay, completeTask, markMessageRead, toast, watchlist: state.watchlist, addToWatchlist };
     const views = {
       dashboard: renderDashboard,
       players: renderPlayers,

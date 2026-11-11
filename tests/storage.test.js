@@ -103,3 +103,70 @@ test("does not overwrite a corrupt watchlist", () => {
   assert.equal(storage.getItem(WATCHLIST_KEY), "{broken json");
   assert.throws(() => writeWatchlist([42], storage), TypeError);
 });
+
+
+test("migrates version 1 saves without losing career or agency progress", () => {
+  const legacy = createInitialSave("2026-07-01T00:00:00.000Z");
+  legacy.meta.version = 1;
+  legacy.career.day = 42;
+  legacy.career.week = 6;
+  legacy.agency.name = "Legacy Agency";
+  legacy.agency.balance = 765432;
+  legacy.agency.clients = ["player-legacy"];
+  legacy.world.currentDate = "2026-08-11";
+  legacy.world.players = [{ id: "saved-player", career: { goals: 8, appearances: 21 } }];
+  legacy.world.clubs = [{ id: "saved-club", reputation: 17 }];
+  legacy.world.competitions = [{ id: "saved-competition", season: 4 }];
+  legacy.world.activeOffers = [{ id: "saved-offer", playerId: "saved-player" }];
+  delete legacy.world.events;
+  delete legacy.world.inbox;
+  delete legacy.world.tasks;
+
+  const raw = JSON.stringify(legacy);
+  const storage = memoryStorage({ [STORAGE_KEY]: raw });
+  const result = readSave(storage);
+
+  assert.equal(result.status, "loaded");
+  assert.equal(result.migrated, true);
+  assert.equal(result.save.meta.version, SAVE_VERSION);
+  assert.equal(result.save.career.day, 42);
+  assert.equal(result.save.career.week, 6);
+  assert.equal(result.save.agency.name, "Legacy Agency");
+  assert.equal(result.save.agency.balance, 765432);
+  assert.deepEqual(result.save.agency.clients, ["player-legacy"]);
+  assert.equal(result.save.world.currentDate, "2026-08-11");
+  assert.deepEqual(result.save.world.players, [{ id: "saved-player", career: { goals: 8, appearances: 21 } }]);
+  assert.deepEqual(result.save.world.clubs, [{ id: "saved-club", reputation: 17 }]);
+  assert.deepEqual(result.save.world.competitions, [{ id: "saved-competition", season: 4 }]);
+  assert.deepEqual(result.save.world.activeOffers, [{ id: "saved-offer", playerId: "saved-player" }]);
+  assert.deepEqual(result.save.world.events, []);
+  assert.deepEqual(result.save.world.inbox, []);
+  assert.deepEqual(result.save.world.tasks, []);
+  assert.equal(storage.getItem(STORAGE_KEY), raw, "reading must not rewrite the user's save");
+
+  writeSave(result.save, storage);
+  const persisted = readSave(storage);
+  assert.equal(persisted.status, "loaded");
+  assert.equal(persisted.migrated, false);
+  assert.equal(persisted.save.career.day, 42);
+});
+
+test("rejects duplicate activity IDs and inbox references to missing events", () => {
+  const duplicate = createInitialSave();
+  duplicate.world.events = [
+    { id: "event-1", date: "2026-07-01", type: "briefing", title: "A", description: "A", priority: "normal" },
+    { id: "event-1", date: "2026-07-02", type: "briefing", title: "B", description: "B", priority: "normal" }
+  ];
+  assert.equal(isValidSave(duplicate), false);
+
+  const missingReference = createInitialSave();
+  missingReference.world.inbox = [{
+    id: "message-1",
+    eventId: "missing-event",
+    date: "2026-07-01",
+    title: "رسالة",
+    body: "محتوى",
+    read: false
+  }];
+  assert.equal(isValidSave(missingReference), false);
+});
