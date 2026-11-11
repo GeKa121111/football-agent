@@ -256,7 +256,7 @@ export function advancePlayerDevelopmentDay(state, dateKey, season) {
       intensity: player.trainingIntensity,
       ratingBefore,
       ratingAfter: player.rating,
-      improvement: roundTo(player.rating - ratingBefore, 1),
+      improvement: roundTo(player.rating - ratingBefore, 2),
       outcome: player.injuryDays > 0 ? "overload" : "trained"
     });
     return player;
