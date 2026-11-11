@@ -11,7 +11,8 @@ import {
   advanceCareerDay,
   completeCareerTask as completeTaskInEngine,
   markCareerMessageRead,
-  filterCareerEvents
+  filterCareerEvents,
+  getUpcomingCareerEvents
 } from "./engines/career-calendar.js";
 
 const WORLD_PLAYERS = getWorldPlayerProfiles();
