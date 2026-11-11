@@ -614,8 +614,21 @@ test.describe("Mobile experience", () => {
     await navigateTo(page, "الكشافون");
     await expect(page.getByRole("button", { name: "عرض التقرير" })).toBeVisible();
     await page.getByRole("button", { name: "عرض التقرير" }).click();
-    await expect(page.getByRole("dialog", { name: "تقرير الكشافين" })).toBeVisible();
+    const reportDialog = page.getByRole("dialog", { name: "تقرير الكشافين" });
+    await expect(reportDialog).toBeVisible();
     await expect(page.locator(".scout-finding-rationale").first()).toBeVisible();
+    await expect(reportDialog.getByRole("button", { name: "بدء عرض تمثيل" })).toBeVisible();
+
+    // A scouting discovery can now move directly into representation outreach.
+    await reportDialog.getByRole("button", { name: "بدء عرض تمثيل" }).click();
+    const offerDialog = page.getByRole("dialog", { name: "عرض تمثيل جديد" });
+    await expect(offerDialog).toBeVisible();
+    await offerDialog.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+    const offerSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(offerSave.agency.representation.offers).toHaveLength(1);
+    expect(offerSave.agency.representation.offers[0].playerId).toBe(completed.world.scouting.reports[0].findings[0].playerId);
+    expect(offerSave.agency.representation.offers[0].status).toBe("pending");
+    expect(offerSave.agency.clients).toHaveLength(0);
 
     await page.reload();
     await navigateTo(page, "الكشافون");
