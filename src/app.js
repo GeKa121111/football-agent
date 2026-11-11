@@ -1751,7 +1751,7 @@ export function mountApp(root) {
     note.setAttribute("aria-label", "ملخص التواصل");
     note.maxLength = 500;
     note.rows = 3;
-    note.value = existing?.note ?? "";
+    note.value = "";
     note.placeholder = "اكتب رد اللاعب أو ملخص المكالمة والخطوة التالية...";
     const addField = (label, control) => {
       const wrapper = node("label", "scout-form-field representation-form-field");
