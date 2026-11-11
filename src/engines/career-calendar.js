@@ -417,7 +417,8 @@ const CAREER_EVENT_TYPE_LABELS = Object.freeze({
   "season-closing": "ختام الموسم",
   "task-overdue": "تأخر مهمة",
   "talent-follow-up-due": "موعد متابعة لاعب",
-  "task-completed": "إنجاز مهمة"
+  "task-completed": "إنجاز مهمة",
+  "football-match-played": "مباراة مكتملة"
 });
 
 const CAREER_EVENT_PRIORITY_LABELS = Object.freeze({
