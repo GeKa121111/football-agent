@@ -82,6 +82,15 @@ test.describe("Desktop experience", () => {
     await expect(page.locator(".main-stage")).toBeFocused();
   });
 
+  test("shows a live transfer window instead of demo market cards", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الانتقالات");
+    await expect(page.locator(".transfer-window-card")).toContainText("الصيفية");
+    await expect(page.locator(".market-preview-notice")).toHaveCount(0);
+    await expect(page.locator(".transfer-empty-clients")).toBeVisible();
+    await hasNoHorizontalOverflow(page);
+  });
+
   test("navigates through all six primary screens", async ({ page }) => {
     await page.goto("/");
     const screens = [
@@ -110,7 +119,7 @@ test.describe("Desktop experience", () => {
     await expect(page.locator(".football-screen")).toHaveCount(0);
     await page.getByRole("button", { name: "حفظ المسيرة" }).click();
     const firstSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(firstSave.meta.version).toBe(6);
+    expect(firstSave.meta.version).toBe(7);
     expect(firstSave.world.football.fixtures.length).toBeGreaterThan(0);
 
     await navigateTo(page, "المباريات");
