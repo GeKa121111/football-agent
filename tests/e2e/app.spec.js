@@ -137,6 +137,8 @@ test.describe("Desktop experience", () => {
     }
     await navigateTo(page, "المباريات");
     await expect(page.locator(".football-result-row").first()).toBeVisible();
+    // Re-select the Egyptian league because the workspace is rebuilt on navigation.
+    await page.getByLabel("اختيار المسابقة للترتيب").selectOption("competition-eg-premier");
     const playedSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(playedSave.world.football.results.length).toBeGreaterThan(0);
     expect(playedSave.world.events.some((event) => event.type === "football-match-played")).toBe(true);
