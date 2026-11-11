@@ -529,6 +529,14 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 .day-advance-button { width: 100%; min-height: 48px; border: 1px solid rgba(204,255,218,.55); border-radius: 12px; color: #f6fff7; background: linear-gradient(180deg,#48d77b,#16974e 60%,#08743c); box-shadow: inset 0 1px rgba(255,255,255,.28),0 5px 13px rgba(15,158,80,.25); cursor: pointer; font-size: 15px; font-weight: 900; text-shadow: 0 1px 2px rgba(0,0,0,.2); transition: filter .16s ease, transform .16s ease; }
 .day-advance-button:hover { filter: brightness(1.08); transform: translateY(-1px); }
 .day-advance-button:active { transform: translateY(1px); }
+.week-advance-button {
+  width: 100%; min-height: 42px; margin-top: 7px; padding: 8px 12px;
+  border: 1px solid rgba(133,166,211,.3); border-radius: 11px; color: #cbd8ed;
+  background: linear-gradient(180deg,rgba(44,59,86,.9),rgba(27,38,59,.95));
+  cursor: pointer; font-size: 12px; font-weight: 800; transition: filter .16s ease, transform .16s ease;
+}
+.week-advance-button:hover { filter: brightness(1.12); transform: translateY(-1px); }
+.week-advance-button:active { transform: translateY(1px); }
 .career-day-foot { display: flex; align-items: center; gap: 7px; margin-top: 9px; color: #77859c; font-size: 8px; }
 .career-day-foot .day-foot-dot { width: 5px; height: 5px; flex: 0 0 auto; }
 .home-feature-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; margin: 0 5px 10px; }
