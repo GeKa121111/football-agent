@@ -736,3 +736,27 @@ test.describe("Scouting discovery channels and observation history", () => {
     await hasNoHorizontalOverflow(page);
   });
 });
+
+
+test.describe("Scouting recruitment contracts", () => {
+  test("signs and persists an annual scout contract, then assigns the contracted scout", async ({ page }) => {
+    await page.goto("/"); await navigateTo(page, "الكشافون");
+    await expect(page.locator(".scout-staff-card")).toHaveCount(4); await expect(page.locator(".scout-recruit-card")).toHaveCount(2);
+    const recruitCard = page.locator(".scout-recruit-card").filter({ hasText: "رافاييل أورتيغا" });
+    await expect(recruitCard).toContainText("18,000"); await recruitCard.getByRole("button", { name: "توقيع عقد سنوي" }).click();
+    await expect(page.locator(".scout-staff-card")).toHaveCount(5); await expect(page.locator(".scout-recruit-card")).toHaveCount(1);
+    const signed = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const contract = signed.world.scouting.scouts.find((scout) => scout.id === "scout-iberian-network");
+    expect(signed.agency.balance).toBe(82000); expect(contract.contractStartedOn).toBe("2026-07-01");
+    expect(contract.contractExpiresOn).toBe("2027-07-01"); expect(contract.contractCost).toBe(18000);
+    await page.reload(); await navigateTo(page, "الكشافون"); await expect(page.locator(".scout-staff-card")).toHaveCount(5);
+    await expect(page.locator(".scout-staff-card").filter({ hasText: "رافاييل أورتيغا" })).toContainText("عقد حتى");
+    await page.getByRole("button", { name: /إطلاق بعثة كشف/ }).click();
+    await page.getByLabel("مستوى البعثة").selectOption("local"); await page.getByLabel("الدولة المستهدفة").selectOption("all");
+    await page.getByLabel("المركز المستهدف").selectOption("all"); await page.getByLabel("الكشاف المكلف").selectOption("scout-iberian-network");
+    await expect(page.locator(".scout-launch-preview")).toContainText("رافاييل أورتيغا");
+    await page.getByRole("button", { name: "تأكيد إطلاق البعثة" }).click();
+    const assigned = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(assigned.world.scouting.activeMissions[0].scoutId).toBe("scout-iberian-network"); await hasNoHorizontalOverflow(page);
+  });
+});

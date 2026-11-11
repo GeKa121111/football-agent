@@ -166,12 +166,13 @@ function isValidScoutingState(scouting, currentDate) {
     if (!Array.isArray(scouting.scouts) ||
         scouting.scouts.length > SCOUTING_SCOUTS.length ||
         !hasUniqueIds(scouting.scouts) ||
-        !scouting.scouts.every((scout) =>
-          isRecord(scout) &&
-          knownScoutIds.has(scout.id) &&
-          Number.isSafeInteger(scout.experience) && scout.experience >= 0 && scout.experience <= 1000000 &&
-          Number.isSafeInteger(scout.missionsCompleted) && scout.missionsCompleted >= 0 && scout.missionsCompleted <= 100000
-        )) return false;
+        !scouting.scouts.every((scout) => {
+          if (!isRecord(scout) || !knownScoutIds.has(scout.id) || !Number.isSafeInteger(scout.experience) || scout.experience < 0 || scout.experience > 1000000 || !Number.isSafeInteger(scout.missionsCompleted) || scout.missionsCompleted < 0 || scout.missionsCompleted > 100000) return false;
+          const profile = SCOUTING_SCOUTS.find((item) => item.id === scout.id);
+          const fields = ["contractStartedOn", "contractExpiresOn", "contractCost", "contractRenewals"];
+          if (profile.startingStaff) return fields.every((field) => scout[field] === undefined);
+          return isValidCalendarDate(scout.contractStartedOn) && isValidCalendarDate(scout.contractExpiresOn) && scout.contractStartedOn <= currentDate && scout.contractExpiresOn === dateAfter(scout.contractStartedOn, profile.contractDays) && Number.isSafeInteger(scout.contractCost) && [profile.contractCost, profile.renewalCost].includes(scout.contractCost) && Number.isSafeInteger(scout.contractRenewals) && scout.contractRenewals >= 0 && scout.contractRenewals <= 100000;
+        })) return false;
   }
 
   let highestSequence = 0;
