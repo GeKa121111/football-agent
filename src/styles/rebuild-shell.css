@@ -239,7 +239,7 @@
     left: 12px;
     bottom: max(8px, env(safe-area-inset-bottom));
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 3px;
     padding: 8px 6px;
     border: 1px solid rgba(169,243,107,.2);
