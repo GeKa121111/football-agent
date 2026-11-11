@@ -886,7 +886,7 @@ function renderMarket(context) {
     );
     const value = node("div", "market-value");
     value.append(node("strong", "", item.fee), node("span", "", item.note));
-    card.append(badge, details, value, actionButton("عرض المثال", "button-outline", () => {
+    card.append(badge, details, value, actionButton("التفاصيل", "button-outline", () => {
       context.openModal("فرصة انتقال تجريبية", [
         node("p", "modal-copy", item.player + " — " + item.position),
         node("p", "modal-copy", item.note),
