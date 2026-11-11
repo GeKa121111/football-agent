@@ -272,7 +272,6 @@ export function createPlayerPortrait(player, { featured = false } = {}) {
     d: shirtPath,
     fill: profile.kit
   });
-  svgElement("g", athlete, { "clip-path": `url(#${shirtClipId})` });
   const shirtDetails = svgElement("g", athlete, { "clip-path": `url(#${shirtClipId})` });
 
   if (profile.kitPattern === "stripes") {
