@@ -7,7 +7,8 @@ import {
   isValidTalentPipelineState,
   upsertTalentProspect,
   recordTalentProspectContact,
-  completeTalentProspectFollowUp
+  completeTalentProspectFollowUp,
+  assignTalentProspectStaff
 } from "../src/engines/talent-pipeline.js";
 import { completeCareerTask } from "../src/engines/career-calendar.js";
 
@@ -142,6 +143,73 @@ test("records stage changes as a chronological activity trail without duplicatin
   assert.equal(shortlisted.entry.activity[1].fromStage, "discovered");
   assert.equal(shortlisted.entry.activity[1].toStage, "shortlisted");
   assert.equal(isValidSave(shortlisted.save), true);
+});
+
+test("assigns a prospect to active scouting staff and records ownership changes", () => {
+  const first = upsertTalentProspect(createInitialSave(), player(), { sourceId: "scouting" });
+  const assigned = assignTalentProspectStaff(first.save, player().id, "scout-north-africa");
+  assert.equal(assigned.changed, true);
+  assert.equal(assigned.entry.assignedScoutId, "scout-north-africa");
+  assert.equal(assigned.entry.activity.at(-1).type, "assignment");
+  assert.equal(assigned.entry.activity.at(-1).fromScoutId, null);
+  assert.equal(assigned.entry.activity.at(-1).toScoutId, "scout-north-africa");
+  assert.equal(isValidSave(assigned.save), true);
+
+  const reassigned = assignTalentProspectStaff(assigned.save, player().id, "scout-western-europe");
+  assert.equal(reassigned.changed, true);
+  assert.equal(reassigned.entry.assignedScoutId, "scout-western-europe");
+  assert.equal(reassigned.entry.activity.at(-1).fromScoutId, "scout-north-africa");
+  assert.equal(reassigned.entry.activity.at(-1).toScoutId, "scout-western-europe");
+
+  const released = assignTalentProspectStaff(reassigned.save, player().id, null);
+  assert.equal(released.changed, true);
+  assert.equal(released.entry.assignedScoutId, undefined);
+  assert.equal(released.entry.activity.at(-1).toScoutId, null);
+  assert.equal(isValidSave(released.save), true);
+});
+
+test("limits scout ownership to six active prospects and rejects unavailable staff", () => {
+  let save = createInitialSave();
+  for (let index = 1; index <= 6; index += 1) {
+    const profile = player({ id: "capacity-player-" + index, name: "موهبة " + index });
+    const tracked = upsertTalentProspect(save, profile, { sourceId: "scouting" });
+    const assigned = assignTalentProspectStaff(tracked.save, profile.id, "scout-north-africa");
+    assert.equal(assigned.changed, true);
+    save = assigned.save;
+  }
+
+  const seventh = player({ id: "capacity-player-7", name: "موهبة 7" });
+  const trackedSeventh = upsertTalentProspect(save, seventh, { sourceId: "scouting" });
+  const full = assignTalentProspectStaff(trackedSeventh.save, seventh.id, "scout-north-africa");
+  assert.equal(full.changed, false);
+  assert.match(full.error, /6 ملفات/);
+  assert.equal(full.save, trackedSeventh.save);
+  assert.equal(isValidSave(save), true);
+
+  const invalidStaff = assignTalentProspectStaff(trackedSeventh.save, seventh.id, "scout-not-hired");
+  assert.equal(invalidStaff.changed, false);
+});
+
+test("releases the assigned scout when a prospect is archived and logs the handoff", () => {
+  const tracked = upsertTalentProspect(createInitialSave(), player(), { sourceId: "manual" });
+  const assigned = assignTalentProspectStaff(tracked.save, player().id, "scout-north-africa");
+  const archived = upsertTalentProspect(assigned.save, player(), { stage: "archived" });
+  assert.equal(archived.entry.assignedScoutId, undefined);
+  assert.equal(archived.entry.activity.at(-1).type, "assignment");
+  assert.equal(archived.entry.activity.at(-1).toScoutId, null);
+  assert.equal(isValidSave(archived.save), true);
+});
+
+test("releases a scout after contract signing without creating a second client record", () => {
+  const tracked = upsertTalentProspect(createInitialSave(), player(), { sourceId: "scouting" });
+  const assigned = assignTalentProspectStaff(tracked.save, player().id, "scout-north-africa");
+  const released = assignTalentProspectStaff(assigned.save, player().id, null, "contract-signed");
+  assert.equal(released.changed, true);
+  assert.equal(released.entry.assignedScoutId, undefined);
+  assert.equal(released.entry.activity.at(-1).reason, "contract-signed");
+  assert.match(released.entry.activity.at(-1).note, /تسليم الملف إلى إدارة العملاء/);
+  assert.equal(released.save.agency.clients.length, 0);
+  assert.equal(isValidSave(released.save), true);
 });
 
 test("records pre-contract outreach, outcome and follow-up without creating a client or mandate", () => {
