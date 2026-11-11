@@ -183,8 +183,8 @@ test("calendar progression expires offers and contracts without dropping archiva
     termDays: preferences.preferredTermDays
   });
   const signed = evaluateRepresentationOffer(signedOffer.save, signedOffer.offer.id);
-  const contractAtExpiry = advanceToDate(signed.save, "2027-07-01");
-  const expired = advanceRepresentationState(contractAtExpiry, "2027-07-01");
+  const contractAtExpiry = advanceToDate(signed.save, signed.contract.expiresOn);
+  const expired = advanceRepresentationState(contractAtExpiry, signed.contract.expiresOn);
   assert.deepEqual(expired.expiredContracts, [signed.contract.id]);
   assert.equal(expired.save.agency.representation.contracts[0].status, "expired");
   assert.deepEqual(expired.save.agency.clients, []);
@@ -315,24 +315,21 @@ test("only allows renewal offers during the final 90 days and blocks duplicate r
   const save = createInitialSave();
   const profile = player({ age: 22, rating: 68, potential: 80 });
   const preferences = getPlayerRepresentationProfile(profile);
-  const sent = createRepresentationOffer(save, profile, {
+  const terms = {
     commissionRate: preferences.preferredCommissionRate,
-    termDays: 365
-  });
+    termDays: preferences.preferredTermDays
+  };
+  const sent = createRepresentationOffer(save, profile, terms);
   const signed = evaluateRepresentationOffer(sent.save, sent.offer.id);
-  const tooEarly = createRepresentationRenewalOffer(signed.save, signed.contract.id, {
-    commissionRate: 8, termDays: 365
-  });
+  const tooEarly = createRepresentationRenewalOffer(signed.save, signed.contract.id, terms);
   assert.equal(tooEarly.changed, false);
 
-  const nearExpiry = advanceToDate(signed.save, "2027-05-02");
-  const first = createRepresentationRenewalOffer(nearExpiry, signed.contract.id, {
-    commissionRate: 8, termDays: 365
-  });
+  const remainingDate = new Date(Date.parse(signed.contract.expiresOn + "T00:00:00.000Z") - 60 * 86400000)
+    .toISOString().slice(0, 10);
+  const nearExpiry = advanceToDate(signed.save, remainingDate);
+  const first = createRepresentationRenewalOffer(nearExpiry, signed.contract.id, terms);
   assert.equal(first.changed, true);
-  const duplicate = createRepresentationRenewalOffer(first.save, signed.contract.id, {
-    commissionRate: 8, termDays: 365
-  });
+  const duplicate = createRepresentationRenewalOffer(first.save, signed.contract.id, terms);
   assert.equal(duplicate.changed, false);
   assert.match(duplicate.error, /عرض تجديد مفتوح/);
   assert.equal(isValidSave(first.save), true);
