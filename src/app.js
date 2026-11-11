@@ -979,13 +979,35 @@ function renderMarket(context) {
 
 function getTalentPipelineRecords(context) {
   const records = new Map();
+  const representation = context.save.agency.representation;
+  const pipeline = context.save.agency.talentPipeline;
   const add = (playerId, sourceId) => {
-    const player = context.players.find((candidate) => candidate.id === playerId);
-    if (!player) return;
+    const savedEntry = (pipeline?.entries ?? []).find((entry) => entry.playerId === playerId);
+    const offerSnapshot = representation.offers.find((item) => item.playerId === playerId);
+    const contractSnapshot = representation.contracts.find((item) => item.playerId === playerId);
+    const sourcePlayer = context.players.find((candidate) => candidate.id === playerId);
+    const snapshot = savedEntry ?? offerSnapshot ?? contractSnapshot;
+    const player = sourcePlayer ?? (snapshot ? {
+      id: playerId,
+      name: snapshot.name ?? snapshot.playerName,
+      age: snapshot.age,
+      club: snapshot.club,
+      position: snapshot.position,
+      rating: snapshot.rating,
+      potential: snapshot.potential,
+      country: snapshot.country ?? "غير محدد",
+      league: snapshot.league ?? "غير محدد",
+      value: snapshot.value ?? "غير متاح",
+      role: snapshot.role ?? "غير محدد",
+      status: "ملف محفوظ"
+    } : null);
+    if (!player || typeof player.name !== "string" || !player.name.trim()) return;
     let record = records.get(playerId);
     if (!record) {
       record = { player, sourceIds: new Set(), entry: null };
       records.set(playerId, record);
+    } else if (!sourcePlayer && snapshot) {
+      record.player = player;
     }
     if (sourceId) record.sourceIds.add(sourceId);
   };
@@ -997,16 +1019,14 @@ function getTalentPipelineRecords(context) {
   (scouting?.observations ?? []).forEach((observation) => add(observation.playerId, "scouting"));
   context.watchlist.forEach((playerId) => add(playerId, "watchlist"));
 
-  const representation = context.save.agency.representation;
   representation.offers
-    .filter((offer) => ["pending", "countered"].includes(offer.status))
+    .filter((offer) => ["pending", "countered"].includes(offer.status)
     .forEach((offer) => add(offer.playerId, "manual"));
   representation.contracts
     .filter((contract) => contract.status === "active")
     .forEach((contract) => add(contract.playerId, "manual"));
   context.save.agency.clients.forEach((playerId) => add(playerId, "manual"));
 
-  const pipeline = context.save.agency.talentPipeline;
   (pipeline?.entries ?? []).forEach((entry) => {
     add(entry.playerId, null);
     const record = records.get(entry.playerId);
