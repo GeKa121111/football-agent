@@ -28,8 +28,9 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
+      # Match the validation workflow: use the runner's native libraries and avoid apt mirror downloads.
       - name: Install Chromium for browser tests
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       - name: Run unit tests
         run: npm test
       - name: Run desktop and mobile browser tests

@@ -443,3 +443,102 @@ test("simulates scouting contracts and paid missions across two season boundarie
   const rejected = startScoutingMission(save, { type: "local", countryId: "all", role: "all", scoutId: "scout-iberian-network" }, PLAYERS);
   assert.equal(rejected.changed, false); assert.match(rejected.error, /انتهى عقد الكشاف/);
 });
+
+
+test("balances paid scouting across countries, roles, discovery channels and all mission tiers", () => {
+  const scenarios = [
+    { type: "local", countryId: "country-eg", role: "هجوم", sourceId: "academy", playerIds: ["demo-yassin-adel"] },
+    { type: "regional", countryId: "country-gb", role: "دفاع", sourceId: "club-network", playerIds: ["seed-noah-bennett"] },
+    { type: "elite", countryId: "country-fr", role: "دفاع", sourceId: "agent-referral", playerIds: ["seed-lucas-moreau"] },
+    { type: "local", countryId: "country-es", role: "هجوم", sourceId: "youth-tournament", playerIds: ["seed-es-madrid-forward"] },
+    { type: "regional", countryId: "country-de", role: "all", sourceId: "club-network", playerIds: ["seed-leon-fischer", "seed-de-dortmund-striker"] }
+  ];
+
+  let save = createInitialSave();
+  let expectedTotalCost = 0;
+  let totalObservations = 0;
+
+  for (const scenario of scenarios) {
+    const config = SCOUTING_MISSION_TYPES[scenario.type];
+    const balanceBefore = save.agency.balance;
+    const started = startScoutingMission(save, scenario, PLAYERS);
+
+    assert.equal(started.changed, true, scenario.countryId + " / " + scenario.role + " / " + scenario.sourceId + ": " + started.error);
+    assert.equal(started.mission.countryId, scenario.countryId);
+    assert.equal(started.mission.role, scenario.role);
+    assert.equal(started.mission.sourceId, scenario.sourceId);
+    assert.equal(started.mission.targetCount, scenario.playerIds.length);
+    assert.equal(started.mission.cost, config.cost);
+    assert.equal(started.mission.durationDays, config.durationDays);
+    assert.ok(started.mission.accuracy >= config.accuracy && started.mission.accuracy <= 0.99);
+    assert.equal(started.save.agency.balance, balanceBefore - config.cost);
+    assert.equal(isValidSave(started.save), true);
+    expectedTotalCost += config.cost;
+    save = started.save;
+
+    let completed = [];
+    for (let day = 0; day < config.durationDays; day += 1) {
+      save = advanceCareerDay(save);
+      const result = advanceScoutingMissions(save, PLAYERS);
+      save = result.save;
+      completed.push(...result.completedReports);
+      assert.ok(save.agency.balance >= 0);
+      assert.equal(isValidSave(save), true);
+    }
+
+    assert.equal(completed.length, 1);
+    const report = completed[0];
+    assert.equal(report.candidateCount, scenario.playerIds.length);
+    assert.equal(report.cost, config.cost);
+    assert.equal(report.durationDays, config.durationDays);
+    assert.equal(report.sourceId, scenario.sourceId);
+    assert.equal(report.countryId, scenario.countryId);
+    assert.equal(report.role, scenario.role);
+    assert.deepEqual(report.findings.map((finding) => finding.playerId).sort(), [...scenario.playerIds].sort());
+
+    const newObservations = save.world.scouting.observations.filter((observation) => observation.reportId === report.id);
+    assert.equal(newObservations.length, scenario.playerIds.length);
+    assert.ok(newObservations.every((observation) => observation.sourceIds.length === 1 && observation.sourceIds[0] === scenario.sourceId));
+    assert.deepEqual(newObservations.map((observation) => observation.playerId).sort(), [...scenario.playerIds].sort());
+    totalObservations += scenario.playerIds.length;
+  }
+
+  assert.equal(save.agency.balance, 100000 - expectedTotalCost);
+  assert.equal(expectedTotalCost, 59000);
+  assert.equal(save.agency.balance, 41000);
+  assert.equal(save.world.scouting.reports.length, scenarios.length);
+  assert.equal(save.world.scouting.observations.length, totalObservations);
+  assert.equal(totalObservations, 6);
+  assert.equal(save.world.scouting.activeMissions.length, 0);
+  assert.equal(isValidSave(save), true);
+});
+
+
+test("enforces exact budget boundaries for local, regional and elite missions", () => {
+  for (const [type, config] of Object.entries(SCOUTING_MISSION_TYPES)) {
+    const underBudget = {
+      ...createInitialSave(),
+      agency: { ...createInitialSave().agency, balance: config.cost - 1 }
+    };
+    const rejected = startScoutingMission(underBudget, {
+      type, countryId: "all", role: "all"
+    }, PLAYERS);
+    assert.equal(rejected.changed, false, type + " mission must reject a one-pound shortfall");
+    assert.equal(rejected.save, underBudget);
+    assert.equal(rejected.save.agency.balance, config.cost - 1);
+
+    const exactBudgetBase = createInitialSave();
+    const exactBudget = {
+      ...exactBudgetBase,
+      agency: { ...exactBudgetBase.agency, balance: config.cost }
+    };
+    const accepted = startScoutingMission(exactBudget, {
+      type, countryId: "all", role: "all"
+    }, PLAYERS);
+    assert.equal(accepted.changed, true, type + " mission must accept an exact budget");
+    assert.equal(accepted.mission.cost, config.cost);
+    assert.equal(accepted.mission.durationDays, config.durationDays);
+    assert.equal(accepted.save.agency.balance, 0);
+    assert.equal(isValidSave(accepted.save), true);
+  }
+});
