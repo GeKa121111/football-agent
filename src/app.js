@@ -94,6 +94,58 @@ function playerArt(player, featured = false) {
   return createPlayerPortrait(player, { featured });
 }
 
+function clubCrest(player) {
+  const clubId = typeof player.clubId === "string" ? player.clubId : "unknown-club";
+  const clubColor = /^#[0-9a-f]{6}$/i.test(player.clubColor) ? player.clubColor : "#344d78";
+  const accentColor = /^#[0-9a-f]{6}$/i.test(player.kitLight) ? player.kitLight : "#f2f0e9";
+  const crest = node("span", "club-crest");
+  crest.dataset.clubId = clubId;
+  crest.dataset.clubColor = clubColor;
+  crest.title = "رمز ألوان " + (player.club || "النادي") + " — تصميم داخل اللعبة وليس الشعار الرسمي";
+  crest.setAttribute("role", "img");
+  crest.setAttribute("aria-label", crest.title);
+  crest.style.setProperty("--club-color", clubColor);
+  crest.style.setProperty("--club-accent", accentColor);
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", "club-crest-svg");
+  svg.setAttribute("viewBox", "0 0 32 36");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+
+  const add = (tag, attributes) => {
+    const element = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    Object.entries(attributes).forEach(([name, value]) => element.setAttribute(name, String(value)));
+    svg.append(element);
+    return element;
+  };
+  add("path", {
+    d: "M4 3 H28 V18 C28 25 22 31 16 34 C10 31 4 25 4 18 Z",
+    fill: clubColor,
+    stroke: accentColor,
+    "stroke-width": 1.4,
+    "stroke-linejoin": "round"
+  });
+  add("path", {
+    d: "M7 7 H25 V14 H7 Z",
+    fill: accentColor,
+    opacity: 0.92
+  });
+  add("path", {
+    d: "M9 18 L16 26 L23 18",
+    fill: "none",
+    stroke: accentColor,
+    "stroke-width": 2.1,
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round"
+  });
+  add("circle", {
+    cx: 16, cy: 11, r: 2.1, fill: clubColor, stroke: clubColor, "stroke-width": 0.5
+  });
+  crest.append(svg);
+  return crest;
+}
+
 function playerCard(player, onDetails) {
   const card = node("article", "player-card");
   card.dataset.playerId = player.id;
@@ -112,9 +164,14 @@ function playerCard(player, onDetails) {
   const info = node("div", "player-card-info");
   info.append(
     node("p", "player-country", player.age + " سنة · " + (player.foot === "left" ? "قدم يسرى" : "قدم يمنى")),
-    node("h3", "player-name", player.name),
+    node("h3", "player-name", player.name)
+  );
+  const clubLine = node("div", "player-club-line");
+  clubLine.append(
+    clubCrest(player),
     node("p", "player-club", player.club + " · " + player.league)
   );
+  info.append(clubLine);
 
   const potential = node("div", "player-potential-row");
   potential.append(
@@ -512,10 +569,12 @@ function renderPlayers(context) {
 
   const worldStats = node("div", "metrics-grid world-metrics");
   worldStats.append(
-    metricCard("الدول", WORLD_COUNTS.countries, "نطاق جغرافي تأسيسي", "◎", "purple"),
+    metricCard("الدول", WORLD_COUNTS.countries, "12 نطاقًا جغرافيًا", "◎", "purple"),
     metricCard("الدوريات", WORLD_COUNTS.leagues, "دوريات مرجعية", "▤", "cyan"),
-    metricCard("الأندية", WORLD_COUNTS.clubs, "كيانات مترابطة", "♜", "gold"),
-    metricCard("اللاعبون", WORLD_COUNTS.players, "ملفات خيالية", "⚽", "purple")
+    metricCard("الأندية", WORLD_COUNTS.clubs, "أندية مرتبطة بالدوريات", "♜", "gold"),
+    metricCard("المسابقات", WORLD_COUNTS.competitions, "محلية وقارية", "🏆", "cyan"),
+    metricCard("اللاعبون", WORLD_COUNTS.players, "ملفات خيالية", "⚽", "purple"),
+    metricCard("أصول الصور", WORLD_COUNTS.portraitAssets, "هويات رسومية ثابتة", "▧", "gold")
   );
 
   const toolbar = node("div", "player-library-toolbar");
@@ -637,7 +696,7 @@ function renderScouting(context) {
   const bannerCopy = node("div", "scout-banner-copy");
   bannerCopy.append(
     node("h2", "", "عينك على المستقبل"),
-    node("p", "", "قاعدة البحث الحالية تضم " + WORLD_PLAYERS.length + " ملفًا خياليًا من 8 دول. نتائج الكشافين تقديرات داخل المحاكاة وليست بيانات لاعبين حقيقية.")
+    node("p", "", "قاعدة البحث الحالية تضم " + WORLD_PLAYERS.length + " ملفًا خياليًا من " + WORLD_COUNTS.countries + " دولة. نتائج الكشافين تقديرات داخل المحاكاة وليست بيانات لاعبين حقيقية.")
   );
   scoutBanner.append(
     node("div", "scout-symbol", "⌕"),
@@ -2432,6 +2491,13 @@ export function mountApp(root) {
       node("p", "", player.position + " · " + player.club),
       node("span", "player-profile-status", player.status)
     );
+
+    const profileClubLine = node("div", "player-profile-club-line");
+    profileClubLine.append(
+      clubCrest(player),
+      node("span", "", player.club + " · " + player.league)
+    );
+    identity.append(profileClubLine);
 
     const hero = node("div", "player-profile-hero");
     hero.append(art, identity);
