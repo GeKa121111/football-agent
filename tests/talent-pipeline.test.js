@@ -8,8 +8,14 @@ import {
   upsertTalentProspect,
   recordTalentProspectContact,
   completeTalentProspectFollowUp,
-  assignTalentProspectStaff
+  assignTalentProspectStaff,
+  handoffTalentProspectToClientManagement
 } from "../src/engines/talent-pipeline.js";
+import {
+  createRepresentationOffer,
+  evaluateRepresentationOffer,
+  getPlayerRepresentationProfile
+} from "../src/engines/representation.js";
 import { completeCareerTask } from "../src/engines/career-calendar.js";
 
 function player(overrides = {}) {
@@ -210,6 +216,50 @@ test("releases a scout after contract signing without creating a second client r
   assert.match(released.entry.activity.at(-1).note, /تسليم الملف إلى إدارة العملاء/);
   assert.equal(released.save.agency.clients.length, 0);
   assert.equal(isValidSave(released.save), true);
+});
+
+test("hands an assigned prospect to client management when a representation contract is signed", () => {
+  const profile = player();
+  const preferences = getPlayerRepresentationProfile(profile);
+  const contacted = recordTalentProspectContact(createInitialSave(), profile, {
+    kind: "call",
+    outcome: "pending",
+    followUpDate: "2026-07-04",
+    note: "بانتظار الرد الأول."
+  });
+  const assigned = assignTalentProspectStaff(contacted.save, profile.id, "scout-north-africa");
+  const offer = createRepresentationOffer(assigned.save, profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays,
+    representationType: preferences.prefersExclusive ? "exclusive" : "non-exclusive"
+  });
+  assert.equal(offer.changed, true);
+  const signed = evaluateRepresentationOffer(offer.save, offer.offer.id);
+  assert.equal(signed.status, "signed");
+  assert.ok(signed.save.agency.clients.includes(profile.id));
+
+  const handoff = handoffTalentProspectToClientManagement(signed.save, profile.id);
+  assert.equal(handoff.changed, true);
+  assert.equal(handoff.entry.assignedScoutId, undefined);
+  assert.equal(handoff.entry.nextFollowUpDate, null);
+  assert.equal(handoff.entry.activity.at(-1).type, "assignment");
+  assert.equal(handoff.entry.activity.at(-1).reason, "contract-signed");
+  const followUpTask = handoff.save.world.tasks.find((task) =>
+    task.category === "talent-follow-up" && task.prospectId === handoff.entry.id
+  );
+  assert.equal(followUpTask.status, "completed");
+  assert.equal(followUpTask.completionReason, "contract-signed");
+  assert.deepEqual(handoff.save.agency.clients, [profile.id]);
+  assert.equal(handoff.save.agency.representation.contracts[0].status, "active");
+  assert.equal(isValidSave(handoff.save), true);
+});
+
+test("refuses client handoff before a valid representation contract is signed", () => {
+  const tracked = upsertTalentProspect(createInitialSave(), player(), { sourceId: "scouting" });
+  const rejected = handoffTalentProspectToClientManagement(tracked.save, player().id);
+  assert.equal(rejected.changed, false);
+  assert.match(rejected.error, /قبل توقيع عقد/);
+  assert.equal(rejected.save, tracked.save);
 });
 
 test("records pre-contract outreach, outcome and follow-up without creating a client or mandate", () => {
