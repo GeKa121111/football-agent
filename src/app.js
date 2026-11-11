@@ -569,7 +569,7 @@ function renderPlayers(context) {
 
   const worldStats = node("div", "metrics-grid world-metrics");
   worldStats.append(
-    metricCard("الدول", WORLD_COUNTS.countries, "12 نطاقًا جغرافيًا", "◎", "purple"),
+    metricCard("الدول", WORLD_COUNTS.countries, "دول موصولة بقاعدة العالم", "◎", "purple"),
     metricCard("الدوريات", WORLD_COUNTS.leagues, "دوريات مرجعية", "▤", "cyan"),
     metricCard("الأندية", WORLD_COUNTS.clubs, "أندية مرتبطة بالدوريات", "♜", "gold"),
     metricCard("المسابقات", WORLD_COUNTS.competitions, "محلية وقارية", "🏆", "cyan"),
