@@ -160,12 +160,12 @@ function addEvent(events, event) {
 function createPlayerPerformance(player, random) {
   const formSwing = (random() * 0.8) - 0.4;
   const score = clamp(
-    6.2 +
-      player.goals * 1.1 +
-      player.assists * 0.7 +
-      player.shotsOnTarget * 0.12 -
-      player.yellowCards * 0.35 -
-      (player.injuryDays > 0 ? 0.35 : 0) +
+    6.25 +
+      player.goals * 1.0 +
+      player.assists * 0.65 +
+      player.shotsOnTarget * 0.08 -
+      player.yellowCards * 0.4 -
+      (player.injuryDays > 0 ? 0.5 : 0) +
       formSwing,
     4,
     10
@@ -235,16 +235,16 @@ export function simulateMatch(fixture) {
       const defending = attacking === home ? away : home;
       attacking.stats.attacks += 1;
 
-      if (random() < 0.48) {
+      if (random() < MATCH_SIMULATION_BALANCE.shotChancePerAttack) {
         const scorer = weightedPick(attacking.players, scorerWeight, random);
         if (scorer) {
           scorer.shots += 1;
           attacking.stats.shots += 1;
 
           const targetChance = clamp(
-            0.40 + (scorer.rating - defending.goalkeeper.rating) * 0.007,
-            0.24,
-            0.58
+            MATCH_SIMULATION_BALANCE.targetShotBaseChance + (scorer.rating - defending.goalkeeper.rating) * 0.006,
+            0.28,
+            0.60
           );
           if (random() < targetChance) {
             scorer.shotsOnTarget += 1;
@@ -285,17 +285,17 @@ export function simulateMatch(fixture) {
 
       if (random() < MATCH_SIMULATION_BALANCE.yellowCardChancePerAttack) {
         const carded = weightedPick(
-          attacking.players.filter((player) => player.role !== "حراسة"),
+          defending.players.filter((player) => player.role !== "حراسة"),
           (player) => player.role === "دفاع" ? 2.2 : player.role === "وسط" ? 1.8 : 1,
           random
         );
         if (carded && carded.yellowCards === 0) {
           carded.yellowCards = 1;
-          attacking.stats.yellowCards += 1;
+          defending.stats.yellowCards += 1;
           addEvent(events, {
             minute,
             type: "yellow-card",
-            teamId: attacking.clubId,
+            teamId: defending.clubId,
             playerId: carded.id,
             playerName: carded.name
           });
