@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { advanceCareerDays } from "../src/engines/career-calendar.js";
+import { advanceCareerDays } from "../../src/engines/career-calendar.js";
 
 async function navigateTo(page, view) {
   const mobileNav = page.locator(".mobile-nav");
