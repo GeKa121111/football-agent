@@ -166,6 +166,7 @@ function isValidScoutingState(scouting, currentDate) {
     if (!Array.isArray(scouting.scouts) ||
         scouting.scouts.length > SCOUTING_SCOUTS.length ||
         !hasUniqueIds(scouting.scouts) ||
+        !SCOUTING_SCOUTS.filter((profile) => profile.startingStaff).every((profile) => scouting.scouts.some((scout) => scout.id === profile.id)) ||
         !scouting.scouts.every((scout) => {
           if (!isRecord(scout) || !knownScoutIds.has(scout.id) || !Number.isSafeInteger(scout.experience) || scout.experience < 0 || scout.experience > 1000000 || !Number.isSafeInteger(scout.missionsCompleted) || scout.missionsCompleted < 0 || scout.missionsCompleted > 100000) return false;
           const profile = SCOUTING_SCOUTS.find((item) => item.id === scout.id);

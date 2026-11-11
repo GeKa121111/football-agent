@@ -80,11 +80,16 @@ function initialScoutProgress() {
 }
 
 function getProgressRecords(scouting) {
+  const hasExplicitRoster = scouting?.scouts !== undefined;
   const saved = Array.isArray(scouting?.scouts) ? scouting.scouts : [];
   return SCOUTING_SCOUTS.flatMap((profile) => {
     const record = saved.find((scout) => scout?.id === profile.id);
     if (record) return [{ ...record, id: profile.id }];
-    return profile.startingStaff ? [{ id: profile.id, experience: profile.initialExperience, missionsCompleted: 0 }] : [];
+    // Only legacy saves with no roster field receive the original default staff.
+    // An explicitly partial roster is invalid and must never regain lost progress silently.
+    return profile.startingStaff && !hasExplicitRoster
+      ? [{ id: profile.id, experience: profile.initialExperience, missionsCompleted: 0 }]
+      : [];
   });
 }
 
@@ -179,6 +184,8 @@ function hasValidScoutProgress(scouting) {
   if (!Array.isArray(scouting.scouts) || scouting.scouts.length > SCOUTING_SCOUTS.length) return false;
   const ids = scouting.scouts.map((record) => record?.id);
   if (ids.some((id) => typeof id !== "string") || new Set(ids).size !== ids.length) return false;
+  const requiredStartingIds = SCOUTING_SCOUTS.filter((scout) => scout.startingStaff).map((scout) => scout.id);
+  if (!requiredStartingIds.every((id) => ids.includes(id))) return false;
   return scouting.scouts.every((record) => {
     if (!record || typeof record !== "object" || Array.isArray(record)) return false;
     const profile = SCOUTING_SCOUTS.find((scout) => scout.id === record.id);

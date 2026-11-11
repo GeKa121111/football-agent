@@ -287,6 +287,28 @@ test("stores repeat observations by stable player ID and preserves an auditable 
   assert.equal(repeated.save.world.scouting.observations.length, 2);
 });
 
+test("rejects partial explicit scout rosters without silently recreating permanent staff", () => {
+  const complete = createInitialSave();
+  const partial = structuredClone(complete);
+  partial.world.scouting.scouts = partial.world.scouting.scouts.filter((scout) => scout.id !== "scout-north-africa");
+
+  assert.equal(isValidSave(partial), false);
+  const visibleRoster = getScoutingRoster(partial.world.scouting);
+  assert.equal(visibleRoster.length, 3);
+  assert.equal(visibleRoster.some((scout) => scout.id === "scout-north-africa"), false);
+
+  const rejectedMission = startScoutingMission(partial, {
+    type: "local", countryId: "all", role: "all"
+  }, PLAYERS);
+  assert.equal(rejectedMission.changed, false);
+  assert.match(rejectedMission.error, /سجل الكشافين غير صالح/);
+
+  const legacy = structuredClone(complete);
+  delete legacy.world.scouting.scouts;
+  assert.equal(isValidSave(legacy), true);
+  assert.equal(getScoutingRoster(legacy.world.scouting).length, 4);
+});
+
 test("accepts legacy schema-v3 scouting records without crew fields and rejects invalid crew progress", () => {
   const legacy = createInitialSave();
   delete legacy.world.scouting.scouts;
