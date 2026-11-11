@@ -155,6 +155,14 @@ test("expires stale offers as career time advances", () => {
   assert.equal(isValidTransferState(advanced.save.world.transfers, "2026-07-16", advanced.save.agency.clients, advanced.save.agency.representation), true);
 });
 
+test("expires open offers when the transfer window closes before their 14-day validity", () => {
+  const sent = send(makeSave("2026-08-31"));
+  assert.equal(sent.offer.expiresDate, "2026-09-14");
+  const advanced = advanceTransferState(sent.save, "2026-09-01");
+  assert.deepEqual(advanced.expiredOffers, [sent.offer.id]);
+  assert.equal(advanced.save.world.transfers.offers[0].status, "expired");
+});
+
 test("expires an agreed deal that misses the end of its registration window", () => {
   const save = makeSave();
   const sent = createTransferOffer(save, "player-1", "club-target", "permanent",
