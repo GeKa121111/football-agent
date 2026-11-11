@@ -1,5 +1,5 @@
 import { createInitialCareerCalendar } from "../engines/career-calendar.js";
-import { createInitialScoutingState, SCOUTING_MISSION_TYPES, SCOUTING_SCOUTS } from "../engines/scouting.js";
+import { createInitialScoutingState, SCOUTING_MISSION_TYPES, SCOUTING_SCOUTS, SCOUTING_SOURCES } from "../engines/scouting.js";
 
 export const STORAGE_KEY = "football-agent.save";
 export const SAVE_VERSION = 3;
@@ -150,6 +150,8 @@ function isValidScoutingState(scouting, currentDate) {
   const roles = ["all", "هجوم", "وسط", "دفاع", "حراسة"];
   const recommendations = ["أولوية", "متابعة", "مراقبة فقط"];
   const knownScoutIds = new Set(SCOUTING_SCOUTS.map((scout) => scout.id));
+  const knownSourceIds = new Set(SCOUTING_SOURCES.map((source) => source.id));
+  const knownDiscoverySourceIds = new Set(SCOUTING_SOURCES.filter((source) => source.id !== "all").map((source) => source.id));
   const sequenceOf = (id, prefix) => {
     const match = new RegExp("^" + prefix + "-(\\d+)$").exec(id);
     return match ? Number(match[1]) : 0;
@@ -188,7 +190,10 @@ function isValidScoutingState(scouting, currentDate) {
         typeof mission.accuracy !== "number" || !Number.isFinite(mission.accuracy) || mission.accuracy < 0 || mission.accuracy > 1 ||
         !Number.isSafeInteger(mission.targetCount) || mission.targetCount < 1 ||
         mission.startDate > currentDate || mission.dueDate <= currentDate ||
-        mission.reportId !== "scout-report-" + sequenceOf(mission.id, "scout-mission")) return false;
+        mission.reportId !== "scout-report-" + sequenceOf(mission.id, "scout-mission") ||
+        (mission.sourceId !== undefined && (!knownSourceIds.has(mission.sourceId) ||
+          mission.sourceLabel !== SCOUTING_SOURCES.find((source) => source.id === mission.sourceId)?.label)) ||
+        (mission.sourceId === undefined && mission.sourceLabel !== undefined)) return false;
 
     if (mission.scoutId !== undefined) {
       const baseAccuracy = SCOUTING_MISSION_TYPES[mission.type].accuracy;
@@ -234,7 +239,10 @@ function isValidScoutingState(scouting, currentDate) {
         !Number.isSafeInteger(report.candidateCount) || report.candidateCount < 0 ||
         !Array.isArray(report.findings) || report.findings.length > 6 ||
         report.missionId !== "scout-mission-" + sequenceOf(report.id, "scout-report") ||
-        !sequenceOf(report.id, "scout-report")) return false;
+        !sequenceOf(report.id, "scout-report") ||
+        (report.sourceId !== undefined && (!knownSourceIds.has(report.sourceId) ||
+          report.sourceLabel !== SCOUTING_SOURCES.find((source) => source.id === report.sourceId)?.label)) ||
+        (report.sourceId === undefined && report.sourceLabel !== undefined)) return false;
 
     if (report.scoutId !== undefined) {
       if (!knownScoutIds.has(report.scoutId) ||
@@ -271,10 +279,40 @@ function isValidScoutingState(scouting, currentDate) {
       Number.isInteger(finding.confidence) && finding.confidence >= 40 && finding.confidence <= 99 &&
       Number.isInteger(finding.upside) && finding.upside === finding.estimatedPotential - finding.estimatedRating &&
       recommendations.includes(finding.recommendation) &&
-      typeof finding.rationale === "string" && finding.rationale.trim()
+      typeof finding.rationale === "string" && finding.rationale.trim() &&
+      (finding.discoverySourceIds === undefined ||
+        (Array.isArray(finding.discoverySourceIds) && finding.discoverySourceIds.length > 0 &&
+          new Set(finding.discoverySourceIds).size === finding.discoverySourceIds.length &&
+          finding.discoverySourceIds.every((sourceId) => knownDiscoverySourceIds.has(sourceId))))
     )) return false;
 
     highestSequence = Math.max(highestSequence, sequenceOf(report.id, "scout-report"));
+  }
+
+  if (scouting.observations !== undefined) {
+    const observations = scouting.observations;
+    if (!Array.isArray(observations) || observations.length > 300 || !hasUniqueIds(observations)) return false;
+    if (!observations.every((observation) => {
+      if (!isRecord(observation) ||
+          typeof observation.playerId !== "string" || !observation.playerId.trim() ||
+          typeof observation.playerName !== "string" || !observation.playerName.trim() ||
+          typeof observation.missionId !== "string" ||
+          typeof observation.reportId !== "string" ||
+          !isValidCalendarDate(observation.observedAt) || observation.observedAt > currentDate ||
+          !Array.isArray(observation.sourceIds) || observation.sourceIds.length === 0 ||
+          new Set(observation.sourceIds).size !== observation.sourceIds.length ||
+          !observation.sourceIds.every((sourceId) => knownDiscoverySourceIds.has(sourceId)) ||
+          !Number.isInteger(observation.estimatedRating) || observation.estimatedRating < 1 || observation.estimatedRating > 99 ||
+          !Number.isInteger(observation.estimatedPotential) || observation.estimatedPotential < observation.estimatedRating || observation.estimatedPotential > 99 ||
+          !Number.isInteger(observation.confidence) || observation.confidence < 40 || observation.confidence > 99 ||
+          !recommendations.includes(observation.recommendation)) return false;
+      const sequence = sequenceOf(observation.missionId, "scout-mission");
+      if (!sequence || observation.reportId !== "scout-report-" + sequence ||
+          observation.id !== "scout-observation-" + sequence + "-" + observation.playerId) return false;
+      if (observation.scoutId !== undefined &&
+          (!knownScoutIds.has(observation.scoutId) || typeof observation.scoutName !== "string" || !observation.scoutName.trim())) return false;
+      return observation.scoutId === undefined || observation.scoutName !== undefined;
+    })) return false;
   }
 
   return scouting.nextMissionSequence > highestSequence;
