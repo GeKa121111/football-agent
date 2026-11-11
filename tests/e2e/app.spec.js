@@ -298,7 +298,7 @@ test.describe("Mobile experience", () => {
 
     await page.locator(".day-advance-button").click();
     let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(saved.meta.version).toBe(2);
+    expect(saved.meta.version).toBe(3);
     expect(saved.career.day).toBe(6);
     expect(saved.career.week).toBe(1);
     expect(saved.career.season).toBe(1);
