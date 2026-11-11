@@ -33,6 +33,8 @@ import {
   getPlayerRepresentationProfile,
   getRepresentationContractExpiry,
   getRepresentationContractCommission,
+  getRepresentationRelationshipLabel,
+  recordRepresentationInteraction,
   advanceRepresentationState
 } from "./engines/representation.js";
 import {
@@ -905,6 +907,7 @@ function renderAgency(context) {
         node("strong", "", contract.playerName),
         node("span", "", contract.position + " · " + contract.club + " · " + contract.age + " سنة"),
         node("small", "", "عمولتك " + commissionRate + "% · حتى " + formatHomeDate(effectiveExpiry)),
+        node("small", "representation-trust", "العلاقة: " + getRepresentationRelationshipLabel(contract.relationshipScore) + " · " + contract.relationshipScore + "/100"),
         node("small", "", hasOpenRenewal
           ? "يوجد تفاوض تجديد مفتوح"
           : remainingDays <= 90
@@ -915,6 +918,7 @@ function renderAgency(context) {
       if (remainingDays >= 1 && remainingDays <= 90 && !hasOpenRenewal) {
         actions.append(actionButton("تجديد العقد", "button-primary representation-renew-button", () => context.openRepresentationRenewal(contract.id)));
       }
+      actions.append(actionButton("تواصل مع اللاعب", "button-outline representation-contact-button", () => context.openRelationshipInteraction(contract.id)));
       actions.append(actionButton("إنهاء التمثيل", "button-outline representation-terminate-button", () => context.terminateRepresentationContract(contract.id)));
       row.append(copy, actions);
       contractList.append(row);
@@ -1019,7 +1023,8 @@ function renderAgency(context) {
         "contract-renewed": "تجديد عقد",
         "renewal-offer-sent": "إرسال عرض تجديد",
         "contract-terminated": "إنهاء عقد",
-        "contract-expired": "انتهاء عقد"
+        "contract-expired": "انتهاء عقد",
+        "relationship-event": "تواصل مع لاعب"
       };
       row.append(
         node("strong", "", labels[entry.type] ?? entry.type),
@@ -1312,6 +1317,31 @@ export function mountApp(root) {
       render();
       toast("تم إنهاء عقد التمثيل وحفظه في سجل التعاملات.");
     } else state.save = previousSave;
+  }
+
+  function openRelationshipInteraction(contractId) {
+    if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم نسجل تواصلًا."); return; }
+    const contract = state.save.agency.representation.contracts.find((item) => item.id === contractId);
+    if (!contract || contract.status !== "active") { toast("عقد اللاعب لم يعد نشطًا."); return; }
+    const form = node("div", "representation-offer-form");
+    form.append(
+      node("p", "modal-copy", "اختار طريقة تعاملك مع " + contract.playerName + ". قراراتك ترفع الثقة تدريجيًا، لكن لازم تسيب 14 يومًا بين كل تواصل والتاني."),
+      node("p", "representation-form-note", "مستوى العلاقة الحالي: " + getRepresentationRelationshipLabel(contract.relationshipScore) + " · " + contract.relationshipScore + "/100")
+    );
+    [["check-in", "اطمّن عليه", "تواصل شخصي بسيط"], ["career-guidance", "وجّهه مهنيًا", "ناقش خطوته القادمة وأهدافه"], ["public-support", "ادعمه إعلاميًا", "سانده وقت الضغط والانتقادات"]].forEach(([action, label, detail]) => {
+      form.append(actionButton(label + " · " + detail, "button-outline representation-interaction-choice", () => {
+        const previousSave = state.save;
+        const result = recordRepresentationInteraction(state.save, contract.id, action);
+        if (!result.changed) { toast(result.error); return; }
+        state.save = result.save;
+        if (saveCareer()) {
+          root.querySelector(".modal-overlay .icon-button")?.click();
+          render();
+          toast("العلاقة مع " + contract.playerName + " بقت " + result.relationshipLabel + " (+" + result.delta + ").");
+        } else state.save = previousSave;
+      }));
+    });
+    openModal("إدارة العلاقة مع اللاعب", [form], "إغلاق");
   }
 
   function renewScoutingContract(scoutId) {
@@ -2024,7 +2054,8 @@ export function mountApp(root) {
         if (saveCareer()) { render(); toast("تم تحديث نتيجة التفاوض."); } else state.save = previousSave;
       },
       rejectRepresentationOffer,
-      terminateRepresentationContract
+      terminateRepresentationContract,
+      openRelationshipInteraction
     };
     const views = {
       dashboard: renderDashboard,
