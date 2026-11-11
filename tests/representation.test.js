@@ -50,6 +50,15 @@ test("creates a pending representation offer without charging the agency", () =>
   assert.equal(isValidSave(result.save), true);
 });
 
+test("validates strict calendar dates before creating representation offers", () => {
+  const save = createInitialSave();
+  const valid = createRepresentationOffer(save, player(), { commissionRate: 8, termDays: 365 }, "2026-07-01");
+  assert.equal(valid.changed, true);
+  const invalid = createRepresentationOffer(save, player(), { commissionRate: 8, termDays: 365 }, "2026-02-30");
+  assert.equal(invalid.changed, false);
+  assert.match(invalid.error, /تاريخ المسيرة غير صالح/);
+});
+
 test("prevents duplicate open offers and duplicate client representation", () => {
   const first = sendOffer(createInitialSave());
   const duplicate = sendOffer(first.save);
