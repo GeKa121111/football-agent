@@ -188,15 +188,19 @@ test.describe("Mobile experience", () => {
     await page.getByRole("button", { name: /إطلاق بعثة كشف/ }).click();
 
     await page.getByLabel("مستوى البعثة").selectOption("local");
+    await page.getByLabel("مصدر المواهب").selectOption("academy");
     await page.getByLabel("الدولة المستهدفة").selectOption("country-eg");
-    await page.getByLabel("المركز المستهدف").selectOption("all");
-    await expect(page.getByText(/4 لاعب ضمن نطاق البحث/)).toBeVisible();
+    await page.getByLabel("المركز المستهدف").selectOption("هجوم");
+    await expect(page.getByText(/1 لاعب ضمن نطاق البحث/)).toBeVisible();
+    await expect(page.getByText(/قناة الاكتشاف: أكاديميات الشباب/)).toBeVisible();
     await page.getByRole("button", { name: "تأكيد إطلاق البعثة" }).click();
 
     const started = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(started.meta.version).toBe(3);
     expect(started.agency.balance).toBe(95000);
     expect(started.world.scouting.activeMissions).toHaveLength(1);
+    expect(started.world.scouting.activeMissions[0].sourceId).toBe("academy");
+    expect(started.world.scouting.activeMissions[0].targetCount).toBe(1);
     expect(started.world.scouting.reports).toHaveLength(0);
 
     await navigateTo(page, "الرئيسية");
@@ -208,6 +212,10 @@ test.describe("Mobile experience", () => {
     expect(completed.world.currentDate).toBe("2026-07-08");
     expect(completed.world.scouting.activeMissions).toHaveLength(0);
     expect(completed.world.scouting.reports).toHaveLength(1);
+    expect(completed.world.scouting.reports[0].sourceId).toBe("academy");
+    expect(completed.world.scouting.reports[0].candidateCount).toBe(1);
+    expect(completed.world.scouting.observations).toHaveLength(1);
+    expect(completed.world.scouting.observations[0].sourceIds).toEqual(["academy"]);
 
     await navigateTo(page, "الكشافون");
     await expect(page.getByRole("button", { name: "عرض التقرير" })).toBeVisible();
