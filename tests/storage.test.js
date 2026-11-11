@@ -173,3 +173,96 @@ test("rejects duplicate activity IDs and inbox references to missing events", ()
   }];
   assert.equal(isValidSave(missingReference), false);
 });
+
+
+test("validates task lifecycle dates against the saved career date", () => {
+  const validOpen = createInitialSave();
+  validOpen.world.tasks = [{
+    id: "task-open-valid",
+    title: "مهمة مفتوحة",
+    description: "موعدها لم يمر.",
+    createdDate: "2026-07-01",
+    dueDate: "2026-07-03",
+    category: "timeline-test",
+    status: "open"
+  }];
+  assert.equal(isValidSave(validOpen), true);
+
+  const overdue = createInitialSave();
+  overdue.world.tasks = [{
+    id: "task-overdue-valid",
+    title: "مهمة متأخرة",
+    description: "تجاوزت موعدها.",
+    createdDate: "2026-06-28",
+    dueDate: "2026-06-30",
+    overdueDate: "2026-07-01",
+    category: "timeline-test",
+    status: "overdue"
+  }];
+  assert.equal(isValidSave(overdue), true);
+
+  const completedLate = createInitialSave();
+  completedLate.world.tasks = [{
+    id: "task-completed-late-valid",
+    title: "مهمة مكتملة متأخرًا",
+    description: "اكتملت بعد الموعد.",
+    createdDate: "2026-06-28",
+    dueDate: "2026-06-30",
+    overdueDate: "2026-07-01",
+    completedDate: "2026-07-02",
+    completedLate: true,
+    category: "timeline-test",
+    status: "completed"
+  }];
+  assert.equal(isValidSave(completedLate), true);
+
+  const invalidCases = [
+    (task) => { task.dueDate = "2026-06-30"; },
+    (task) => { task.createdDate = "2026-07-02"; },
+    (task) => { task.status = "overdue"; task.overdueDate = "2026-07-01"; },
+    (task) => { task.status = "completed"; task.completedDate = "2026-07-02"; task.completedLate = true; },
+    (task) => { task.status = "completed"; task.completedDate = "2026-07-02"; task.completedLate = false; },
+    (task) => { task.status = "completed"; task.completedDate = "2026-07-02"; task.completedLate = true; task.overdueDate = "2026-07-03"; }
+  ];
+
+  for (const mutate of invalidCases) {
+    const save = createInitialSave();
+    const task = {
+      id: "task-timeline-invalid",
+      title: "مهمة اختبار",
+      description: "اختبار اتساق التواريخ.",
+      createdDate: "2026-07-01",
+      dueDate: "2026-07-03",
+      category: "timeline-test",
+      status: "open"
+    };
+    mutate(task);
+    save.world.tasks = [task];
+    assert.equal(isValidSave(save), false);
+  }
+});
+
+test("requires inbox messages to use the linked event date", () => {
+  const save = createInitialSave();
+  save.world.inbox[0].date = "2026-07-02";
+  assert.equal(isValidSave(save), false);
+});
+
+test("preserves a save with impossible task chronology instead of rewriting it", () => {
+  const invalid = createInitialSave();
+  invalid.world.tasks = [{
+    id: "task-impossible",
+    title: "مهمة غير متسقة",
+    description: "موعد التسليم قبل الإنشاء.",
+    createdDate: "2026-07-02",
+    dueDate: "2026-07-01",
+    category: "timeline-test",
+    status: "open"
+  }];
+  const raw = JSON.stringify(invalid);
+  const storage = memoryStorage({ [STORAGE_KEY]: raw });
+
+  assert.equal(readSave(storage).status, "corrupt");
+  assert.equal(storage.getItem(STORAGE_KEY), raw);
+  assert.throws(() => writeSave(invalid, memoryStorage()), TypeError);
+});
