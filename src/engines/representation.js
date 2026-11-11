@@ -152,17 +152,27 @@ export function getRepresentationContractCommission(contract, currentDate) {
 
 function playerAcceptsTerms(offer, terms) {
   const preferences = getOfferPreferences(offer);
-  const commissionAllowance = preferences.preferredCommissionRate + (offer.round >= 2 ? 1 : 0);
+  const agencyReputation = Number.isInteger(offer.agencyReputation) ? offer.agencyReputation : 50;
+  const commissionAllowance = preferences.preferredCommissionRate -
+    (agencyReputation >= 80 ? 1 : 0) + (offer.round >= 2 ? 1 : 0);
+  const preferredRepresentationType = preferences.prefersExclusive === true || agencyReputation >= 90
+    ? "exclusive"
+    : "non-exclusive";
   return terms.commissionRate <= commissionAllowance &&
-    terms.termDays === preferences.preferredTermDays;
+    terms.termDays === preferences.preferredTermDays &&
+    normalizeRepresentationType(terms.representationType ?? offer.representationType) === preferredRepresentationType;
 }
 
 function buildPlayerCounterOffer(offer) {
   const preferences = getOfferPreferences(offer);
   const concession = offer.round >= 2 ? 1 : 0;
+  const agencyReputation = Number.isInteger(offer.agencyReputation) ? offer.agencyReputation : 50;
   return {
     commissionRate: clamp(preferences.preferredCommissionRate + concession, 5, 15),
-    termDays: preferences.preferredTermDays
+    termDays: preferences.preferredTermDays,
+    representationType: preferences.prefersExclusive === true || agencyReputation >= 90
+      ? "exclusive"
+      : "non-exclusive"
   };
 }
 
@@ -323,7 +333,8 @@ function commitRepresentationAgreement(save, offer, terms, currentDate, resoluti
       startsOn,
       expiresOn: addDays(startsOn, terms.termDays),
       termDays: terms.termDays,
-      commissionRate: terms.commissionRate
+      commissionRate: terms.commissionRate,
+      representationType: normalizeRepresentationType(terms.representationType ?? offer.representationType ?? contract.representationType)
     };
     const updated = {
       ...representation,
@@ -405,6 +416,8 @@ export function isValidRepresentationState(representation, currentDate, clients 
         !sequenceOf(offer.id, "representation-offer") ||
         (offer.kind !== undefined && !["new", "renewal"].includes(offer.kind)) ||
         (offer.playerPreferences !== undefined && !isValidPlayerPreferences(offer.playerPreferences)) ||
+        (offer.representationType !== undefined && !isValidRepresentationType(offer.representationType)) ||
+        (offer.agencyReputation !== undefined && (!Number.isInteger(offer.agencyReputation) || offer.agencyReputation < 0 || offer.agencyReputation > 100)) ||
         (offer.renewalContractId !== undefined && (typeof offer.renewalContractId !== "string" || !offer.renewalContractId.trim())) ||
         typeof offer.playerId !== "string" || !offer.playerId.trim() ||
         typeof offer.playerName !== "string" || !offer.playerName.trim() ||
@@ -426,7 +439,8 @@ export function isValidRepresentationState(representation, currentDate, clients 
     if (["pending", "countered"].includes(offer.status) && currentDate > offer.expiresDate) return false;
     if (offer.status === "countered" || offer.status === "accepted" && offer.counterOffer !== undefined) {
       if (!isRecord(offer.counterOffer) ||
-          !validTerms(offer.counterOffer.commissionRate, offer.counterOffer.termDays)) return false;
+          !validTerms(offer.counterOffer.commissionRate, offer.counterOffer.termDays) ||
+          (offer.counterOffer.representationType !== undefined && !isValidRepresentationType(offer.counterOffer.representationType))) return false;
     } else if (offer.counterOffer !== undefined) {
       return false;
     }
@@ -461,6 +475,7 @@ export function isValidRepresentationState(representation, currentDate, clients 
         (contract.rating !== undefined && (!Number.isInteger(contract.rating) || contract.rating < 1 || contract.rating > 99)) ||
         (contract.potential !== undefined && (!Number.isInteger(contract.potential) || contract.potential < 1 || contract.potential > 99)) ||
         (contract.playerPreferences !== undefined && !isValidPlayerPreferences(contract.playerPreferences)) ||
+        (contract.representationType !== undefined && !isValidRepresentationType(contract.representationType)) ||
         (contract.renewals !== undefined && (!Array.isArray(contract.renewals) || contract.renewals.length > 20)) ||
         !Number.isInteger(contract.relationshipScore) || contract.relationshipScore < 0 || contract.relationshipScore > 100 ||
         !CONTRACT_STATUSES.has(contract.status)) return false;
@@ -482,6 +497,7 @@ export function isValidRepresentationState(representation, currentDate, clients 
           !isCalendarDate(renewal.startsOn) ||
           !isCalendarDate(renewal.expiresOn) ||
           !validTerms(renewal.commissionRate, renewal.termDays) ||
+          (renewal.representationType !== undefined && !isValidRepresentationType(renewal.representationType)) ||
           renewal.startsOn !== expectedRenewalStart ||
           renewal.expiresOn !== addDays(renewal.startsOn, renewal.termDays) ||
           renewal.signedOn < contract.signedOn ||
@@ -498,7 +514,8 @@ export function isValidRepresentationState(representation, currentDate, clients 
           renewalOffer.playerId !== contract.playerId ||
           !acceptedRenewalTerms ||
           acceptedRenewalTerms.commissionRate !== renewal.commissionRate ||
-          acceptedRenewalTerms.termDays !== renewal.termDays) return false;
+          acceptedRenewalTerms.termDays !== renewal.termDays ||
+          normalizeRepresentationType(acceptedRenewalTerms.representationType ?? renewalOffer.representationType) !== normalizeRepresentationType(renewal.representationType ?? renewalOffer.representationType)) return false;
       renewalOfferIds.add(renewal.offerId);
       expectedRenewalStart = renewal.expiresOn;
     }
@@ -554,7 +571,8 @@ export function isValidRepresentationState(representation, currentDate, clients 
       } else if (
         contract.offerId !== offer.id ||
         contract.commissionRate !== acceptedTerms.commissionRate ||
-        contract.termDays !== acceptedTerms.termDays
+        contract.termDays !== acceptedTerms.termDays ||
+        normalizeRepresentationType(contract.representationType) !== normalizeRepresentationType(acceptedTerms.representationType ?? offer.representationType)
       ) {
         return false;
       }
