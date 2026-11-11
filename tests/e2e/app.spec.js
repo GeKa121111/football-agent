@@ -106,7 +106,7 @@ test.describe("Desktop experience", () => {
   test("negotiates and signs a player representation contract", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الوكالة");
-    await expect(page.locator(".representation-prospect-card")).toHaveCount(32);
+    await expect(page.locator(".representation-prospect-card")).toHaveCount(48);
 
     await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
     const modal = page.locator(".modal-overlay");
@@ -334,23 +334,51 @@ test.describe("Desktop experience", () => {
     await expect(page.locator(".modal-overlay")).toHaveCount(0);
   });
 
+  test("shows consistent expanded world coverage across player and scouting screens", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "اللاعبون");
+
+    const metrics = page.locator(".players-screen .world-metrics .metric-card");
+    await expect(metrics).toHaveCount(6);
+    await expect(metrics.filter({ hasText: "المسابقات" }).locator(".metric-value")).toHaveText("15");
+    await expect(metrics.filter({ hasText: "أصول الصور" }).locator(".metric-value")).toHaveText("48");
+    await expect(page.locator(".player-card .club-crest")).toHaveCount(48);
+
+    const crests = await page.locator(".player-card .club-crest").evaluateAll((items) => items.map((item) => ({
+      clubId: item.dataset.clubId,
+      color: item.dataset.clubColor,
+      pathCount: item.querySelectorAll("svg path").length,
+      label: item.getAttribute("aria-label")
+    })));
+    expect(new Set(crests.map((item) => item.clubId)).size).toBe(24);
+    expect(crests.every((item) => /^#[0-9a-f]{6}$/i.test(item.color))).toBe(true);
+    expect(crests.every((item) => item.pathCount >= 2 && item.label.includes("ليس الشعار الرسمي"))).toBe(true);
+
+    await navigateTo(page, "الكشافون");
+    await expect(page.locator(".scout-banner")).toContainText("من 12 دولة");
+  });
+
   test("renders distinct SVG player portraits and reuses them in player details", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "اللاعبون");
 
     const portraits = page.locator(".player-card .player-portrait");
-    await expect(portraits).toHaveCount(32);
+    await expect(portraits).toHaveCount(48);
 
     const profiles = await portraits.evaluateAll((elements) => elements.map((element) => ({
       hair: element.dataset.hairStyle,
       face: element.dataset.faceShape,
       beard: element.dataset.facialHair,
       kit: element.dataset.kitPattern,
+      assetId: element.dataset.portraitAssetId,
+      assetVersion: element.dataset.portraitVersion,
       paths: element.querySelectorAll("svg path").length
     })));
     expect(new Set(profiles.map((profile) => profile.face)).size).toBe(4);
     expect(new Set(profiles.map((profile) => profile.hair)).size).toBeGreaterThanOrEqual(4);
     expect(new Set(profiles.map((profile) => profile.kit)).size).toBe(4);
+    expect(new Set(profiles.map((profile) => profile.assetId)).size).toBe(48);
+    expect(profiles.every((profile) => profile.assetId.startsWith("portrait-") && profile.assetVersion === "1")).toBe(true);
     expect(profiles.every((profile) => profile.paths >= 10)).toBe(true);
 
     const animationName = await portraits.first().locator(".portrait-athlete").evaluate(
@@ -358,10 +386,13 @@ test.describe("Desktop experience", () => {
     );
     expect(animationName).toBe("portrait-idle");
 
-    await portraits.first().locator("xpath=ancestor::article").getByRole("button", { name: "ملف اللاعب" }).click();
+    const firstCard = page.locator(".player-card").first();
+    const firstPlayerName = await firstCard.locator(".player-name").textContent();
+    await firstCard.getByRole("button", { name: "ملف اللاعب" }).click();
     await expect(page.locator(".modal-player-art .portrait-svg")).toBeVisible();
-    await expect(page.locator(".modal-player-art")).toHaveAttribute("aria-label", /ياسين عادل/);
+    await expect(page.locator(".modal-player-art")).toHaveAttribute("aria-label", "رسم اللاعب " + firstPlayerName);
     await expect(page.locator(".modal-player-art")).toHaveAttribute("data-hair-style", profiles[0].hair);
+    await expect(page.locator(".modal-player-art")).toHaveAttribute("data-portrait-asset-id", profiles[0].assetId);
   });
 
   test("opens a player profile and restores focus after Escape", async ({ page }) => {
@@ -418,7 +449,7 @@ test.describe("Mobile experience", () => {
   test("searches the agency prospect pool without changing its source data", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الوكالة");
-    await expect(page.locator(".representation-prospect-card")).toHaveCount(32);
+    await expect(page.locator(".representation-prospect-card")).toHaveCount(48);
     const search = page.getByRole("searchbox", { name: "البحث عن لاعب لضمّه" });
     await search.fill("ياسين");
     await expect(page.locator(".representation-prospect-card")).toHaveCount(1);
@@ -426,7 +457,7 @@ test.describe("Mobile experience", () => {
     await search.fill("لا يوجد لاعب بهذا الاسم");
     await expect(page.locator(".empty-results")).toBeVisible();
     await page.getByRole("button", { name: "مسح البحث" }).click();
-    await expect(page.locator(".representation-prospect-card")).toHaveCount(32);
+    await expect(page.locator(".representation-prospect-card")).toHaveCount(48);
     await hasNoHorizontalOverflow(page);
   });
 
@@ -468,7 +499,7 @@ test.describe("Mobile experience", () => {
     await expect(page.getByText("مفيش لاعبين مطابقين للبحث")).toBeVisible();
 
     await page.getByRole("button", { name: "مسح البحث" }).click();
-    await expect(page.locator(".player-card")).toHaveCount(32);
+    await expect(page.locator(".player-card")).toHaveCount(48);
     await hasNoHorizontalOverflow(page);
   });
 
@@ -477,12 +508,13 @@ test.describe("Mobile experience", () => {
     await navigateTo(page, "اللاعبون");
     const role = page.getByLabel("تصفية حسب مركز اللاعب");
     const country = page.getByLabel("تصفية حسب الجنسية");
+    const league = page.getByLabel("تصفية حسب الدوري");
     const sort = page.getByLabel("ترتيب اللاعبين");
 
     await role.selectOption("هجوم");
     const attackCount = await page.locator(".player-card").count();
     expect(attackCount).toBeGreaterThan(0);
-    expect(attackCount).toBeLessThan(32);
+    expect(attackCount).toBeLessThan(48);
 
     await country.selectOption("مصر");
     const egyptAttackCount = await page.locator(".player-card").count();
@@ -491,6 +523,10 @@ test.describe("Mobile experience", () => {
 
     await role.selectOption("all");
     await country.selectOption("all");
+    await league.selectOption("league-br-serie-a");
+    await expect(page.locator(".player-card")).toHaveCount(4);
+    await expect(page.locator(".player-card").first().locator(".player-club")).toContainText("الدوري البرازيلي");
+    await league.selectOption("all");
     await sort.selectOption("youngest");
     await expect(page.locator(".player-card").first().locator(".player-country")).toContainText("18 سنة");
     await hasNoHorizontalOverflow(page);
@@ -518,9 +554,9 @@ test.describe("Mobile experience", () => {
     await navigateTo(page, "الكشافون");
     const roleFilter = page.getByLabel("تصفية حسب المركز");
     await roleFilter.selectOption("هجوم");
-    await expect(page.locator(".player-card")).toHaveCount(8);
+    await expect(page.locator(".player-card")).toHaveCount(12);
     await roleFilter.selectOption("حراسة");
-    await expect(page.locator(".player-card")).toHaveCount(8);
+    await expect(page.locator(".player-card")).toHaveCount(12);
     await roleFilter.selectOption("all");
 
     await page.getByRole("searchbox", { name: "البحث في المواهب" }).fill("ياسين");

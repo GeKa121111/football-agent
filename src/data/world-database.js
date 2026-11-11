@@ -1,4 +1,5 @@
-// Curated playable seed for phase 4.
+// Curated fictional player seed for Phase 3. Club names are reference entities; player identities are fictional.
+import { createPortraitAssignment, validatePortraitAssignments } from "./player-portrait-catalog.js";
 // Club and competition labels are reference entities; every player profile is fictional.
 // This is a compact prototype database, not a live or complete global roster feed.
 
@@ -10,7 +11,11 @@ const COUNTRIES = [
   { id: "country-es", code: "ES", nameAr: "إسبانيا", nameEn: "Spain", confederation: "UEFA" },
   { id: "country-de", code: "DE", nameAr: "ألمانيا", nameEn: "Germany", confederation: "UEFA" },
   { id: "country-fr", code: "FR", nameAr: "فرنسا", nameEn: "France", confederation: "UEFA" },
-  { id: "country-it", code: "IT", nameAr: "إيطاليا", nameEn: "Italy", confederation: "UEFA" }
+  { id: "country-it", code: "IT", nameAr: "إيطاليا", nameEn: "Italy", confederation: "UEFA" },
+  { id: "country-nl", code: "NL", nameAr: "هولندا", nameEn: "Netherlands", confederation: "UEFA" },
+  { id: "country-pt", code: "PT", nameAr: "البرتغال", nameEn: "Portugal", confederation: "UEFA" },
+  { id: "country-br", code: "BR", nameAr: "البرازيل", nameEn: "Brazil", confederation: "CONMEBOL" },
+  { id: "country-ar", code: "AR", nameAr: "الأرجنتين", nameEn: "Argentina", confederation: "CONMEBOL" }
 ];
 
 const LEAGUES = [
@@ -21,7 +26,11 @@ const LEAGUES = [
   { id: "league-es-laliga", nameAr: "الدوري الإسباني", nameEn: "LaLiga", countryId: "country-es", tier: 1 },
   { id: "league-de-bundesliga", nameAr: "الدوري الألماني", nameEn: "Bundesliga", countryId: "country-de", tier: 1 },
   { id: "league-fr-ligue1", nameAr: "الدوري الفرنسي", nameEn: "Ligue 1", countryId: "country-fr", tier: 1 },
-  { id: "league-it-seriea", nameAr: "الدوري الإيطالي", nameEn: "Serie A", countryId: "country-it", tier: 1 }
+  { id: "league-it-seriea", nameAr: "الدوري الإيطالي", nameEn: "Serie A", countryId: "country-it", tier: 1 },
+  { id: "league-nl-eredivisie", nameAr: "الدوري الهولندي", nameEn: "Eredivisie", countryId: "country-nl", tier: 1 },
+  { id: "league-pt-primeira", nameAr: "الدوري البرتغالي", nameEn: "Primeira Liga", countryId: "country-pt", tier: 1 },
+  { id: "league-br-serie-a", nameAr: "الدوري البرازيلي", nameEn: "Brasileirão", countryId: "country-br", tier: 1 },
+  { id: "league-ar-primera", nameAr: "الدوري الأرجنتيني", nameEn: "Primera División", countryId: "country-ar", tier: 1 }
 ];
 
 const CLUBS = [
@@ -40,7 +49,15 @@ const CLUBS = [
   { id: "club-psg", nameAr: "باريس سان جيرمان", nameEn: "Paris Saint-Germain", countryId: "country-fr", leagueId: "league-fr-ligue1", shortName: "باريس", simulationProfile: 92, primaryColor: "#244b83" },
   { id: "club-marseille", nameAr: "أولمبيك مارسيليا", nameEn: "Olympique Marseille", countryId: "country-fr", leagueId: "league-fr-ligue1", shortName: "مارسيليا", simulationProfile: 82, primaryColor: "#e9edf5" },
   { id: "club-inter", nameAr: "إنتر ميلان", nameEn: "Inter", countryId: "country-it", leagueId: "league-it-seriea", shortName: "إنتر", simulationProfile: 91, primaryColor: "#19549b" },
-  { id: "club-juventus", nameAr: "يوفنتوس", nameEn: "Juventus", countryId: "country-it", leagueId: "league-it-seriea", shortName: "يوفنتوس", simulationProfile: 89, primaryColor: "#eeeeef" }
+  { id: "club-juventus", nameAr: "يوفنتوس", nameEn: "Juventus", countryId: "country-it", leagueId: "league-it-seriea", shortName: "يوفنتوس", simulationProfile: 89, primaryColor: "#eeeeef" },
+  { id: "club-ajax", nameAr: "أياكس", nameEn: "Ajax", countryId: "country-nl", leagueId: "league-nl-eredivisie", shortName: "أياكس", simulationProfile: 82, primaryColor: "#c92f3c" },
+  { id: "club-psv", nameAr: "آيندهوفن", nameEn: "PSV Eindhoven", countryId: "country-nl", leagueId: "league-nl-eredivisie", shortName: "PSV", simulationProfile: 82, primaryColor: "#d32f43" },
+  { id: "club-benfica", nameAr: "بنفيكا", nameEn: "Benfica", countryId: "country-pt", leagueId: "league-pt-primeira", shortName: "بنفيكا", simulationProfile: 85, primaryColor: "#c92535" },
+  { id: "club-porto", nameAr: "بورتو", nameEn: "Porto", countryId: "country-pt", leagueId: "league-pt-primeira", shortName: "بورتو", simulationProfile: 84, primaryColor: "#2863a0" },
+  { id: "club-flamengo", nameAr: "فلامنغو", nameEn: "Flamengo", countryId: "country-br", leagueId: "league-br-serie-a", shortName: "فلامنغو", simulationProfile: 86, primaryColor: "#c92b38" },
+  { id: "club-palmeiras", nameAr: "بالميراس", nameEn: "Palmeiras", countryId: "country-br", leagueId: "league-br-serie-a", shortName: "بالميراس", simulationProfile: 85, primaryColor: "#16724a" },
+  { id: "club-river", nameAr: "ريفر بليت", nameEn: "River Plate", countryId: "country-ar", leagueId: "league-ar-primera", shortName: "ريفر", simulationProfile: 86, primaryColor: "#eeeeef" },
+  { id: "club-boca", nameAr: "بوكا جونيورز", nameEn: "Boca Juniors", countryId: "country-ar", leagueId: "league-ar-primera", shortName: "بوكا", simulationProfile: 86, primaryColor: "#24539b" }
 ];
 
 const COMPETITIONS = [
@@ -52,17 +69,13 @@ const COMPETITIONS = [
   { id: "competition-de-bundesliga", nameAr: "الدوري الألماني", nameEn: "Bundesliga", type: "league", countryId: "country-de", leagueId: "league-de-bundesliga", season: "2026-2027", clubIds: ["club-bayern", "club-dortmund"] },
   { id: "competition-fr-ligue1", nameAr: "الدوري الفرنسي", nameEn: "Ligue 1", type: "league", countryId: "country-fr", leagueId: "league-fr-ligue1", season: "2026-2027", clubIds: ["club-psg", "club-marseille"] },
   { id: "competition-it-seriea", nameAr: "الدوري الإيطالي", nameEn: "Serie A", type: "league", countryId: "country-it", leagueId: "league-it-seriea", season: "2026-2027", clubIds: ["club-inter", "club-juventus"] },
+  { id: "competition-nl-eredivisie", nameAr: "الدوري الهولندي", nameEn: "Eredivisie", type: "league", countryId: "country-nl", leagueId: "league-nl-eredivisie", season: "2026-2027", clubIds: ["club-ajax", "club-psv"] },
+  { id: "competition-pt-primeira", nameAr: "الدوري البرتغالي", nameEn: "Primeira Liga", type: "league", countryId: "country-pt", leagueId: "league-pt-primeira", season: "2026-2027", clubIds: ["club-benfica", "club-porto"] },
+  { id: "competition-br-serie-a", nameAr: "الدوري البرازيلي", nameEn: "Brasileirão", type: "league", countryId: "country-br", leagueId: "league-br-serie-a", season: "2026-2027", clubIds: ["club-flamengo", "club-palmeiras"] },
+  { id: "competition-ar-primera", nameAr: "الدوري الأرجنتيني", nameEn: "Primera División", type: "league", countryId: "country-ar", leagueId: "league-ar-primera", season: "2026-2027", clubIds: ["club-river", "club-boca"] },
   { id: "competition-caf-champions", nameAr: "دوري أبطال أفريقيا", nameEn: "CAF Champions League", type: "continental", countryId: null, leagueId: null, season: "2026-2027", clubIds: ["club-al-ahly", "club-zamalek", "club-wydad", "club-raja", "club-etoile", "club-es-tunis"] },
-  { id: "competition-uefa-champions", nameAr: "دوري أبطال أوروبا", nameEn: "UEFA Champions League", type: "continental", countryId: null, leagueId: null, season: "2026-2027", clubIds: ["club-arsenal", "club-liverpool", "club-real-madrid", "club-barcelona", "club-bayern", "club-dortmund", "club-psg", "club-marseille", "club-inter", "club-juventus"] }
-];
-
-const PORTRAIT_PRESETS = [
-  { skin: "#b97857", hair: "#211a19", hairStyle: "hair-curly", kit: "#7138a8", kitLight: "#c7a2ef", appearance: { faceShape: "oval", haircut: "curly", facialHair: "none", eyeColor: "#2b1d18", kitPattern: "stripes" } },
-  { skin: "#e0aa82", hair: "#302221", hairStyle: "hair-fade", kit: "#174d85", kitLight: "#77c9ef", appearance: { faceShape: "round", haircut: "fade", facialHair: "none", eyeColor: "#38271f", kitPattern: "sash" } },
-  { skin: "#8b543b", hair: "#17191e", hairStyle: "hair-wavy", kit: "#9b273f", kitLight: "#e78a9c", appearance: { faceShape: "angular", haircut: "wavy", facialHair: "short-beard", eyeColor: "#211713", kitPattern: "chevron" } },
-  { skin: "#c88d6d", hair: "#28201d", hairStyle: "hair-curly", kit: "#d6d7df", kitLight: "#8a8fa4", appearance: { faceShape: "square", haircut: "short", facialHair: "full-beard", eyeColor: "#31231d", kitPattern: "solid" } },
-  { skin: "#d39a75", hair: "#3a2d25", hairStyle: "hair-short", kit: "#376d54", kitLight: "#9ed0ac", appearance: { faceShape: "oval", haircut: "short", facialHair: "stubble", eyeColor: "#493528", kitPattern: "stripes" } },
-  { skin: "#a96e50", hair: "#17191e", hairStyle: "hair-buzz", kit: "#b63e43", kitLight: "#e5a1a2", appearance: { faceShape: "angular", haircut: "buzz", facialHair: "none", eyeColor: "#2b211b", kitPattern: "solid" } }
+  { id: "competition-uefa-champions", nameAr: "دوري أبطال أوروبا", nameEn: "UEFA Champions League", type: "continental", countryId: null, leagueId: null, season: "2026-2027", clubIds: ["club-arsenal", "club-liverpool", "club-real-madrid", "club-barcelona", "club-bayern", "club-dortmund", "club-psg", "club-marseille", "club-inter", "club-juventus", "club-ajax", "club-psv", "club-benfica", "club-porto"] },
+  { id: "competition-conmebol-libertadores", nameAr: "كوبا ليبرتادوريس", nameEn: "CONMEBOL Libertadores", type: "continental", countryId: null, leagueId: null, season: "2026-2027", clubIds: ["club-flamengo", "club-palmeiras", "club-river", "club-boca"] }
 ];
 
 const PLAYER_SEEDS = [
@@ -97,21 +110,40 @@ const PLAYER_SEEDS = [
   { id: "seed-fr-psg-forward", name: "Mathis Bernard", age: 20, countryId: "country-fr", clubId: "club-psg", position: "جناح أيسر", role: "هجوم", rating: 76, potential: 89, marketValueEur: 3400000, status: "جاهز للتطور", shirtNumber: 29, contractUntil: "2028-06-30", foot: "right", discoverySourceIds: ["academy", "youth-tournament"] },
   { id: "seed-fr-marseille-keeper", name: "Noé Girard", age: 19, countryId: "country-fr", clubId: "club-marseille", position: "حارس مرمى", role: "حراسة", rating: 70, potential: 86, marketValueEur: 1400000, status: "موهبة صاعدة", shirtNumber: 30, contractUntil: "2029-06-30", foot: "right", discoverySourceIds: ["club-network", "agent-referral"] },
   { id: "seed-it-inter-striker", name: "Lorenzo Conti", age: 19, countryId: "country-it", clubId: "club-inter", position: "مهاجم", role: "هجوم", rating: 73, potential: 88, marketValueEur: 2500000, status: "موهبة صاعدة", shirtNumber: 19, contractUntil: "2029-06-30", foot: "right", discoverySourceIds: ["academy", "youth-tournament"] },
-  { id: "seed-it-juventus-midfielder", name: "Andrea Moretti", age: 18, countryId: "country-it", clubId: "club-juventus", position: "وسط مركزي", role: "وسط", rating: 70, potential: 89, marketValueEur: 2000000, status: "متاح للكشف", shirtNumber: 18, contractUntil: "2029-06-30", foot: "left", discoverySourceIds: ["club-network", "agent-referral"] }
+  { id: "seed-it-juventus-midfielder", name: "Andrea Moretti", age: 18, countryId: "country-it", clubId: "club-juventus", position: "وسط مركزي", role: "وسط", rating: 70, potential: 89, marketValueEur: 2000000, status: "متاح للكشف", shirtNumber: 18, contractUntil: "2029-06-30", foot: "left", discoverySourceIds: ["club-network", "agent-referral"] },
+  { id: "seed-nl-ajax-forward", name: "Daan Vermeer", age: 19, countryId: "country-nl", clubId: "club-ajax", position: "مهاجم", role: "هجوم", rating: 72, potential: 88, marketValueEur: 2100000, status: "موهبة صاعدة", shirtNumber: 19, contractUntil: "2029-06-30", foot: "right", discoverySourceIds: ["academy", "youth-tournament"] },
+  { id: "seed-nl-ajax-keeper", name: "Milan de Groot", age: 20, countryId: "country-nl", clubId: "club-ajax", position: "حارس مرمى", role: "حراسة", rating: 71, potential: 86, marketValueEur: 1500000, status: "تحت المراقبة", shirtNumber: 1, contractUntil: "2028-06-30", foot: "right", discoverySourceIds: ["club-network", "agent-referral"] },
+  { id: "seed-nl-psv-midfielder", name: "Timo Smit", age: 18, countryId: "country-nl", clubId: "club-psv", position: "وسط مركزي", role: "وسط", rating: 69, potential: 87, marketValueEur: 1300000, status: "متاح للكشف", shirtNumber: 8, contractUntil: "2029-06-30", foot: "left", discoverySourceIds: ["academy", "youth-tournament"] },
+  { id: "seed-nl-psv-defender", name: "Jesse Bakker", age: 21, countryId: "country-nl", clubId: "club-psv", position: "قلب دفاع", role: "دفاع", rating: 73, potential: 84, marketValueEur: 1900000, status: "جاهز للتطور", shirtNumber: 4, contractUntil: "2028-06-30", foot: "right", discoverySourceIds: ["club-network", "agent-referral"] },
+  { id: "seed-pt-benfica-winger", name: "Tiago Rocha", age: 19, countryId: "country-pt", clubId: "club-benfica", position: "جناح أيمن", role: "هجوم", rating: 74, potential: 89, marketValueEur: 2900000, status: "موهبة صاعدة", shirtNumber: 17, contractUntil: "2029-06-30", foot: "left", discoverySourceIds: ["academy", "youth-tournament"] },
+  { id: "seed-pt-benfica-keeper", name: "Rui Matos", age: 22, countryId: "country-pt", clubId: "club-benfica", position: "حارس مرمى", role: "حراسة", rating: 75, potential: 84, marketValueEur: 2600000, status: "تحت المراقبة", shirtNumber: 24, contractUntil: "2028-06-30", foot: "right", discoverySourceIds: ["club-network", "agent-referral"] },
+  { id: "seed-pt-porto-midfielder", name: "Gonçalo Pires", age: 18, countryId: "country-pt", clubId: "club-porto", position: "وسط هجومي", role: "وسط", rating: 70, potential: 90, marketValueEur: 2400000, status: "متاح للكشف", shirtNumber: 10, contractUntil: "2029-06-30", foot: "left", discoverySourceIds: ["academy", "youth-tournament"] },
+  { id: "seed-pt-porto-defender", name: "Afonso Lima", age: 20, countryId: "country-pt", clubId: "club-porto", position: "قلب دفاع", role: "دفاع", rating: 73, potential: 86, marketValueEur: 2200000, status: "موهبة صاعدة", shirtNumber: 5, contractUntil: "2028-06-30", foot: "right", discoverySourceIds: ["club-network", "agent-referral"] },
+  { id: "seed-br-flamengo-striker", name: "Lucas Nascimento", age: 19, countryId: "country-br", clubId: "club-flamengo", position: "مهاجم", role: "هجوم", rating: 75, potential: 91, marketValueEur: 3600000, status: "موهبة صاعدة", shirtNumber: 9, contractUntil: "2029-06-30", foot: "right", discoverySourceIds: ["academy", "youth-tournament"] },
+  { id: "seed-br-flamengo-defender", name: "Caio Ribeiro", age: 21, countryId: "country-br", clubId: "club-flamengo", position: "قلب دفاع", role: "دفاع", rating: 74, potential: 86, marketValueEur: 2800000, status: "تحت المراقبة", shirtNumber: 3, contractUntil: "2028-06-30", foot: "right", discoverySourceIds: ["club-network", "agent-referral"] },
+  { id: "seed-br-palmeiras-keeper", name: "Murilo Costa", age: 20, countryId: "country-br", clubId: "club-palmeiras", position: "حارس مرمى", role: "حراسة", rating: 73, potential: 87, marketValueEur: 2400000, status: "جاهز للتطور", shirtNumber: 1, contractUntil: "2029-06-30", foot: "right", discoverySourceIds: ["academy", "youth-tournament"] },
+  { id: "seed-br-palmeiras-midfielder", name: "Pedro Almeida", age: 18, countryId: "country-br", clubId: "club-palmeiras", position: "وسط مركزي", role: "وسط", rating: 71, potential: 89, marketValueEur: 2500000, status: "متاح للكشف", shirtNumber: 8, contractUntil: "2029-06-30", foot: "left", discoverySourceIds: ["club-network", "agent-referral"] },
+  { id: "seed-ar-river-winger", name: "Mateo Benítez", age: 19, countryId: "country-ar", clubId: "club-river", position: "جناح أيسر", role: "هجوم", rating: 74, potential: 90, marketValueEur: 3200000, status: "موهبة صاعدة", shirtNumber: 11, contractUntil: "2029-06-30", foot: "right", discoverySourceIds: ["academy", "youth-tournament"] },
+  { id: "seed-ar-river-keeper", name: "Tomás Rojas", age: 21, countryId: "country-ar", clubId: "club-river", position: "حارس مرمى", role: "حراسة", rating: 72, potential: 85, marketValueEur: 2100000, status: "تحت المراقبة", shirtNumber: 12, contractUntil: "2028-06-30", foot: "right", discoverySourceIds: ["club-network", "agent-referral"] },
+  { id: "seed-ar-boca-midfielder", name: "Julián Acosta", age: 18, countryId: "country-ar", clubId: "club-boca", position: "وسط هجومي", role: "وسط", rating: 70, potential: 89, marketValueEur: 2300000, status: "متاح للكشف", shirtNumber: 9, contractUntil: "2029-06-30", foot: "left", discoverySourceIds: ["academy", "youth-tournament"] },
+  { id: "seed-ar-boca-defender", name: "Nicolás Duarte", age: 22, countryId: "country-ar", clubId: "club-boca", position: "قلب دفاع", role: "دفاع", rating: 75, potential: 85, marketValueEur: 2700000, status: "جاهز للتطور", shirtNumber: 2, contractUntil: "2028-06-30", foot: "right", discoverySourceIds: ["club-network", "agent-referral"] }
 ];
 
-const players = PLAYER_SEEDS.map((player, index) => ({
-  ...player,
-  ...PORTRAIT_PRESETS[index % PORTRAIT_PRESETS.length]
-}));
+const players = PLAYER_SEEDS.map((player) => {
+  const club = CLUBS.find((item) => item.id === player.clubId);
+  return {
+    ...player,
+    ...createPortraitAssignment(player, club)
+  };
+});
 
 export const WORLD_DATABASE = deepFreeze({
   meta: {
     id: "football-agent-world-seed",
-    version: 1,
+    version: 2,
     season: "2026-2027",
-    sourceType: "curated-prototype-seed",
-    sourceNote: "أندية ومسابقات مرجعية مختارة، و32 ملف لاعب خياليًا موزعة بواقع أربعة لاعبين لكل دولة ولاعبين لكل نادٍ مع تغطية المراكز العامة الأربعة. ليست قوائم فرق كاملة أو بيانات مباشرة."
+    sourceType: "curated-fictional-world-seed",
+    sourceNote: "12 دولة و12 دوريًا و24 ناديًا و48 ملف لاعب خياليًا؛ أربعة لاعبين لكل دولة ولاعبان لكل نادٍ مع تغطية الأدوار العامة الأربعة. أسماء الأندية والمسابقات مرجعية، واللاعبون ليسوا قوائم حقيقية أو بيانات مباشرة."
   },
   countries: COUNTRIES,
   leagues: LEAGUES,
@@ -150,6 +182,8 @@ export function validateWorldDatabase(database = WORLD_DATABASE) {
   for (const [name, items] of Object.entries({ countries, leagues, competitions, clubs, players })) {
     if (!hasUniqueIds(items)) errors.push("معرفات " + name + " مفقودة أو مكررة.");
   }
+  const portraitValidation = validatePortraitAssignments(players);
+  errors.push(...portraitValidation.errors);
 
   const countryById = new Map(countries.map((item) => [item.id, item]));
   const leagueById = new Map(leagues.map((item) => [item.id, item]));
@@ -171,6 +205,10 @@ export function validateWorldDatabase(database = WORLD_DATABASE) {
     else if (league.countryId !== club.countryId) errors.push("دولة النادي لا تطابق دولة دوري النادي: " + club.id);
     if (!Number.isInteger(club.simulationProfile) || club.simulationProfile < 1 || club.simulationProfile > 100) {
       errors.push("تقييم قوة المحاكاة خارج النطاق: " + club.id);
+    }
+    if (typeof club.shortName !== "string" || !club.shortName.trim()) errors.push("الاسم المختصر للنادي مفقود: " + club.id);
+    if (typeof club.primaryColor !== "string" || !/^#[0-9a-f]{6}$/i.test(club.primaryColor)) {
+      errors.push("لون النادي غير صالح لربط هوية القميص: " + club.id);
     }
   }
 
@@ -204,7 +242,9 @@ export function validateWorldDatabase(database = WORLD_DATABASE) {
   const allowedDiscoverySources = new Set(["academy", "club-network", "youth-tournament", "agent-referral"]);
   for (const player of players) {
     if (!countryById.has(player.countryId)) errors.push("اللاعب " + player.id + " يشير إلى جنسية غير موجودة.");
-    if (!clubById.has(player.clubId)) errors.push("اللاعب " + player.id + " يشير إلى نادٍ غير موجود.");
+    const currentClub = clubById.get(player.clubId);
+    if (!currentClub) errors.push("اللاعب " + player.id + " يشير إلى نادٍ غير موجود.");
+    else if (player.kit !== currentClub.primaryColor) errors.push("لون قميص اللاعب لا يطابق النادي المرتبط: " + player.id);
     if (!Number.isInteger(player.age) || player.age < 15 || player.age > 45) errors.push("عمر اللاعب خارج النطاق: " + player.id);
     if (!Number.isInteger(player.rating) || player.rating < 1 || player.rating > 99) errors.push("تقييم اللاعب غير صالح: " + player.id);
     if (!Number.isInteger(player.potential) || player.potential < player.rating || player.potential > 99) errors.push("إمكانية اللاعب غير صالحة: " + player.id);
@@ -241,8 +281,11 @@ export function getWorldPlayerProfiles(database = WORLD_DATABASE) {
       ...player,
       country: countries.get(player.countryId).nameAr,
       club: club.nameAr,
+      clubShortName: club.shortName,
+      clubId: club.id,
       league: league.nameAr,
       leagueId: league.id,
+      clubColor: club.primaryColor,
       value: formatEuro(player.marketValueEur)
     };
   });
@@ -254,7 +297,8 @@ export function getWorldSummary(database = WORLD_DATABASE) {
     leagues: database.leagues.length,
     competitions: database.competitions.length,
     clubs: database.clubs.length,
-    players: database.players.length
+    players: database.players.length,
+    portraitAssets: database.players.filter((player) => Boolean(player.portraitAssetId)).length
   };
 }
 

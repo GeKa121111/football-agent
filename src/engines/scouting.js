@@ -27,7 +27,7 @@ export const SCOUTING_SCOUTS = Object.freeze([
     id: "scout-western-europe",
     name: "مارتن فيشر",
     region: "أوروبا الغربية",
-    countryIds: Object.freeze(["country-gb", "country-es", "country-de", "country-fr"]),
+    countryIds: Object.freeze(["country-gb", "country-es", "country-de", "country-fr", "country-nl", "country-pt"]),
     roles: Object.freeze(["وسط", "دفاع"]),
     specialty: "لاعبو الوسط والدفاع في أوروبا",
     initialExperience: 140,
@@ -53,7 +53,7 @@ export const SCOUTING_SCOUTS = Object.freeze([
     initialExperience: 0,
     startingStaff: true
   }),
-  Object.freeze({ id: "scout-iberian-network", name: "رافاييل أورتيغا", region: "إيبيريا", countryIds: Object.freeze(["country-es"]), roles: Object.freeze(["هجوم", "وسط"]), specialty: "المواهب الهجومية وصناع اللعب في إسبانيا", initialExperience: 0, startingStaff: false, contractCost: 18000, renewalCost: 8000, contractDays: 365 }),
+  Object.freeze({ id: "scout-iberian-network", name: "رافاييل أورتيغا", region: "إيبيريا", countryIds: Object.freeze(["country-es", "country-pt"]), roles: Object.freeze(["هجوم", "وسط"]), specialty: "المواهب الهجومية وصناع اللعب في إسبانيا والبرتغال", initialExperience: 0, startingStaff: false, contractCost: 18000, renewalCost: 8000, contractDays: 365 }),
   Object.freeze({ id: "scout-central-europe", name: "ماتياس كروغر", region: "أوروبا الوسطى", countryIds: Object.freeze(["country-de", "country-fr", "country-it"]), roles: Object.freeze(["دفاع", "حراسة"]), specialty: "المدافعون وحراس المرمى في أوروبا الوسطى", initialExperience: 0, startingStaff: false, contractCost: 15000, renewalCost: 7000, contractDays: 365 })
 ]);
 

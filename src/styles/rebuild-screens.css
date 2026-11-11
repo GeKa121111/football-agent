@@ -171,7 +171,7 @@
 /* Rebuild 2.0 — player library, scouting, agency and market workspaces */
 .player-library-toolbar {
   display: grid;
-  grid-template-columns: minmax(220px, 1.8fr) repeat(3, minmax(130px, .75fr)) auto;
+  grid-template-columns: minmax(200px, 1.6fr) repeat(4, minmax(110px, .72fr)) auto;
   align-items: center;
   gap: 9px;
   padding: 12px;
@@ -421,6 +421,32 @@
   background: #172438;
 }
 .representation-prospect-portrait .player-portrait { width: 100%; height: 100%; border-radius: inherit; }
+/* Phase 3 — illustrated identity is a reusable player asset. */
+.player-portrait {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 30%, rgba(170, 205, 235, .16), transparent 62%), #111a2d;
+}
+.player-portrait::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: inherit;
+  content: "";
+  pointer-events: none;
+}
+.player-portrait .portrait-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: saturate(1.06) contrast(1.025);
+}
+.player-profile-hero .player-portrait {
+  box-shadow: 0 14px 36px rgba(0,0,0,.22);
+}
+
 .agency-screen .representation-prospect-card .representation-copy { min-width: 0; }
 .agency-screen .representation-prospect-card .representation-offer-button { grid-column: 1 / -1; min-height: 37px; border-radius: 10px; font-size: 8px; }
 .agency-screen .representation-intro { color: var(--fa-muted); font-size: 8px; line-height: 1.8; }
@@ -528,4 +554,64 @@
 .representation-client-toolbar .search-input { width: 100%; min-width: 0; }
 @media (max-width: 760px) {
   .representation-client-toolbar { padding: 8px; }
+}
+
+
+/* World directory — generated, non-official club identity marks. */
+.rebuild-main .players-screen .world-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.player-club-line,
+.player-profile-club-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.player-club-line .player-club,
+.player-profile-club-line > span:last-child {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.club-crest {
+  display: inline-grid;
+  width: 25px;
+  height: 29px;
+  flex: 0 0 25px;
+  place-items: center;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--club-color) 22%, transparent);
+}
+.club-crest-svg {
+  display: block;
+  width: 21px;
+  height: 25px;
+  overflow: visible;
+}
+.player-profile-club-line {
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 8px;
+  padding: 6px 9px 6px 7px;
+  border: 1px solid var(--fa-border);
+  border-radius: 10px;
+  color: var(--fa-text-soft);
+  background: rgba(255,255,255,.025);
+  font-size: 9px;
+}
+.player-profile-club-line .club-crest {
+  width: 23px;
+  height: 25px;
+  flex-basis: 23px;
+}
+.player-profile-club-line .club-crest-svg { width: 19px; height: 22px; }
+@media (max-width: 760px) {
+  .rebuild-main .players-screen .world-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
