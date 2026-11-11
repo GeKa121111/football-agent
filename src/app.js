@@ -22,6 +22,7 @@ import {
   startScoutingMission
 } from "./engines/scouting.js";
 import { createPlayerPortrait } from "./ui/player-portrait.js";
+import { upsertTalentProspect } from "./engines/talent-pipeline.js";
 import {
   createRepresentationOffer as createRepresentationOfferInEngine,
   evaluateRepresentationOffer as evaluateRepresentationOfferInEngine,
@@ -311,7 +312,8 @@ function renderCareerOperations(context) {
   const inboxHeading = node("div", "career-operations-heading");
   inboxHeading.append(
     node("h2", "", "صندوق الوارد"),
-    node("span", "career-count", formatHomeNumber(unread) + " غير مقروءة")
+    node("span", "career-count", formatHomeNumber(unread) + " غير مقروءة"),
+    actionButton("عرض كل الرسائل", "inbox-archive-button", context.openInbox)
   );
   inboxPanel.append(inboxHeading);
 
