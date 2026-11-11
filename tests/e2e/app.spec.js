@@ -261,7 +261,7 @@ test.describe("Mobile experience", () => {
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(saved.world.currentDate).toBe("2027-07-01");
     expect(saved.career.season).toBe(2);
-    await expect(page.locator(".career-season")).toHaveText("الموسم 2");
+    await expect(page.locator(".career-season")).toHaveText("الموسم ٢");
     await expect(page.locator(".season-pill")).toHaveText("موسم 2027 / 2028");
     expect(saved.world.events.some((event) => event.type === "season-opening")).toBe(true);
   });
