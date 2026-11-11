@@ -182,13 +182,19 @@ export function completeCareerTask(save, taskId) {
       : "اكتملت المهمة في موعدها وتم تحديث سجل الوكالة.",
     priority: "normal"
   };
+  const events = [...(save.world.events ?? []), completionEvent].slice(-MAX_EVENTS);
+  const retainedEventIds = new Set(events.map((event) => event.id));
+  const inbox = (save.world.inbox ?? [])
+    .filter((message) => retainedEventIds.has(message.eventId))
+    .slice(-MAX_MESSAGES);
   return {
     changed: true,
     save: {
       ...save,
       world: {
         ...save.world,
-        events: [...(save.world.events ?? []), completionEvent].slice(-MAX_EVENTS),
+        events,
+        inbox,
         tasks: save.world.tasks.map((item) => item.id === taskId
           ? { ...item, status: "completed", completedDate: save.world.currentDate, completedLate }
           : item)

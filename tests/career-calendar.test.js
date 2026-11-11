@@ -169,3 +169,32 @@ test("keeps the calendar stable across three complete season openings and leap d
   assert.equal(leapDay.world.currentDate, "2028-02-29");
   assert.equal(march.world.currentDate, "2028-03-01");
 });
+
+
+test("keeps inbox references valid when a completion event evicts the oldest history item", () => {
+  const save = createInitialSave();
+  save.world.events = Array.from({ length: 90 }, (_, index) => ({
+    id: "history-" + index,
+    date: "2026-07-01",
+    type: "weekly-briefing",
+    title: "حدث " + index,
+    description: "سجل تجريبي",
+    priority: "normal"
+  }));
+  save.world.inbox = [{
+    id: "message-oldest",
+    eventId: "history-0",
+    date: "2026-07-01",
+    title: "رسالة قديمة",
+    body: "مرتبطة بأقدم حدث.",
+    read: false
+  }];
+  save.world.tasks = [makeTask()];
+  const result = completeCareerTask(save, "task-unit-overdue");
+
+  assert.equal(result.changed, true);
+  assert.equal(result.save.world.events.length, 90);
+  assert.equal(result.save.world.events.some((event) => event.type === "task-completed"), true);
+  assert.equal(result.save.world.inbox.length, 0);
+  assert.equal(isValidSave(result.save), true);
+});
