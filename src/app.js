@@ -1799,6 +1799,7 @@ export function mountApp(root) {
       assignedStaff.append(option);
     });
     assignedStaff.value = existing?.assignedScoutId ?? "";
+    assignedStaff.disabled = stage.value === "archived";
     const note = node("textarea", "search-input");
     note.setAttribute("aria-label", "ملاحظات الوكالة");
     note.maxLength = 500;
@@ -1971,7 +1972,9 @@ export function mountApp(root) {
               " ← " + (event.toScoutId ? staffName(event.toScoutId) : "بدون مسؤول")
             : event.type === "follow-up-reviewed"
               ? "إتمام مراجعة المتابعة"
-              : "تواصل " + kindLabels[event.kind] + " · " + outcomeLabels[event.outcome];
+              : event.type === "contact"
+                ? "تواصل " + kindLabels[event.kind] + " · " + outcomeLabels[event.outcome]
+                : "نشاط الوكالة";
         row.append(
           node("strong", "", title),
           node("small", "", formatHomeDate(event.date))
