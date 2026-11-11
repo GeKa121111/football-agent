@@ -170,14 +170,16 @@ function scheduledItems(date, season) {
  * task category is not queued again while an earlier task in that category
  * is still open or overdue; the calendar event itself is still recorded.
  */
-function retainCareerTaskHistory(tasks) {
-  const actionable = tasks.filter((task) => task.status !== "completed");
-  const completedHistory = tasks
-    .filter((task) => task.status === "completed")
-    .sort((a, b) => a.completedDate.localeCompare(b.completedDate) || a.id.localeCompare(b.id))
-    .slice(-MAX_COMPLETED_TASK_HISTORY);
+function trimCompletedTaskHistory(tasks) {
+  const retainedCompletedIds = new Set(
+    tasks
+      .filter((task) => task.status === "completed")
+      .sort((a, b) => a.completedDate.localeCompare(b.completedDate) || a.id.localeCompare(b.id))
+      .slice(-MAX_COMPLETED_TASK_HISTORY)
+      .map((task) => task.id)
+  );
 
-  return [...actionable, ...completedHistory];
+  return tasks.filter((task) => task.status !== "completed" || retainedCompletedIds.has(task.id));
 }
 
 function mergeCareerTasks(existingTasks, scheduledTasks) {
@@ -196,7 +198,14 @@ function mergeCareerTasks(existingTasks, scheduledTasks) {
     activeCategories.add(task.category);
   }
 
-  return retainCareerTaskHistory([...existingTasks, ...appended]);
+  const combined = [...existingTasks, ...appended];
+  const actionable = combined.filter((task) => task.status !== "completed");
+  const completedHistory = combined
+    .filter((task) => task.status === "completed")
+    .sort((a, b) => a.completedDate.localeCompare(b.completedDate) || a.id.localeCompare(b.id))
+    .slice(-MAX_COMPLETED_TASK_HISTORY);
+
+  return [...actionable, ...completedHistory];
 }
 
 /**
@@ -325,7 +334,7 @@ export function completeCareerTask(save, taskId) {
         ...save.world,
         events,
         inbox,
-        tasks: retainCareerTaskHistory(save.world.tasks.map((item) => item.id === taskId
+        tasks: trimCompletedTaskHistory(save.world.tasks.map((item) => item.id === taskId
           ? { ...item, status: "completed", completedDate: save.world.currentDate, completedLate }
           : item))
       }
