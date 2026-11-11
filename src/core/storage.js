@@ -50,7 +50,7 @@ function isValidCalendarDate(value) {
 
 
 function hasUniqueIds(items) {
-  const ids = items.map((item) => item.id);
+  const ids = items.map((item) => isRecord(item) ? item.id : null);
   return ids.every((id) => typeof id === "string" && id.trim()) && new Set(ids).size === ids.length;
 }
 
