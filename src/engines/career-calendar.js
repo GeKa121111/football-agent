@@ -437,3 +437,26 @@ export function getUpcomingCareerEvents(currentDate, currentSeason, daysAhead = 
 
   return upcoming;
 }
+
+
+/**
+ * Filters the retained inbox without changing persisted messages. Search covers
+ * message text, linked event IDs and dates; results are newest-first and stable.
+ */
+export function filterCareerMessages(messages, { status = "all", query = "" } = {}) {
+  if (!Array.isArray(messages) || !["all", "read", "unread"].includes(status)) return [];
+  const normalizedQuery = String(query ?? "").trim().toLocaleLowerCase("ar");
+
+  return [...messages]
+    .filter((message) => message && typeof message === "object")
+    .filter((message) => status === "all" || (status === "read" ? message.read === true : message.read === false))
+    .filter((message) => {
+      if (!normalizedQuery) return true;
+      const haystack = [
+        message.id, message.eventId, message.title, message.body, message.date
+      ].filter((value) => typeof value === "string").join(" ").toLocaleLowerCase("ar");
+      return haystack.includes(normalizedQuery);
+    })
+    .sort((a, b) => String(b.date ?? "").localeCompare(String(a.date ?? "")) ||
+      String(b.id ?? "").localeCompare(String(a.id ?? "")));
+}
