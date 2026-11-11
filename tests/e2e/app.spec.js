@@ -48,15 +48,37 @@ test.describe("Desktop experience", () => {
     await hasNoHorizontalOverflow(page);
   });
   
-  test("keeps all five workspaces responsive at tablet width", async ({ page }) => {
-    await page.setViewportSize({ width: 768, height: 900 });
+  test("keeps all five workspaces within every supported viewport width", async ({ page }) => {
     await page.goto("/");
+    const viewports = [
+      { width: 320, height: 800 },
+      { width: 390, height: 844 },
+      { width: 768, height: 900 },
+      { width: 1440, height: 960 }
+    ];
     const screens = ["اللاعبون", "الكشافون", "الانتقالات", "الوكالة", "الرئيسية"];
-    for (const screen of screens) {
-      await navigateTo(page, screen);
-      await expect(page.locator(".main-stage")).toBeVisible();
-      await hasNoHorizontalOverflow(page);
+
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport);
+      for (const screen of screens) {
+        await navigateTo(page, screen);
+        await expect(page.locator(".main-stage")).toBeVisible();
+        const navigation = viewport.width <= 760
+          ? page.locator(".mobile-nav")
+          : page.locator(".sidebar");
+        await expect(navigation.locator('[aria-current="page"]')).toHaveCount(1);
+        await hasNoHorizontalOverflow(page);
+      }
     }
+  });
+
+  test("provides a keyboard skip link that moves focus to the main workspace", async ({ page }) => {
+    await page.goto("/");
+    await page.keyboard.press("Tab");
+    const skipLink = page.locator(".rebuild-skip-link");
+    await expect(skipLink).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".main-stage")).toBeFocused();
   });
 
   test("navigates through all five primary screens", async ({ page }) => {
