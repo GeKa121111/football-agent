@@ -234,6 +234,27 @@ export function advanceCareerDay(save) {
     }
     return task;
   });
+  const followUpTasks = currentTasks.filter((task) =>
+    task.category === "talent-follow-up" &&
+    task.status === "open" &&
+    task.dueDate === dateKey
+  );
+  const followUpEvents = followUpTasks.map((task) => ({
+    id: "event-" + dateKey + "-talent-follow-up-" + task.id,
+    date: dateKey,
+    type: "talent-follow-up-due",
+    title: "موعد متابعة مستحق: " + (task.playerName ?? task.title),
+    description: "حان موعد مراجعة التواصل مع " + (task.playerName ?? "اللاعب") + ". افتح صندوق المواهب وحدد الخطوة التالية بنفسك.",
+    priority: "high"
+  }));
+  const followUpMessages = followUpEvents.map((event) => ({
+    id: "message-" + event.id,
+    eventId: event.id,
+    date: dateKey,
+    title: event.title,
+    body: event.description,
+    read: false
+  }));
   const overdueEvents = overdueTasks.map((task) => ({
     id: "event-" + dateKey + "-task-overdue-" + task.id,
     date: dateKey,
@@ -251,9 +272,9 @@ export function advanceCareerDay(save) {
     read: false
   }));
 
-  const events = [...(save.world.events ?? []), ...scheduled.events, ...overdueEvents].slice(-MAX_EVENTS);
+  const events = [...(save.world.events ?? []), ...scheduled.events, ...followUpEvents, ...overdueEvents].slice(-MAX_EVENTS);
   const retainedEventIds = new Set(events.map((event) => event.id));
-  const inbox = [...(save.world.inbox ?? []), ...scheduled.messages, ...overdueMessages]
+  const inbox = [...(save.world.inbox ?? []), ...scheduled.messages, ...followUpMessages, ...overdueMessages]
     .filter((message) => retainedEventIds.has(message.eventId))
     .slice(-MAX_MESSAGES);
   const tasks = mergeCareerTasks(currentTasks, scheduled.tasks);
@@ -375,6 +396,7 @@ const CAREER_EVENT_TYPE_LABELS = Object.freeze({
   "season-review": "تقييم نهاية الموسم",
   "season-closing": "ختام الموسم",
   "task-overdue": "تأخر مهمة",
+  "talent-follow-up-due": "موعد متابعة لاعب",
   "task-completed": "إنجاز مهمة"
 });
 
