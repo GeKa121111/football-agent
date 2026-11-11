@@ -786,3 +786,57 @@
   .football-standings-row { min-width: 420px; }
   .football-panel-heading .filter-select { width: 100%; }
 }
+
+
+/* Phase 6 — live transfer market */
+.transfer-window-card{display:flex;align-items:center;gap:14px;padding:16px;border:1px solid var(--fa-border);border-radius:16px;background:rgba(17,24,39,.72)}
+.transfer-window-card.is-open{border-color:rgba(83,190,151,.32);background:linear-gradient(110deg,rgba(46,126,101,.13),rgba(17,24,39,.72))}
+.transfer-window-card.is-closed{border-color:rgba(232,189,114,.22)}
+.transfer-window-icon{display:grid;flex:0 0 44px;width:44px;height:44px;place-items:center;border-radius:13px;color:var(--fa-gold);background:rgba(232,189,114,.1);font-size:22px}
+.transfer-window-copy{min-width:0;flex:1}
+.transfer-window-kicker,.transfer-window-copy p{display:block;color:var(--fa-muted);font-size:9px}
+.transfer-window-copy h2{margin:4px 0;color:var(--fa-text);font-size:16px}
+.transfer-window-copy p{margin:0;line-height:1.7}
+.transfer-window-status{padding:6px 9px;border:1px solid var(--fa-border);border-radius:8px;color:var(--fa-muted);font-size:8px;font-weight:900;letter-spacing:.08em}
+.transfer-window-card.is-open .transfer-window-status{border-color:rgba(83,190,151,.3);color:#70d6ad}
+.transfer-summary{margin-top:0}
+.transfer-proposal-panel,.transfer-list-panel,.transfer-moves-panel{min-width:0}
+.transfer-proposal-form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px;padding:13px;border:1px solid var(--fa-border);border-radius:14px;background:rgba(5,10,18,.2)}
+.transfer-form-field{display:grid;min-width:0;gap:6px;color:var(--fa-muted);font-size:9px}
+.transfer-form-field .search-input{width:100%;min-width:0}
+.transfer-form-field[hidden]{display:none!important}
+.transfer-submit-button{align-self:end;min-height:39px}
+.transfer-empty-clients,.transfer-window-hint{margin-top:12px;padding:14px;border:1px dashed var(--fa-border);border-radius:13px;color:var(--fa-muted);background:rgba(5,10,18,.18)}
+.transfer-empty-clients strong{display:block;margin-bottom:5px;color:var(--fa-text);font-size:12px}
+.transfer-empty-clients p{margin:0 0 12px;font-size:9px;line-height:1.8}
+.transfer-deal-list,.transfer-move-list{display:grid;gap:10px;margin-top:12px}
+.transfer-deal-card,.transfer-move-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:12px;padding:13px;border:1px solid var(--fa-border);border-radius:13px;background:rgba(17,24,39,.65)}
+.transfer-deal-details{min-width:0}
+.transfer-deal-title{color:var(--fa-text);font-size:12px;font-weight:800}
+.transfer-deal-details p,.transfer-deal-details small{display:block;margin:5px 0 0;color:var(--fa-muted);font-size:9px;line-height:1.7;overflow-wrap:anywhere}
+.transfer-deal-status{display:inline-flex;margin-top:8px;padding:5px 8px;border-radius:7px;color:var(--fa-muted);background:rgba(255,255,255,.045);font-size:8px}
+.transfer-status-agreed .transfer-deal-status,.transfer-status-completed .transfer-deal-status{color:#70d6ad}
+.transfer-status-countered .transfer-deal-status{color:var(--fa-gold)}
+.transfer-status-rejected .transfer-deal-status,.transfer-status-expired .transfer-deal-status{color:#e28a8a}
+.transfer-deal-card>.button-primary,.transfer-deal-card>.button-outline{align-self:center;white-space:nowrap}
+.transfer-counter-form{display:grid;grid-column:1/-1;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;padding-top:12px;border-top:1px solid var(--fa-border)}
+.transfer-counter-form .button-outline{align-self:end}
+.transfer-move-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+.transfer-move-row strong{color:var(--fa-text);font-size:11px}
+.transfer-move-row span,.transfer-move-row small{color:var(--fa-muted);font-size:9px;overflow-wrap:anywhere}
+.transfer-market-disclaimer{margin:5px 0 12px;color:var(--fa-muted);font-size:8px;line-height:1.8}
+.transfer-history-empty{margin:10px 0 0;padding:12px;color:var(--fa-muted);border:1px dashed var(--fa-border);border-radius:11px;font-size:9px}
+@media(max-width:1080px){.transfer-proposal-form,.transfer-counter-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){
+ .transfer-window-card{align-items:flex-start;flex-wrap:wrap}.transfer-window-status{margin-inline-start:auto}
+ .transfer-proposal-form{grid-template-columns:repeat(2,minmax(0,1fr));padding:10px}
+ .transfer-proposal-form .transfer-form-field:first-child,.transfer-proposal-form .transfer-form-field:nth-child(2){grid-column:1/-1}
+ .transfer-submit-button{grid-column:1/-1}.transfer-deal-card{grid-template-columns:minmax(0,1fr)}
+ .transfer-deal-card>.button-primary,.transfer-deal-card>.button-outline{justify-self:start}
+ .transfer-counter-form{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:390px){
+ .transfer-proposal-form,.transfer-counter-form{grid-template-columns:minmax(0,1fr)}
+ .transfer-proposal-form .transfer-form-field:first-child,.transfer-proposal-form .transfer-form-field:nth-child(2),.transfer-submit-button{grid-column:auto}
+ .transfer-move-row{grid-template-columns:minmax(0,1fr)}
+}
