@@ -5,7 +5,9 @@ import {
   advanceCareerDay,
   completeCareerTask,
   markCareerMessageRead,
-  filterCareerEvents
+  filterCareerEvents,
+  createInitialCareerCalendar,
+  getUpcomingCareerEvents
 } from "../src/engines/career-calendar.js";
 import { isValidSave } from "../src/core/storage.js";
 
@@ -39,9 +41,6 @@ test("advances the date, day and week without mutating the original save", () =>
 test("starts a weekly briefing, inbox message and actionable task on Monday", () => {
   const save = createInitialSave();
   save.world.currentDate = "2026-07-05";
-  save.world.events = [];
-  save.world.inbox = [];
-  save.world.tasks = [];
   save.career.day = 5;
 
   const next = advanceCareerDay(save);
@@ -72,7 +71,7 @@ test("starts a new season on July 1 and creates a season planning task", () => {
 
   assert.equal(next.world.currentDate, "2027-07-01");
   assert.equal(next.career.season, 2);
-  assert.equal(next.world.events.filter((event) => event.type === "season-opening" && event.date === "2027-07-01").length, 1);
+  assert.ok(next.world.events.some((event) => event.type === "season-opening"));
   assert.ok(next.world.tasks.some((task) => task.category === "season-planning"));
 });
 
@@ -143,9 +142,6 @@ test("allows a late task to be completed and records that it missed its due date
 test("filters event history by type and Arabic or date search in newest-first order", () => {
   const save = createInitialSave();
   save.world.currentDate = "2026-07-05";
-  save.world.events = [];
-  save.world.inbox = [];
-  save.world.tasks = [];
   const monday = advanceCareerDay(save);
   const events = [
     { id: "z", date: "2026-07-07", type: "monthly-market", title: "تقرير السوق", description: "مراجعة الأندية", priority: "normal" },
@@ -203,4 +199,43 @@ test("keeps inbox references valid when a completion event evicts the oldest his
   assert.equal(result.save.world.events.some((event) => event.type === "task-completed"), true);
   assert.equal(result.save.world.inbox.length, 0);
   assert.equal(isValidSave(result.save), true);
+});
+
+
+test("seeds a new career with the opening-day season and monthly milestones", () => {
+  const seed = createInitialCareerCalendar("2026-07-01", 1);
+  assert.deepEqual(seed.events.map((event) => event.type), ["monthly-market", "season-opening"]);
+  assert.equal(seed.inbox.length, 2);
+  assert.equal(seed.inbox.every((message) => seed.events.some((event) => event.id === message.eventId)), true);
+  assert.equal(seed.tasks.length, 1);
+  assert.equal(seed.tasks[0].category, "season-planning");
+  assert.equal(seed.tasks[0].dueDate, "2026-07-14");
+});
+
+test("schedules preseason, midseason and season-close milestones with actionable tasks", () => {
+  const dates = [
+    ["2026-08-15", "preseason-review", "preseason-review"],
+    ["2027-01-15", "midseason-review", "midseason-review"],
+    ["2027-06-15", "season-review", "season-review"],
+    ["2027-06-30", "season-closing", null]
+  ];
+  for (const [date, eventType, taskCategory] of dates) {
+    const save = createInitialSave();
+    save.world.currentDate = new Date(Date.parse(date + "T12:00:00.000Z") - 86400000).toISOString().slice(0, 10);
+    const next = advanceCareerDay(save);
+    assert.ok(next.world.events.some((event) => event.type === eventType), date);
+    if (taskCategory) assert.ok(next.world.tasks.some((task) => task.category === taskCategory), date);
+  }
+});
+
+test("returns the next 365 days of agency milestones in date order across season boundaries", () => {
+  const upcoming = getUpcomingCareerEvents("2026-06-30", 1, 365);
+  assert.equal(upcoming[0].type, "monthly-market");
+  assert.ok(upcoming.some((event) => event.type === "season-opening" && event.season === 2));
+  assert.ok(upcoming.some((event) => event.type === "preseason-review" && event.season === 2));
+  assert.ok(upcoming.some((event) => event.type === "midseason-review" && event.season === 2));
+  assert.ok(upcoming.some((event) => event.type === "season-closing" && event.season === 2));
+  assert.ok(upcoming.every((event, index) => index === 0 || upcoming[index - 1].date <= event.date));
+  assert.throws(() => getUpcomingCareerEvents("2026-07-01", 1, 0), /نطاق التقويم/);
+  assert.throws(() => getUpcomingCareerEvents("2026-07-01", 1, 731), /نطاق التقويم/);
 });

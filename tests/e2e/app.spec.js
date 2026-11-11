@@ -343,6 +343,7 @@ test.describe("Annual career calendar", () => {
 
   test("starts a new career with season-opening information", async ({ page }) => {
     await page.goto("/");
+    await page.locator(".home-save-button").click();
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(saved.world.currentDate).toBe("2026-07-01");
     expect(saved.world.events.some((event) => event.type === "season-opening")).toBe(true);
