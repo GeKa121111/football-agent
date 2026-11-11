@@ -354,6 +354,47 @@ test.describe("Career operations follow-up", () => {
     expect(saved.world.tasks[0].completedLate).toBe(true);
   });
 
+  test("localizes seasonal and task events and exposes their priority", async ({ page }) => {
+    await page.goto("/");
+    await page.locator(".home-save-button").click();
+    await page.evaluate(() => {
+      const save = JSON.parse(localStorage.getItem("football-agent.save"));
+      const types = [
+        "weekly-briefing", "monthly-market", "season-opening", "preseason-review",
+        "midseason-review", "season-review", "season-closing", "task-overdue", "task-completed"
+      ];
+      save.world.events = types.map((type, index) => ({
+        id: "localized-event-" + type,
+        date: "2026-08-" + String(index + 1).padStart(2, "0"),
+        type,
+        title: "حدث " + index,
+        description: "تفاصيل الحدث " + index,
+        priority: index % 2 === 0 ? "high" : "normal"
+      }));
+      save.world.inbox = [];
+      save.world.tasks = [];
+      localStorage.setItem("football-agent.save", JSON.stringify(save));
+    });
+    await page.reload();
+    await page.getByRole("button", { name: "عرض السجل الكامل" }).click();
+
+    const dialog = page.getByRole("dialog", { name: "سجل الأحداث" });
+    await expect(dialog.locator(".event-history-row")).toHaveCount(9);
+    await expect(dialog.locator(".event-history-row").filter({ hasText: "مراجعة ما قبل الموسم" })).toHaveCount(1);
+    await expect(dialog.locator(".event-history-row").filter({ hasText: "مراجعة منتصف الموسم" })).toHaveCount(1);
+    await expect(dialog.locator(".event-history-row").filter({ hasText: "إنجاز مهمة" })).toHaveCount(1);
+    await expect(dialog.locator(".event-history-priority").first()).toContainText("الأولوية:");
+
+    const search = dialog.getByRole("searchbox", { name: "البحث في سجل الأحداث" });
+    await search.fill("مراجعة ما قبل الموسم");
+    await expect(dialog.locator(".event-history-row")).toHaveCount(1);
+    await search.clear();
+    await dialog.getByLabel("تصفية نوع الحدث").selectOption("midseason-review");
+    await expect(dialog.locator(".event-history-row")).toHaveCount(1);
+    await expect(dialog.locator(".event-history-row")).toContainText("الأولوية: عالية");
+    await hasNoHorizontalOverflow(page);
+  });
+
   test("searches and filters the event history", async ({ page }) => {
     await page.goto("/");
     await page.locator(".home-save-button").click();

@@ -13,6 +13,8 @@ import {
   completeCareerTask as completeTaskInEngine,
   markCareerMessageRead,
   filterCareerEvents,
+  getCareerEventTypeLabel,
+  getCareerEventPriorityLabel,
   getUpcomingCareerEvents,
   filterCareerTasks,
   filterCareerMessages
@@ -895,17 +897,11 @@ export function mountApp(root) {
     search.setAttribute("aria-label", "البحث في سجل الأحداث");
     const typeFilter = node("select", "event-history-filter");
     typeFilter.setAttribute("aria-label", "تصفية نوع الحدث");
-    const typeNames = {
-      "weekly-briefing": "إحاطة أسبوعية",
-      "monthly-market": "تقرير شهري",
-      "season-opening": "افتتاح موسم",
-      "task-overdue": "مهمة متأخرة"
-    };
     const allOption = node("option", "", "كل الأحداث");
     allOption.value = "all";
     typeFilter.append(allOption);
     [...new Set(events.map((event) => event.type))].sort().forEach((type) => {
-      const option = node("option", "", typeNames[type] ?? type);
+      const option = node("option", "", getCareerEventTypeLabel(type));
       option.value = type;
       typeFilter.append(option);
     });
@@ -929,8 +925,12 @@ export function mountApp(root) {
         copy.append(
           node("strong", "", event.title),
           node("span", "", event.description),
-          node("small", "", formatHomeDate(event.date) + " · " + (typeNames[event.type] ?? event.type))
+          node("small", "", formatHomeDate(event.date) + " · " + getCareerEventTypeLabel(event.type))
         );
+        const priority = node("small", "event-history-priority priority-" + event.priority,
+          "الأولوية: " + getCareerEventPriorityLabel(event.priority));
+        priority.setAttribute("aria-label", "أولوية الحدث: " + getCareerEventPriorityLabel(event.priority));
+        copy.append(priority);
         row.append(copy);
         list.append(row);
       });

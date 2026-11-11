@@ -855,6 +855,17 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 .event-history-count { margin: 0 0 8px; color: #8e9bb2; font-size: 9px; }
 .event-history-results { display: flex; flex-direction: column; gap: 7px; max-height: 55vh; overflow: auto; }
 .event-history-row .career-activity-copy small { color: #7e8ca4; }
+.event-history-priority {
+  align-self:flex-start; padding:3px 7px; border:1px solid rgba(143,163,197,.2);
+  border-radius:999px; color:#b9c7dc !important; background:rgba(143,163,197,.08);
+  font-size:8px; font-weight:800;
+}
+.event-history-priority.priority-high {
+  border-color:rgba(232,111,111,.3); color:#f29b9b !important; background:rgba(126,39,52,.12);
+}
+.event-history-priority.priority-low {
+  border-color:rgba(104,217,160,.22); color:#9be2b7 !important; background:rgba(65,173,113,.08);
+}
 @media (max-width: 760px) {
   .career-event-list { grid-template-columns: minmax(0,1fr); }
   .event-history-controls { grid-template-columns: minmax(0,1fr); }
