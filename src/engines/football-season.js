@@ -398,6 +398,10 @@ export function isValidFootballState(state, currentDate, season, database = WORL
       resultIds.some((id) => typeof id !== "string" || !id.trim()) ||
       new Set(resultIds).size !== resultIds.length) return false;
 
+  const expectedPlayerIds = getWorldSquadPlayers(database).map((player) => player.id);
+  const savedPlayerIds = new Set(state.playerDevelopment.players.map((player) => player.playerId));
+  if (!expectedPlayerIds.every((playerId) => savedPlayerIds.has(playerId))) return false;
+
   const clubIds = new Set(database.clubs.map((club) => club.id));
   const competitionIds = new Set(database.competitions.map((competition) => competition.id));
   const fixtureById = new Map(state.fixtures.map((fixture) => [fixture.id, fixture]));
