@@ -9,9 +9,14 @@ import {
   acceptRepresentationCounterOffer,
   submitRepresentationCounterOffer,
   createRepresentationRenewalOffer,
+  createRepresentationInteraction,
+  completeRepresentationMeeting,
   getPlayerRepresentationProfile,
   getRepresentationContractExpiry,
   getRepresentationContractCommission,
+  getRepresentationContractType,
+  getRepresentationRelationshipLabel,
+  getAgencyReputationScore,
   rejectRepresentationOffer,
   terminateRepresentationContract,
   advanceRepresentationState,
@@ -101,7 +106,8 @@ test("player can counter a high commission and long mandate, then sign when the 
   assert.equal(response.status, "countered");
   assert.deepEqual(response.counterOffer, {
     commissionRate: sent.offer.playerPreferences.preferredCommissionRate,
-    termDays: sent.offer.playerPreferences.preferredTermDays
+    termDays: sent.offer.playerPreferences.preferredTermDays,
+    representationType: sent.offer.playerPreferences.prefersExclusive ? "exclusive" : "non-exclusive"
   });
   assert.equal(response.save.agency.clients.length, 0);
   assert.equal(response.save.agency.representation.offers[0].status, "countered");
@@ -112,6 +118,7 @@ test("player can counter a high commission and long mandate, then sign when the 
   assert.equal(accepted.contract.commissionRate, sent.offer.playerPreferences.preferredCommissionRate);
   assert.equal(accepted.contract.termDays, sent.offer.playerPreferences.preferredTermDays);
   assert.equal(accepted.contract.status, "active");
+  assert.equal(accepted.contract.representationType, sent.offer.playerPreferences.prefersExclusive ? "exclusive" : "non-exclusive");
   assert.deepEqual(accepted.save.agency.clients, ["seed-test-player"]);
   assert.equal(accepted.save.agency.representation.offers[0].resolution, "counter-accepted");
   assert.deepEqual(
@@ -361,6 +368,168 @@ test("keeps first-slice v4 contracts valid and can renew them without profile me
   });
   assert.equal(renewal.changed, true);
   assert.equal(isValidSave(renewal.save), true);
+});
+
+test("supports exclusive and non-exclusive mandates and lets reputation improve exclusive negotiation", () => {
+  let profile;
+  for (let index = 0; index < 100; index += 1) {
+    const candidate = player({ id: "shared-mandate-player-" + index, age: 22, rating: 68, potential: 80 });
+    if (!getPlayerRepresentationProfile(candidate).prefersExclusive) {
+      profile = candidate;
+      break;
+    }
+  }
+  assert.ok(profile, "test fixture should include a player who prefers non-exclusive representation");
+  const preferences = getPlayerRepresentationProfile(profile);
+  const save = createInitialSave();
+  const sharedOffer = createRepresentationOffer(save, profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays,
+    representationType: "exclusive"
+  });
+  const sharedCounter = evaluateRepresentationOffer(sharedOffer.save, sharedOffer.offer.id);
+  assert.equal(sharedCounter.status, "countered");
+  assert.equal(sharedCounter.counterOffer.representationType, "non-exclusive");
+  const acceptedShared = acceptRepresentationCounterOffer(sharedCounter.save, sharedOffer.offer.id);
+  assert.equal(acceptedShared.contract.representationType, "non-exclusive");
+  assert.equal(acceptedShared.contract.relationshipScore, 60);
+  assert.equal(isValidSave(acceptedShared.save), true);
+
+  const reputableSave = createInitialSave();
+  reputableSave.agency.representation.reputationScore = 90;
+  const exclusiveOffer = createRepresentationOffer(reputableSave, profile, {
+    commissionRate: preferences.preferredCommissionRate - 1,
+    termDays: preferences.preferredTermDays,
+    representationType: "exclusive"
+  });
+  const exclusiveResponse = evaluateRepresentationOffer(exclusiveOffer.save, exclusiveOffer.offer.id);
+  assert.equal(exclusiveResponse.status, "signed");
+  assert.equal(exclusiveResponse.contract.representationType, "exclusive");
+  assert.equal(exclusiveResponse.contract.relationshipScore, 70);
+  assert.equal(getAgencyReputationScore(exclusiveResponse.save.agency.representation), 92);
+  assert.equal(getRepresentationContractType(exclusiveResponse.contract, exclusiveResponse.save.world.currentDate), "exclusive");
+  assert.equal(isValidSave(exclusiveResponse.save), true);
+});
+
+test("messages and calls receive deterministic responses as career time advances", () => {
+  const profile = player({ id: "relationship-message-player", age: 22, rating: 68, potential: 80 });
+  const preferences = getPlayerRepresentationProfile(profile);
+  const sent = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays
+  });
+  const signed = evaluateRepresentationOffer(sent.save, sent.offer.id);
+  const initialTrust = signed.contract.relationshipScore;
+  const initialReputation = getAgencyReputationScore(signed.save.agency.representation);
+
+  const message = createRepresentationInteraction(signed.save, signed.contract.id, "message");
+  assert.equal(message.changed, true);
+  assert.equal(message.interaction.status, "pending_response");
+  assert.equal(message.interaction.dueDate, "2026-07-04");
+  assert.equal(isValidSave(message.save), true);
+
+  const duplicate = createRepresentationInteraction(message.save, signed.contract.id, "message");
+  assert.equal(duplicate.changed, false);
+  assert.match(duplicate.error, /رسالة بانتظار رد/);
+
+  const afterReply = advanceToDate(message.save, message.interaction.dueDate);
+  const storedInteraction = afterReply.agency.representation.interactions.find((item) => item.id === message.interaction.id);
+  const updatedContract = afterReply.agency.representation.contracts.find((item) => item.id === signed.contract.id);
+  assert.equal(storedInteraction.status, "resolved");
+  assert.ok(["positive", "neutral", "negative"].includes(storedInteraction.outcome));
+  assert.notEqual(updatedContract.relationshipScore, initialTrust);
+  assert.equal(afterReply.agency.representation.history[0].type, "message-replied");
+  assert.ok([initialReputation - 1, initialReputation, initialReputation + 1].includes(
+    getAgencyReputationScore(afterReply.agency.representation)
+  ));
+  assert.equal(isValidSave(afterReply), true);
+
+  const call = createRepresentationInteraction(afterReply, signed.contract.id, "call");
+  assert.equal(call.changed, true);
+  assert.equal(call.interaction.kind, "call");
+  assert.equal(call.interaction.dueDate, "2026-07-05");
+  const afterCall = advanceToDate(call.save, call.interaction.dueDate);
+  assert.equal(afterCall.agency.representation.interactions.find((item) => item.id === call.interaction.id).status, "resolved");
+  assert.equal(isValidSave(afterCall), true);
+});
+
+test("schedules and completes a client meeting, improving trust and agency reputation", () => {
+  const profile = player({ id: "relationship-meeting-player", age: 22, rating: 68, potential: 80 });
+  const preferences = getPlayerRepresentationProfile(profile);
+  const sent = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays
+  });
+  const signed = evaluateRepresentationOffer(sent.save, sent.offer.id);
+  const meetingDate = new Date(Date.parse(signed.save.world.currentDate + "T00:00:00.000Z") + 5 * 86400000)
+    .toISOString().slice(0, 10);
+  const scheduled = createRepresentationInteraction(signed.save, signed.contract.id, "meeting", meetingDate);
+  assert.equal(scheduled.changed, true);
+  assert.equal(scheduled.interaction.status, "scheduled");
+  assert.equal(isValidSave(scheduled.save), true);
+
+  const duplicate = createRepresentationInteraction(scheduled.save, signed.contract.id, "meeting", meetingDate);
+  assert.equal(duplicate.changed, false);
+  assert.match(duplicate.error, /اجتماع مجدول/);
+
+  const tooEarly = completeRepresentationMeeting(scheduled.save, scheduled.interaction.id, "positive");
+  assert.equal(tooEarly.changed, false);
+  const atMeeting = advanceToDate(scheduled.save, meetingDate);
+  const completed = completeRepresentationMeeting(atMeeting, scheduled.interaction.id, "positive");
+  assert.equal(completed.changed, true);
+  assert.equal(completed.interaction.status, "resolved");
+  assert.equal(completed.interaction.outcome, "positive");
+  assert.equal(completed.contract.relationshipScore, signed.contract.relationshipScore + 7);
+  assert.equal(getAgencyReputationScore(completed.save.agency.representation),
+    getAgencyReputationScore(atMeeting.agency.representation) + 2);
+  assert.equal(completed.save.agency.representation.history[0].type, "meeting-completed");
+  assert.equal(getRepresentationRelationshipLabel(completed.contract.relationshipScore), "جيدة");
+  assert.equal(isValidSave(completed.save), true);
+});
+
+test("missed client meetings reduce relationship and agency reputation after the grace period", () => {
+  const profile = player({ id: "relationship-missed-player", age: 22, rating: 68, potential: 80 });
+  const preferences = getPlayerRepresentationProfile(profile);
+  const sent = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays
+  });
+  const signed = evaluateRepresentationOffer(sent.save, sent.offer.id);
+  const meetingDate = new Date(Date.parse(signed.save.world.currentDate + "T00:00:00.000Z") + 2 * 86400000)
+    .toISOString().slice(0, 10);
+  const scheduled = createRepresentationInteraction(signed.save, signed.contract.id, "meeting", meetingDate);
+  const afterGrace = advanceToDate(scheduled.save, new Date(
+    Date.parse(meetingDate + "T00:00:00.000Z") + 8 * 86400000
+  ).toISOString().slice(0, 10));
+  const missed = afterGrace.agency.representation.interactions.find((item) => item.id === scheduled.interaction.id);
+  const contract = afterGrace.agency.representation.contracts.find((item) => item.id === signed.contract.id);
+  assert.equal(missed.status, "missed");
+  assert.equal(contract.relationshipScore, signed.contract.relationshipScore - 8);
+  assert.equal(getAgencyReputationScore(afterGrace.agency.representation), 50);
+  assert.equal(afterGrace.agency.representation.history[0].type, "meeting-missed");
+  assert.equal(isValidSave(afterGrace), true);
+});
+
+test("rejects tampered agency reputation and client interaction history", () => {
+  const invalid = structuredClone(createInitialSave());
+  invalid.agency.representation.reputationScore = 101;
+  assert.equal(isValidSave(invalid), false);
+
+  const profile = player({ id: "relationship-invalid-player", age: 22, rating: 68, potential: 80 });
+  const preferences = getPlayerRepresentationProfile(profile);
+  const sent = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays
+  });
+  const signed = evaluateRepresentationOffer(sent.save, sent.offer.id);
+  const message = createRepresentationInteraction(signed.save, signed.contract.id, "message");
+  const tampered = structuredClone(message.save);
+  tampered.agency.representation.interactions[0].contractId = "missing-contract";
+  assert.equal(isValidSave(tampered), false);
+
+  const badHistory = structuredClone(message.save);
+  badHistory.agency.representation.history[0].interactionId = "missing-interaction";
+  assert.equal(isValidSave(badHistory), false);
 });
 
 test("calculates the agreed commission without pretending it is already collected", () => {
