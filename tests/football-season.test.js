@@ -8,7 +8,8 @@ import {
   advanceFootballSeasonDay,
   isValidFootballState,
   getUpcomingFootballFixtures,
-  getRecentFootballResults
+  getRecentFootballResults,
+  getCompetitionStandings
 } from "../src/engines/football-season.js";
 
 function dateDistance(left, right) {
@@ -121,4 +122,50 @@ test("upcoming fixtures and recent results are stable and bounded", () => {
   assert.equal(upcoming.length, 5);
   assert.ok(upcoming.every((fixture) => fixture.date > "2026-07-01"));
   assert.deepEqual(getRecentFootballResults(initial), []);
+});
+
+
+test("excludes injured world players from a matchday starting XI", () => {
+  const club = WORLD_DATABASE.clubs[0];
+  const player = WORLD_DATABASE.players.find((item) => item.clubId === club.id);
+  const state = createInitialFootballState(1, "2026-07-01");
+  const development = {
+    ...state.playerDevelopment,
+    players: state.playerDevelopment.players.map((item) => item.playerId === player.id
+      ? { ...item, injuryDays: 5 }
+      : item)
+  };
+  const team = buildSimulationTeam(club.id, WORLD_DATABASE, development);
+  assert.equal(team.lineup.length, 11);
+  assert.equal(team.lineup.some((item) => item.id === player.id), false);
+  assert.ok(team.lineup.some((item) => item.simulationOnly));
+});
+
+test("calculates competition standings from saved results with deterministic tie-breaks", () => {
+  const competition = WORLD_DATABASE.competitions.find((item) => item.id === "competition-eg-premier");
+  const [ahly, zamalek] = competition.clubIds;
+  const state = {
+    results: [
+      {
+        competitionId: competition.id,
+        home: { clubId: ahly, goals: 2 },
+        away: { clubId: zamalek, goals: 0 }
+      },
+      {
+        competitionId: competition.id,
+        home: { clubId: zamalek, goals: 1 },
+        away: { clubId: ahly, goals: 1 }
+      }
+    ]
+  };
+  const table = getCompetitionStandings(state, competition.id);
+  assert.equal(table.length, 2);
+  assert.equal(table[0].clubId, ahly);
+  assert.equal(table[0].played, 2);
+  assert.equal(table[0].wins, 1);
+  assert.equal(table[0].draws, 1);
+  assert.equal(table[0].points, 4);
+  assert.equal(table[1].clubId, zamalek);
+  assert.equal(table[1].points, 1);
+  assert.equal(getCompetitionStandings(state, "missing-competition").length, 0);
 });
