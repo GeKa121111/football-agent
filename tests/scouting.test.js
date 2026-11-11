@@ -68,7 +68,8 @@ test("rejects invalid scopes, empty targets, insufficient funds and excess activ
   }
   const capped = startScoutingMission(activeSave, { type: "local" }, PLAYERS);
   assert.equal(capped.changed, false);
-  assert.equal(capped.changed, false);
+  assert.equal(capped.save, activeSave);
+  assert.ok(capped.error);
 });
 
 test("completes due missions into explainable reports only when their duration elapses", () => {
