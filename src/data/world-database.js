@@ -206,6 +206,10 @@ export function validateWorldDatabase(database = WORLD_DATABASE) {
     if (!Number.isInteger(club.simulationProfile) || club.simulationProfile < 1 || club.simulationProfile > 100) {
       errors.push("تقييم قوة المحاكاة خارج النطاق: " + club.id);
     }
+    if (typeof club.shortName !== "string" || !club.shortName.trim()) errors.push("الاسم المختصر للنادي مفقود: " + club.id);
+    if (typeof club.primaryColor !== "string" || !/^#[0-9a-f]{6}$/i.test(club.primaryColor)) {
+      errors.push("لون النادي غير صالح لربط هوية القميص: " + club.id);
+    }
   }
 
   for (const competition of competitions) {
@@ -238,7 +242,9 @@ export function validateWorldDatabase(database = WORLD_DATABASE) {
   const allowedDiscoverySources = new Set(["academy", "club-network", "youth-tournament", "agent-referral"]);
   for (const player of players) {
     if (!countryById.has(player.countryId)) errors.push("اللاعب " + player.id + " يشير إلى جنسية غير موجودة.");
-    if (!clubById.has(player.clubId)) errors.push("اللاعب " + player.id + " يشير إلى نادٍ غير موجود.");
+    const currentClub = clubById.get(player.clubId);
+    if (!currentClub) errors.push("اللاعب " + player.id + " يشير إلى نادٍ غير موجود.");
+    else if (player.kit !== currentClub.primaryColor) errors.push("لون قميص اللاعب لا يطابق النادي المرتبط: " + player.id);
     if (!Number.isInteger(player.age) || player.age < 15 || player.age > 45) errors.push("عمر اللاعب خارج النطاق: " + player.id);
     if (!Number.isInteger(player.rating) || player.rating < 1 || player.rating > 99) errors.push("تقييم اللاعب غير صالح: " + player.id);
     if (!Number.isInteger(player.potential) || player.potential < player.rating || player.potential > 99) errors.push("إمكانية اللاعب غير صالحة: " + player.id);
