@@ -529,7 +529,7 @@ test("uses UTC calendar transitions independently of the host timezone", () => {
     "  seasonNumber: season.career.season,",
     '  seasonOpening: season.world.events.some((event) => event.type === "season-opening" && event.date === "2029-07-01")',
     "}));"
-  ].join("\\n");
+  ].join("\n");
 
   const expected = {
     leapDate: "2028-03-02",
