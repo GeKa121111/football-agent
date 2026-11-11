@@ -356,6 +356,24 @@
 .rebuild-main .scouting-screen .scout-report-button,
 .rebuild-main .scouting-screen .scout-sign-contract-button,
 .rebuild-main .scouting-screen .scout-contract-renew-button { min-height: 34px; padding-inline: 10px; border-radius: 9px; font-size: 8px; }
+.rebuild-main .scouting-screen .scout-finding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+}
+.rebuild-main .scouting-screen .scout-finding-actions button {
+  min-height: 34px;
+  padding-inline: 10px;
+  border-radius: 9px;
+  font-size: 8px;
+}
+.rebuild-main .scouting-screen .scout-finding-state {
+  align-self: center;
+  color: var(--fa-muted);
+  font-size: 8px;
+}
 
 .agency-screen .agency-overview {
   padding: 17px;
