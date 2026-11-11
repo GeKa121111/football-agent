@@ -610,6 +610,19 @@ function renderPlayers(context) {
       country.append(option);
     });
 
+  const league = node("select", "filter-select");
+  league.setAttribute("aria-label", "تصفية حسب الدوري");
+  const allLeagues = node("option", "", "كل الدوريات");
+  allLeagues.value = "all";
+  league.append(allLeagues);
+  [...new Map(WORLD_PLAYERS.map((player) => [player.leagueId, player.league])).entries()]
+    .sort((a, b) => a[1].localeCompare(b[1], "ar"))
+    .forEach(([id, name]) => {
+      const option = node("option", "", name);
+      option.value = id;
+      league.append(option);
+    });
+
   const sort = node("select", "filter-select");
   sort.setAttribute("aria-label", "ترتيب اللاعبين");
   [
@@ -624,19 +637,21 @@ function renderPlayers(context) {
   });
   const count = node("span", "result-count player-library-count", "");
   count.setAttribute("aria-live", "polite");
-  toolbar.append(search, role, country, sort, count);
+  toolbar.append(search, role, country, league, sort, count);
 
   const grid = node("div", "players-grid players-grid-large");
   const refresh = () => {
     const query = search.value.trim().toLocaleLowerCase("ar");
     const selectedRole = role.value;
     const selectedCountry = country.value;
+    const selectedLeague = league.value;
     const filtered = WORLD_PLAYERS.filter((player) => {
       const matchesText = [player.name, player.club, player.position, player.country, player.league]
         .some((value) => String(value ?? "").toLocaleLowerCase("ar").includes(query));
       const matchesRole = selectedRole === "all" || player.role === selectedRole;
       const matchesCountry = selectedCountry === "all" || player.country === selectedCountry;
-      return matchesText && matchesRole && matchesCountry;
+      const matchesLeague = selectedLeague === "all" || player.leagueId === selectedLeague;
+      return matchesText && matchesRole && matchesCountry && matchesLeague;
     });
 
     const sorted = [...filtered].sort((a, b) => {
@@ -655,6 +670,7 @@ function renderPlayers(context) {
           search.value = "";
           role.value = "all";
           country.value = "all";
+          league.value = "all";
           sort.value = "potential";
           refresh();
           search.focus();
@@ -668,6 +684,7 @@ function renderPlayers(context) {
   search.addEventListener("input", refresh);
   role.addEventListener("change", refresh);
   country.addEventListener("change", refresh);
+  league.addEventListener("change", refresh);
   sort.addEventListener("change", refresh);
   refresh();
   page.append(worldStats, toolbar, grid);
