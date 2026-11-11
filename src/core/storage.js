@@ -151,7 +151,7 @@ function isValidScoutingState(scouting, currentDate) {
   const recommendations = ["أولوية", "متابعة", "مراقبة فقط"];
   const knownScoutIds = new Set(SCOUTING_SCOUTS.map((scout) => scout.id));
   const sequenceOf = (id, prefix) => {
-    const match = new RegExp("^" + prefix + "-(\\\\d+)$").exec(id);
+    const match = new RegExp("^" + prefix + "-(\\d+)$").exec(id);
     return match ? Number(match[1]) : 0;
   };
   const dateAfter = (date, days) => {
