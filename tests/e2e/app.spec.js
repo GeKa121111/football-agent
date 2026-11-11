@@ -386,9 +386,11 @@ test.describe("Desktop experience", () => {
     );
     expect(animationName).toBe("portrait-idle");
 
-    await portraits.first().locator("xpath=ancestor::article").getByRole("button", { name: "ملف اللاعب" }).click();
+    const firstCard = page.locator(".player-card").first();
+    const firstPlayerName = await firstCard.locator(".player-name").textContent();
+    await firstCard.getByRole("button", { name: "ملف اللاعب" }).click();
     await expect(page.locator(".modal-player-art .portrait-svg")).toBeVisible();
-    await expect(page.locator(".modal-player-art")).toHaveAttribute("aria-label", /ياسين عادل/);
+    await expect(page.locator(".modal-player-art")).toHaveAttribute("aria-label", "رسم اللاعب " + firstPlayerName);
     await expect(page.locator(".modal-player-art")).toHaveAttribute("data-hair-style", profiles[0].hair);
     await expect(page.locator(".modal-player-art")).toHaveAttribute("data-portrait-asset-id", profiles[0].assetId);
   });
