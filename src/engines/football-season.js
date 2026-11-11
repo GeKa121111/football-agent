@@ -375,7 +375,7 @@ export function isValidFootballState(state, currentDate, season, database = WORL
       !dateValue(currentDate) ||
       !Array.isArray(state.fixtures) || state.fixtures.length > MAX_RETAINED_FIXTURES ||
       !Array.isArray(state.results) || state.results.length > MAX_RETAINED_MATCH_RESULTS ||
-      !isValidPlayerDevelopmentState(state.playerDevelopment, season)) return false;
+      !isValidPlayerDevelopmentState(state.playerDevelopment, state.season)) return false;
 
   const fixtureIds = state.fixtures.map((fixture) => fixture?.id);
   const resultIds = state.results.map((result) => result?.id);
