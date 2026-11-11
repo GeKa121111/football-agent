@@ -148,7 +148,8 @@ docs/         # قرارات التصميم والخطة التقنية
 ## مسار Rebuild 2.0 — الحالة الحالية
 
 - **المرحلة الرابعة مكتملة** ومُدمجة في `main` عبر [PR #48](https://github.com/GeKa121111/football-agent/pull/48)، ونجحت اختبارات CI.
-- **المرحلة الخامسة مكتملة** ومُدمجة في `main` عبر [PR #49](https://github.com/GeKa121111/football-agent/pull/49). التفاصيل في [خطة المرحلة الخامسة](docs/REBUILD-PHASE-5-MATCH-SIMULATION.md).\n- **المرحلة السادسة قيد التنفيذ:** محرك الانتقالات والتفاوض والإعارات وسجل عمولات الوكيل، مع ترحيل الحفظ إلى v7. التفاصيل في [سجل المرحلة السادسة](docs/REBUILD-PHASE-6-TRANSFERS.md).
+- **المرحلة الخامسة مكتملة** ومُدمجة في `main` عبر [PR #49](https://github.com/GeKa121111/football-agent/pull/49). التفاصيل في [خطة المرحلة الخامسة](docs/REBUILD-PHASE-5-MATCH-SIMULATION.md).
+- **المرحلة السادسة قيد التنفيذ:** محرك الانتقالات والتفاوض والإعارات وسجل عمولات الوكيل، مع ترحيل الحفظ إلى v7. التفاصيل في [سجل المرحلة السادسة](docs/REBUILD-PHASE-6-TRANSFERS.md).
 - [خارطة Rebuild 2.0 ذات المراحل الثماني](docs/REBUILD-ROADMAP-8-PHASES.md).
 - [سجل المرحلة الرابعة — الوكالة وخط المواهب](docs/PHASE-4-AGENCY-PIPELINE.md).
 
