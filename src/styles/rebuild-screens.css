@@ -555,3 +555,63 @@
 @media (max-width: 760px) {
   .representation-client-toolbar { padding: 8px; }
 }
+
+
+/* World directory — generated, non-official club identity marks. */
+.rebuild-main .players-screen .world-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.player-club-line,
+.player-profile-club-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.player-club-line .player-club,
+.player-profile-club-line > span:last-child {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.club-crest {
+  display: inline-grid;
+  width: 25px;
+  height: 29px;
+  flex: 0 0 25px;
+  place-items: center;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--club-color) 22%, transparent);
+}
+.club-crest-svg {
+  display: block;
+  width: 21px;
+  height: 25px;
+  overflow: visible;
+}
+.player-profile-club-line {
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 8px;
+  padding: 6px 9px 6px 7px;
+  border: 1px solid var(--fa-border);
+  border-radius: 10px;
+  color: var(--fa-text-soft);
+  background: rgba(255,255,255,.025);
+  font-size: 9px;
+}
+.player-profile-club-line .club-crest {
+  width: 23px;
+  height: 25px;
+  flex-basis: 23px;
+}
+.player-profile-club-line .club-crest-svg { width: 19px; height: 22px; }
+@media (max-width: 760px) {
+  .rebuild-main .players-screen .world-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
