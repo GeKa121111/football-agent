@@ -1128,6 +1128,7 @@ function renderTalentPipeline(context) {
   panel.append(toolbar);
 
   const grid = node("div", "talent-pipeline-grid");
+  panel.append(grid);
   const stageLabels = {
     discovered: "مكتشف",
     shortlisted: "قائمة المتابعة",
