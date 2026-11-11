@@ -358,6 +358,35 @@ test("signs a paid annual contract, prevents duplicate hires and limits renewal 
   assert.match(rejected.error, /لا يكفي/);
 });
 
+test("treats the contract expiry date as inactive for new assignments and allows renewal", () => {
+  const initial = createInitialSave();
+  const signed = signScoutingContract(initial, "scout-iberian-network");
+  assert.equal(signed.changed, true);
+
+  const expiryDay = {
+    ...signed.save,
+    world: { ...signed.save.world, currentDate: "2027-07-01" }
+  };
+  const scout = getScoutingRoster(expiryDay.world.scouting, expiryDay.world.currentDate)
+    .find((item) => item.id === "scout-iberian-network");
+  assert.equal(scout.isContractExpired, true);
+  assert.equal(scout.contractDaysRemaining, 0);
+  assert.equal(scout.canRenewContract, true);
+  assert.equal(getScoutingScoutFit("scout-iberian-network", expiryDay.world.scouting, "all", "all", 0.62, expiryDay.world.currentDate), null);
+
+  const rejected = startScoutingMission(expiryDay, {
+    type: "local", countryId: "all", role: "all", scoutId: "scout-iberian-network"
+  }, PLAYERS);
+  assert.equal(rejected.changed, false);
+  assert.match(rejected.error, /انتهى عقد الكشاف/);
+
+  const renewed = renewScoutingContract(expiryDay, "scout-iberian-network");
+  assert.equal(renewed.changed, true);
+  assert.equal(renewed.contractExpiresOn, "2028-07-01");
+  assert.equal(renewed.save.agency.balance, 74000);
+  assert.equal(isValidSave(renewed.save), true);
+});
+
 test("allows a mission started before contract expiry to finish after the contract expires", () => {
   const initial = createInitialSave(); const signed = signScoutingContract(initial, "scout-iberian-network");
   const nearExpiry = { ...signed.save, world: { ...signed.save.world, currentDate: "2027-06-30" } };

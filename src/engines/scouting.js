@@ -120,7 +120,8 @@ export function getScoutingRoster(scouting = createInitialScoutingState(), curre
     const isContracted = Boolean(record.contractExpiresOn);
     const hasDate = isValidDate(currentDate);
     const daysRemaining = isContracted && hasDate ? Math.max(0, dayDifference(currentDate, record.contractExpiresOn)) : null;
-    const expired = isContracted && hasDate && currentDate > record.contractExpiresOn;
+    // The end date is exclusive: a 365-day contract starting July 1 is inactive from the following July 1.
+    const expired = isContracted && hasDate && currentDate >= record.contractExpiresOn;
     return { id: profile.id, name: profile.name, region: profile.region, countryIds: [...profile.countryIds], roles: [...profile.roles], specialty: profile.specialty,
       experience: record.experience, level: getScoutLevel(record.experience), missionsCompleted: record.missionsCompleted,
       isBusy: Boolean(activeMission), activeMissionId: activeMission?.id ?? null, isContracted,
