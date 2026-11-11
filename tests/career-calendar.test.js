@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { createInitialSave } from "../src/core/storage.js";
 import {
   advanceCareerDay,
@@ -462,4 +463,91 @@ test("filters the full inbox by read state and Arabic/date search without mutati
   );
   assert.deepEqual(filterCareerMessages(messages, { status: "unknown" }), []);
   assert.equal(JSON.stringify(messages), original);
+});
+
+
+test("keeps five complete season cycles valid with recurring tasks completed and bounded history", () => {
+  let save = createInitialSave();
+  const originalAgency = structuredClone(save.agency);
+
+  for (let offset = 0; offset < 1825; offset += 1) {
+    save = advanceCareerDay(save);
+
+    for (const task of [...save.world.tasks]) {
+      if (task.status !== "open" && task.status !== "overdue") continue;
+      const result = completeCareerTask(save, task.id);
+      assert.equal(result.changed, true, "every actionable task should complete exactly once");
+      save = result.save;
+    }
+
+    assert.equal(isValidSave(save), true, "save must remain valid on " + save.world.currentDate);
+
+    const eventIds = save.world.events.map((event) => event.id);
+    assert.equal(new Set(eventIds).size, eventIds.length, "retained event IDs must be unique");
+
+    const messageIds = save.world.inbox.map((message) => message.id);
+    assert.equal(new Set(messageIds).size, messageIds.length, "retained message IDs must be unique");
+
+    const eventsById = new Map(save.world.events.map((event) => [event.id, event]));
+    for (const message of save.world.inbox) {
+      const linkedEvent = eventsById.get(message.eventId);
+      assert.ok(linkedEvent, "every retained message must reference a retained event");
+      assert.equal(message.date, linkedEvent.date, "message and event dates must agree");
+    }
+  }
+
+  assert.equal(save.world.currentDate, "2031-06-30");
+  assert.equal(save.career.day, 1826);
+  assert.equal(save.career.week, 261);
+  assert.equal(save.career.season, 5);
+  assert.ok(save.world.events.length <= 90);
+  assert.ok(save.world.inbox.length <= 90);
+  assert.ok(save.world.tasks.length <= 60);
+  assert.ok(save.world.tasks.length > 0);
+  assert.ok(save.world.tasks.every((task) => task.status === "completed"));
+  assert.deepEqual(save.agency, originalAgency, "calendar simulation must not mutate agency assets");
+});
+
+test("uses UTC calendar transitions independently of the host timezone", () => {
+  const script = [
+    'import { createInitialSave } from "./src/core/storage.js";',
+    'import { advanceCareerDays } from "./src/engines/career-calendar.js";',
+    "const base = createInitialSave();",
+    "const start = (currentDate, season) => ({",
+    "  ...base,",
+    "  career: { ...base.career, season },",
+    "  world: { ...base.world, currentDate, events: [], inbox: [], tasks: [] }",
+    "});",
+    'const leap = advanceCareerDays(start("2028-02-27", 2), 4);',
+    'const year = advanceCareerDays(start("2028-12-30", 2), 4);',
+    'const season = advanceCareerDays(start("2029-06-29", 3), 4);',
+    "process.stdout.write(JSON.stringify({",
+    "  leapDate: leap.world.currentDate,",
+    "  yearDate: year.world.currentDate,",
+    '  monthlyEvent: year.world.events.some((event) => event.type === "monthly-market" && event.date === "2029-01-01"),',
+    "  seasonDate: season.world.currentDate,",
+    "  seasonNumber: season.career.season,",
+    '  seasonOpening: season.world.events.some((event) => event.type === "season-opening" && event.date === "2029-07-01")',
+    "}));"
+  ].join("\\n");
+
+  const expected = {
+    leapDate: "2028-03-02",
+    yearDate: "2029-01-03",
+    monthlyEvent: true,
+    seasonDate: "2029-07-03",
+    seasonNumber: 4,
+    seasonOpening: true
+  };
+
+  for (const timezone of ["UTC", "Africa/Cairo", "America/Los_Angeles", "Pacific/Kiritimati"]) {
+    const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: { ...process.env, TZ: timezone }
+    });
+
+    assert.equal(result.status, 0, timezone + ": " + result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), expected, "calendar result changed in " + timezone);
+  }
 });
