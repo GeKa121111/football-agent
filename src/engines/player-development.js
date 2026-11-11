@@ -22,7 +22,7 @@ export const TRAINING_FOCUSES = Object.freeze({
   attacking: { label: "هجومي", outfield: ["finishing", "dribbling", "pace"], goalkeeper: ["passing", "positioning"] },
   technical: { label: "مهاري", outfield: ["passing", "dribbling", "finishing"], goalkeeper: ["passing", "handling"] },
   defending: { label: "دفاعي", outfield: ["defending", "positioning", "stamina"], goalkeeper: ["positioning", "reflexes"] },
-  physical: { label: "بدني", outfield: ["pace", "stamina"], goalkeeper: ["stamina", "agility"] },
+  physical: { label: "بدني", outfield: ["pace", "stamina"], goalkeeper: ["stamina", "pace"] },
   goalkeeping: { label: "حراسة المرمى", outfield: [], goalkeeper: ["handling", "reflexes", "positioning"] },
   recovery: { label: "استشفاء", outfield: [], goalkeeper: [] }
 });
@@ -73,7 +73,7 @@ function seedRandom(seed) {
 
 function developmentRating(player) {
   const keys = player.role === "حراسة" ? GOALKEEPER_KEYS : OUTFIELD_KEYS;
-  return roundTo(keys.reduce((sum, key) => sum + player.skills[key], 0) / keys.length, 1);
+  return roundTo(keys.reduce((sum, key) => sum + player.skills[key], 0) / keys.length, 2);
 }
 
 function ageGrowthFactor(age) {
