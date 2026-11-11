@@ -63,6 +63,7 @@ test.describe("Desktop experience", () => {
       for (const screen of screens) {
         await navigateTo(page, screen);
         await expect(page.locator(".main-stage")).toBeVisible();
+        await expect(page.locator(".main-stage")).toBeFocused();
         const navigation = viewport.width <= 760
           ? page.locator(".mobile-nav")
           : page.locator(".sidebar");
