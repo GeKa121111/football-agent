@@ -26,8 +26,12 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
-      - name: Run tests
+      - name: Install Chromium for browser tests
+        run: npx playwright install --with-deps chromium
+      - name: Run unit tests
         run: npm test
+      - name: Run desktop and mobile browser tests
+        run: npm run test:e2e
       - name: Check JavaScript syntax
         run: npm run check
       - name: Build for GitHub Pages
