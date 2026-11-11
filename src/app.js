@@ -1003,8 +1003,8 @@ export function mountApp(root) {
 
     const previousSave = state.save;
     try {
-      state.save = advanceCareerDay(state.save);
-      const scoutingResult = advanceScoutingMissions(state.save, WORLD_PLAYERS);
+      const advancedSave = advanceCareerDay(state.save);
+      const scoutingResult = advanceScoutingMissions(advancedSave, WORLD_PLAYERS);
       state.save = scoutingResult.save;
       if (saveCareer()) {
         render();
@@ -1027,8 +1027,8 @@ export function mountApp(root) {
 
     const previousSave = state.save;
     try {
-      state.save = advanceCareerDays(state.save, 7);
-      const scoutingResult = advanceScoutingMissions(state.save, WORLD_PLAYERS);
+      const advancedSave = advanceCareerDays(state.save, 7);
+      const scoutingResult = advanceScoutingMissions(advancedSave, WORLD_PLAYERS);
       state.save = scoutingResult.save;
       if (saveCareer()) {
         render();
