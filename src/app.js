@@ -946,16 +946,42 @@ function renderAgency(context) {
 
   const contractsPanel = node("section", "surface-card representation-panel");
   const contractsHeading = node("div", "representation-heading");
-  contractsHeading.append(
-    node("h2", "", "عملاء الوكالة"),
-    node("span", "representation-count", activeContracts.length + " عقد نشط")
-  );
+  const contractsCount = node("span", "representation-count", activeContracts.length + " عقد نشط");
+  contractsHeading.append(node("h2", "", "عملاء الوكالة"), contractsCount);
   contractsPanel.append(contractsHeading);
+
+  const clientToolbar = node("div", "representation-client-toolbar");
+  const clientSearch = node("input", "search-input");
+  clientSearch.type = "search";
+  clientSearch.placeholder = "ابحث عن عميل بالاسم أو النادي أو المركز...";
+  clientSearch.setAttribute("aria-label", "البحث في عملاء الوكالة");
+  clientToolbar.append(clientSearch);
   const contractList = node("div", "representation-list");
-  if (activeContracts.length === 0) {
-    contractList.append(node("p", "representation-empty", "لسه مفيش عقود تمثيل موقعة. اختار لاعب وابدأ التفاوض."));
-  } else {
-    activeContracts.forEach((contract) => {
+  const renderContracts = () => {
+    const query = clientSearch.value.trim().toLocaleLowerCase("ar");
+    const filteredContracts = activeContracts.filter((contract) =>
+      [contract.playerName, contract.position, contract.club]
+        .some((value) => String(value ?? "").toLocaleLowerCase("ar").includes(query))
+    );
+    contractsCount.textContent = filteredContracts.length + " من " + activeContracts.length + " عقد نشط";
+    if (activeContracts.length === 0) {
+      contractList.replaceChildren(node("p", "representation-empty", "لسه مفيش عقود تمثيل موقعة. اختار لاعب من قائمة الاستقطاب وابدأ التفاوض."));
+      return;
+    }
+    if (filteredContracts.length === 0) {
+      contractList.replaceChildren(emptyResults(
+        "مش لاقيين عميل مطابق",
+        "جرّب اسم لاعب أو نادي أو مركز مختلف.",
+        "مسح البحث",
+        () => {
+          clientSearch.value = "";
+          renderContracts();
+          clientSearch.focus();
+        }
+      ));
+      return;
+    }
+    contractList.replaceChildren(...filteredContracts.map((contract) => {
       const row = node("article", "representation-row representation-contract-row");
       const copy = node("div", "representation-copy");
       const effectiveExpiry = getRepresentationContractExpiry(contract);
@@ -989,10 +1015,12 @@ function renderAgency(context) {
       }
       actions.append(actionButton("إنهاء التمثيل", "button-outline representation-terminate-button", () => context.terminateRepresentationContract(contract.id)));
       row.append(copy, actions);
-      contractList.append(row);
-    });
-  }
-  contractsPanel.append(contractList);
+      return row;
+    }));
+  };
+  clientSearch.addEventListener("input", renderContracts);
+  renderContracts();
+  contractsPanel.append(clientToolbar, contractList);
 
   const interactionsPanel = node("section", "surface-card representation-panel representation-interactions-panel");
   const interactionsHeading = node("div", "representation-heading");
