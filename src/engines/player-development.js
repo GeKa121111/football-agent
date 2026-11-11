@@ -35,6 +35,16 @@ const INTENSITY_FACTORS = Object.freeze({
 
 const MAX_TRAINING_HISTORY = 240;
 
+export const TRAINING_BALANCE = Object.freeze({
+  dailyFatigueRecovery: 3,
+  dailyFitnessRecovery: 2,
+  weeklySkillGainBase: 0.012,
+  weeklyPotentialGapGain: 0.0012,
+  injuryFatigueThreshold: 55,
+  injuryFatigueRange: 35,
+  injuryRiskByIntensity: Object.freeze({ light: 0.001, normal: 0.006, intense: 0.022 })
+});
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -174,8 +184,8 @@ export function advancePlayerDevelopmentDay(state, dateKey, season) {
     let player = {
       ...original,
       injuryDays: Math.max(0, original.injuryDays - (original.injuryDays > 0 ? 1 : 0)),
-      fatigue: roundTo(Math.max(0, original.fatigue - 3), 1),
-      fitness: roundTo(Math.min(100, original.fitness + 2), 1)
+      fatigue: roundTo(Math.max(0, original.fatigue - TRAINING_BALANCE.dailyFatigueRecovery), 1),
+      fitness: roundTo(Math.min(100, original.fitness + TRAINING_BALANCE.dailyFitnessRecovery), 1)
     };
 
     if (seasonChanged) {
@@ -224,7 +234,7 @@ export function advancePlayerDevelopmentDay(state, dateKey, season) {
     const conditionFactor = player.fitness < 40 ? 0.5 : player.fitness < 65 ? 0.75 : 1;
     const gain = ageFactor === 0
       ? 0
-      : (0.015 + potentialGap * 0.0015) * factor * ageFactor * conditionFactor;
+      : (TRAINING_BALANCE.weeklySkillGainBase + potentialGap * TRAINING_BALANCE.weeklyPotentialGapGain) * factor * ageFactor * conditionFactor;
     const selectedSkills = focusSkills(player, focus);
     const skills = { ...player.skills };
     selectedSkills.forEach((key) => {
@@ -242,10 +252,14 @@ export function advancePlayerDevelopmentDay(state, dateKey, season) {
     };
 
     const random = seedRandom(player.playerId + "|" + dateKey + "|" + focus + "|" + player.trainingIntensity);
-    const injuryRisk = player.trainingIntensity === "intense" ? 0.018
-      : player.trainingIntensity === "normal" ? 0.004 : 0;
-    if (player.fatigue >= 78 && random() < injuryRisk) {
-      player.injuryDays = 2 + Math.floor(random() * 8);
+    const fatigueRiskFactor = clamp(
+      (player.fatigue - TRAINING_BALANCE.injuryFatigueThreshold) / TRAINING_BALANCE.injuryFatigueRange,
+      0,
+      1
+    );
+    const injuryRisk = TRAINING_BALANCE.injuryRiskByIntensity[player.trainingIntensity] * fatigueRiskFactor;
+    if (injuryRisk > 0 && random() < injuryRisk) {
+      player.injuryDays = 3 + Math.floor(random() * 8);
     }
 
     sessions.push({
