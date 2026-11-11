@@ -6,7 +6,8 @@ import {
   advancePlayerDevelopmentDay,
   recordPlayerMatchPerformances,
   isValidPlayerDevelopmentState,
-  getPlayerDevelopmentRecord
+  getPlayerDevelopmentRecord,
+  TRAINING_BALANCE
 } from "../src/engines/player-development.js";
 import { WORLD_DATABASE } from "../src/data/world-database.js";
 
@@ -97,4 +98,46 @@ test("applies real world-player match output and ignores simulation-only generat
   assert.equal(updated.averageMatchRating, 8.2);
   assert.equal(updated.injuryDays, 8);
   assert.equal(isValidPlayerDevelopmentState(next, 1), true);
+});
+
+test("training injury risk scales with intensity under sustained high fatigue", () => {
+  const players = [];
+  const groupSize = 1200;
+  for (const [intensity, index] of [["light", 0], ["normal", 1], ["intense", 2]]) {
+    for (let count = 0; count < groupSize; count += 1) {
+      players.push({
+        playerId: "training-risk-" + index + "-" + count,
+        playerName: "اختبار حمل",
+        clubId: "club-risk-test",
+        role: "وسط",
+        age: 20,
+        potential: 90,
+        rating: 70,
+        skills: {
+          finishing: 70, pace: 70, passing: 70, dribbling: 70,
+          defending: 70, stamina: 70, handling: 20, reflexes: 20, positioning: 20
+        },
+        fitness: 60,
+        fatigue: 90,
+        injuryDays: 0,
+        trainingFocus: "balanced",
+        trainingIntensity: intensity,
+        appearances: 0,
+        minutesPlayed: 0,
+        goals: 0,
+        assists: 0,
+        averageMatchRating: null,
+        lastTrainingDate: null
+      });
+    }
+  }
+  const state = advancePlayerDevelopmentDay({ season: 1, players, trainingHistory: [] }, "2026-07-06", 1);
+  const injuryCounts = [0, 0, 0];
+  state.players.forEach((player, index) => {
+    if (player.injuryDays > 0) injuryCounts[Math.floor(index / groupSize)] += 1;
+  });
+  assert.ok(injuryCounts[2] > injuryCounts[1], "intense injuries must exceed normal: " + injuryCounts);
+  assert.ok(injuryCounts[1] > injuryCounts[0], "normal injuries must exceed light: " + injuryCounts);
+  assert.ok(injuryCounts[2] >= 12 && injuryCounts[2] <= 48, "intense injury count: " + injuryCounts[2]);
+  assert.deepEqual(Object.keys(TRAINING_BALANCE.injuryRiskByIntensity), ["light", "normal", "intense"]);
 });
