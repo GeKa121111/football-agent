@@ -447,7 +447,6 @@ test("migrates version 4 agency saves into football season schema v5 without rew
   legacy.meta.version = 4;
   legacy.agency.name = "Phase Four Agency";
   legacy.agency.balance = 654321;
-  legacy.world.currentDate = "2026-08-11";
   delete legacy.world.football;
   const raw = JSON.stringify(legacy);
   const storage = memoryStorage({ [STORAGE_KEY]: raw });
