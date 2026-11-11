@@ -335,6 +335,34 @@ test("only allows renewal offers during the final 90 days and blocks duplicate r
   assert.equal(isValidSave(first.save), true);
 });
 
+test("keeps first-slice v4 contracts valid and can renew them without profile metadata", () => {
+  const profile = player({ id: "test-player-22", age: 22, rating: 68, potential: 80 });
+  const preferences = getPlayerRepresentationProfile(profile);
+  const sent = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays
+  });
+  const signed = evaluateRepresentationOffer(sent.save, sent.offer.id);
+  const legacy = structuredClone(signed.save);
+  delete legacy.agency.representation.offers[0].kind;
+  delete legacy.agency.representation.offers[0].playerPreferences;
+  delete legacy.agency.representation.contracts[0].rating;
+  delete legacy.agency.representation.contracts[0].potential;
+  delete legacy.agency.representation.contracts[0].playerPreferences;
+  delete legacy.agency.representation.contracts[0].renewals;
+  assert.equal(isValidSave(legacy), true);
+
+  const targetDate = new Date(Date.parse(signed.contract.expiresOn + "T00:00:00.000Z") - 60 * 86400000)
+    .toISOString().slice(0, 10);
+  const nearExpiry = advanceToDate(legacy, targetDate);
+  const renewal = createRepresentationRenewalOffer(nearExpiry, signed.contract.id, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays
+  });
+  assert.equal(renewal.changed, true);
+  assert.equal(isValidSave(renewal.save), true);
+});
+
 test("calculates the agreed commission without pretending it is already collected", () => {
   assert.equal(calculateRepresentationCommission(50000, 10), 5000);
   assert.equal(calculateRepresentationCommission(125000, 8), 10000);
