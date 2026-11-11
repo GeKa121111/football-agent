@@ -2,11 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { NAV_ITEMS, isPrimaryView } from "../src/ui/layout/navigation.js";
 
-test("primary navigation has five unique routes", () => {
+test("primary navigation has six unique routes", () => {
   assert.equal(NAV_ITEMS.length, 6);
   assert.equal(new Set(NAV_ITEMS.map((item) => item.id)).size, NAV_ITEMS.length);
   assert.deepEqual(NAV_ITEMS.map((item) => item.id), [
-    "dashboard", "players", "scouting", "market", "agency"
+    "dashboard", "players", "scouting", "football", "market", "agency"
   ]);
 });
 
