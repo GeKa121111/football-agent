@@ -202,6 +202,7 @@ test("validates task lifecycle dates against the saved career date", () => {
   assert.equal(isValidSave(overdue), true);
 
   const completedLate = createInitialSave();
+  completedLate.world.currentDate = "2026-07-02";
   completedLate.world.tasks = [{
     id: "task-completed-late-valid",
     title: "مهمة مكتملة متأخرًا",
@@ -221,7 +222,7 @@ test("validates task lifecycle dates against the saved career date", () => {
     (task) => { task.createdDate = "2026-07-02"; },
     (task) => { task.status = "overdue"; task.overdueDate = "2026-07-01"; },
     (task) => { task.status = "completed"; task.completedDate = "2026-07-02"; task.completedLate = true; },
-    (task) => { task.status = "completed"; task.completedDate = "2026-07-02"; task.completedLate = false; },
+    (task) => { task.status = "completed"; task.completedDate = "2026-07-04"; task.completedLate = false; },
     (task) => { task.status = "completed"; task.completedDate = "2026-07-02"; task.completedLate = true; task.overdueDate = "2026-07-03"; }
   ];
 
@@ -265,4 +266,22 @@ test("preserves a save with impossible task chronology instead of rewriting it",
   assert.equal(readSave(storage).status, "corrupt");
   assert.equal(storage.getItem(STORAGE_KEY), raw);
   assert.throws(() => writeSave(invalid, memoryStorage()), TypeError);
+});
+
+
+test("rejects a completed task falsely marked as on-time after its deadline", () => {
+  const save = createInitialSave();
+  save.world.currentDate = "2026-07-05";
+  save.world.tasks = [{
+    id: "task-falsely-on-time",
+    title: "مهمة متأخرة بعلامة خاطئة",
+    description: "تاريخ الإنجاز بعد الموعد لكن الحالة تقول في الموعد.",
+    createdDate: "2026-07-01",
+    dueDate: "2026-07-03",
+    completedDate: "2026-07-04",
+    completedLate: false,
+    category: "timeline-test",
+    status: "completed"
+  }];
+  assert.equal(isValidSave(save), false);
 });
