@@ -183,3 +183,17 @@ test("every club supplies the kit color used by its two fictional player portrai
     assert.ok(player.kitLight);
   }
 });
+
+
+test("world validation rejects club colors that cannot be used by kit art", () => {
+  const invalid = structuredClone(WORLD_DATABASE);
+  invalid.clubs[0].primaryColor = "red";
+  assert.equal(validateWorldDatabase(invalid).valid, false);
+});
+
+test("world validation rejects a player kit that drifts from the player's club", () => {
+  const invalid = structuredClone(WORLD_DATABASE);
+  invalid.players[0].kit = "#abcdef";
+  assert.equal(validateWorldDatabase(invalid).valid, false);
+  assert.ok(validateWorldDatabase(invalid).errors.some((error) => error.includes("لون قميص اللاعب لا يطابق النادي")));
+});
