@@ -153,9 +153,15 @@ function syncTalentFollowUpTask(save, entry) {
       const { overdueDate, completedDate, completedLate, completionReason, ...retained } = currentTask;
       tasks[activeIndex] = { ...retained, ...taskDetails };
     } else {
-      const sequence = pipeline.nextFollowUpTaskSequence ?? 1;
+      const usedTaskIds = new Set(tasks.map((task) => task.id));
+      let sequence = pipeline.nextFollowUpTaskSequence ?? 1;
+      let taskId = "talent-follow-up-task-" + sequence;
+      while (usedTaskIds.has(taskId)) {
+        sequence += 1;
+        taskId = "talent-follow-up-task-" + sequence;
+      }
       tasks.push({
-        id: "talent-follow-up-task-" + sequence,
+        id: taskId,
         ...taskDetails,
         createdDate: save.world.currentDate
       });
