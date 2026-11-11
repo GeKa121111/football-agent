@@ -170,6 +170,18 @@ function scheduledItems(date, season) {
  * task category is not queued again while an earlier task in that category
  * is still open or overdue; the calendar event itself is still recorded.
  */
+function trimCompletedTaskHistory(tasks) {
+  const retainedCompletedIds = new Set(
+    tasks
+      .filter((task) => task.status === "completed")
+      .sort((a, b) => a.completedDate.localeCompare(b.completedDate) || a.id.localeCompare(b.id))
+      .slice(-MAX_COMPLETED_TASK_HISTORY)
+      .map((task) => task.id)
+  );
+
+  return tasks.filter((task) => task.status !== "completed" || retainedCompletedIds.has(task.id));
+}
+
 function mergeCareerTasks(existingTasks, scheduledTasks) {
   const activeCategories = new Set(
     existingTasks
@@ -322,9 +334,9 @@ export function completeCareerTask(save, taskId) {
         ...save.world,
         events,
         inbox,
-        tasks: save.world.tasks.map((item) => item.id === taskId
+        tasks: trimCompletedTaskHistory(save.world.tasks.map((item) => item.id === taskId
           ? { ...item, status: "completed", completedDate: save.world.currentDate, completedLate }
-          : item)
+          : item))
       }
     }
   };
