@@ -358,7 +358,11 @@ test.describe("Career operations follow-up", () => {
 
     const overdueTask = page.locator(".career-task-row.is-overdue");
     await expect(overdueTask).toBeVisible();
-    await expect(overdueTask).toContainText("متأخرة منذ");
+    const expectedOverdueDate = await page.evaluate(() => new Intl.DateTimeFormat("ar-EG", {
+      day: "numeric", month: "long", year: "numeric"
+    }).format(new Date("2026-07-02T12:00:00")));
+    await expect(overdueTask.locator(".career-activity-copy small"))
+      .toContainText("متأخرة منذ: " + expectedOverdueDate);
     await overdueTask.getByRole("button", { name: "إنجاز" }).click();
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(saved.world.tasks[0].status).toBe("completed");
@@ -468,6 +472,7 @@ test.describe("Task history archive", () => {
           description: "تم إنجازه بعد الموعد.",
           createdDate: "2026-07-01",
           dueDate: "2026-07-08",
+          overdueDate: "2026-07-09",
           completedDate: "2026-07-09",
           completedLate: true,
           category: "season-review",
@@ -492,6 +497,11 @@ test.describe("Task history archive", () => {
     await dialog.getByLabel("تصفية حالة المهمة").selectOption("overdue");
     await expect(dialog.locator(".task-history-row")).toHaveCount(1);
     await expect(dialog.locator(".task-history-status")).toHaveText("متأخرة");
+    const expectedOverdueDate = await page.evaluate(() => new Intl.DateTimeFormat("ar-EG", {
+      day: "numeric", month: "long", year: "numeric"
+    }).format(new Date("2026-07-04T12:00:00")));
+    await expect(dialog.locator(".task-history-row .career-activity-copy small"))
+      .toContainText("متأخرة منذ: " + expectedOverdueDate);
 
     await dialog.getByLabel("تصفية حالة المهمة").selectOption("completed");
     await expect(dialog.locator(".task-history-row")).toHaveCount(1);

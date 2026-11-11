@@ -196,7 +196,7 @@ function renderCareerOperations(context) {
       copy.append(
         node("strong", "", task.title),
         node("span", "", task.description),
-        node("small", "", task.status === "overdue" ? "متأخرة منذ: " + formatHomeDate(task.dueDate) : "موعد التسليم: " + formatHomeDate(task.dueDate))
+        node("small", "", task.status === "overdue" ? "متأخرة منذ: " + formatHomeDate(task.overdueDate) : "موعد التسليم: " + formatHomeDate(task.dueDate))
       );
       row.append(copy, actionButton("إنجاز", "task-complete-button", () => context.completeTask(task.id)));
       taskList.append(row);
@@ -984,7 +984,7 @@ export function mountApp(root) {
         const detail = task.status === "completed"
           ? "أُنجزت في: " + formatHomeDate(task.completedDate) + (task.completedLate ? " · أُنجزت متأخرًا" : " · أُنجزت في الموعد")
           : task.status === "overdue"
-            ? "متأخرة منذ: " + formatHomeDate(task.dueDate)
+            ? "متأخرة منذ: " + formatHomeDate(task.overdueDate)
             : "موعد التسليم: " + formatHomeDate(task.dueDate);
         copy.append(
           node("strong", "", task.title),

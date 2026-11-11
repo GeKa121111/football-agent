@@ -89,6 +89,72 @@ test("rejects saves with invalid financial, career, or world values", () => {
   assert.equal(isValidSave(invalidDate), false);
 });
 
+test("validates career counter consistency and stable IDs in persisted collections", () => {
+  const inconsistentWeek = createInitialSave();
+  inconsistentWeek.career.day = 8;
+  inconsistentWeek.career.week = 1;
+  assert.equal(isValidSave(inconsistentWeek), false);
+
+  const inconsistentDay = createInitialSave();
+  inconsistentDay.career.day = 2;
+  inconsistentDay.career.week = 2;
+  assert.equal(isValidSave(inconsistentDay), false);
+
+  const duplicateClients = createInitialSave();
+  duplicateClients.agency.clients = ["player-1", "player-1"];
+  assert.equal(isValidSave(duplicateClients), false);
+
+  const invalidClientId = createInitialSave();
+  invalidClientId.agency.clients = ["player-1", " "];
+  assert.equal(isValidSave(invalidClientId), false);
+
+  for (const collection of ["players", "clubs", "competitions", "activeOffers"]) {
+    const duplicateEntity = createInitialSave();
+    duplicateEntity.world[collection] = [{ id: "entity-1" }, { id: "entity-1" }];
+    assert.equal(isValidSave(duplicateEntity), false, collection + " must reject duplicate IDs");
+
+    const missingEntityId = createInitialSave();
+    missingEntityId.world[collection] = [{ name: "missing stable ID" }];
+    assert.equal(isValidSave(missingEntityId), false, collection + " must require stable IDs");
+  }
+
+  const valid = createInitialSave();
+  valid.career.day = 8;
+  valid.career.week = 2;
+  valid.agency.clients = ["player-1", "player-2"];
+  valid.world.players = [{ id: "player-1" }];
+  valid.world.clubs = [{ id: "club-1" }];
+  valid.world.competitions = [{ id: "competition-1" }];
+  valid.world.activeOffers = [{ id: "offer-1" }];
+  assert.equal(isValidSave(valid), true);
+});
+
+test("does not overwrite saves rejected by career or entity invariants", () => {
+  const invalidSaves = [];
+
+  const badCounters = createInitialSave();
+  badCounters.career.day = 15;
+  badCounters.career.week = 2;
+  invalidSaves.push(badCounters);
+
+  const duplicatePlayers = createInitialSave();
+  duplicatePlayers.world.players = [{ id: "player-1" }, { id: "player-1" }];
+  invalidSaves.push(duplicatePlayers);
+
+  const duplicateClients = createInitialSave();
+  duplicateClients.agency.clients = ["player-1", "player-1"];
+  invalidSaves.push(duplicateClients);
+
+  for (const invalid of invalidSaves) {
+    const raw = JSON.stringify(invalid);
+    const storage = memoryStorage({ [STORAGE_KEY]: raw });
+    assert.equal(readSave(storage).status, "corrupt");
+    assert.equal(storage.getItem(STORAGE_KEY), raw);
+    assert.throws(() => writeSave(invalid, storage), TypeError);
+    assert.equal(storage.getItem(STORAGE_KEY), raw);
+  }
+});
+
 test("persists unique watchlist player IDs", () => {
   const storage = memoryStorage();
   assert.deepEqual(readWatchlist(storage), { status: "new", ids: [], error: null });
