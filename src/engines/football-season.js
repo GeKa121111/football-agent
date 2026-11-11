@@ -431,7 +431,7 @@ export function getRecentFootballResults(state, limit = 10) {
 }
 
 /** Builds a deterministic competition table from persisted match results. */
-export function getCompetitionStandings(state, competitionId, database = WORLD_DATABASE) {
+export function getCompetitionStandings(state, competitionId, database = WORLD_DATABASE, season = state?.season) {
   const competition = database.competitions.find((item) => item.id === competitionId);
   if (!competition || !Array.isArray(state?.results)) return [];
   const clubById = new Map(database.clubs.map((club) => [club.id, club]));
@@ -450,6 +450,7 @@ export function getCompetitionStandings(state, competitionId, database = WORLD_D
 
   for (const result of state.results) {
     if (result.competitionId !== competitionId) continue;
+    if (season !== undefined && result.season !== season) continue;
     const home = standings.get(result.home.clubId);
     const away = standings.get(result.away.clubId);
     if (!home || !away) continue;
