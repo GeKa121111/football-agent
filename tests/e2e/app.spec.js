@@ -47,6 +47,17 @@ test.describe("Desktop experience", () => {
     await expect(page.locator(".mobile-nav")).toBeHidden();
     await hasNoHorizontalOverflow(page);
   });
+  
+  test("keeps all five workspaces responsive at tablet width", async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 900 });
+    await page.goto("/");
+    const screens = ["اللاعبون", "الكشافون", "الانتقالات", "الوكالة", "الرئيسية"];
+    for (const screen of screens) {
+      await navigateTo(page, screen);
+      await expect(page.locator(".main-stage")).toBeVisible();
+      await hasNoHorizontalOverflow(page);
+    }
+  });
 
   test("navigates through all five primary screens", async ({ page }) => {
     await page.goto("/");
