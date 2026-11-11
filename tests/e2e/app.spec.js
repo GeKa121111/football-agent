@@ -57,7 +57,7 @@ test.describe("Desktop experience", () => {
     await navigateTo(page, "اللاعبون");
 
     const portraits = page.locator(".player-card .player-portrait");
-    await expect(portraits).toHaveCount(4);
+    await expect(portraits).toHaveCount(16);
 
     const profiles = await portraits.evaluateAll((elements) => elements.map((element) => ({
       hair: element.dataset.hairStyle,
