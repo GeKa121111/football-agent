@@ -22,7 +22,7 @@ import {
   startScoutingMission
 } from "./engines/scouting.js";
 import { createPlayerPortrait } from "./ui/player-portrait.js";
-import { getTalentProspect, upsertTalentProspect, recordTalentProspectContact } from "./engines/talent-pipeline.js";
+import { getTalentProspect, upsertTalentProspect, recordTalentProspectContact, completeTalentProspectFollowUp } from "./engines/talent-pipeline.js";
 import {
   createRepresentationOffer as createRepresentationOfferInEngine,
   evaluateRepresentationOffer as evaluateRepresentationOfferInEngine,
@@ -1189,10 +1189,22 @@ function renderTalentPipeline(context) {
         node("small", "talent-pipeline-sources", item.sourceLabels.join(" · ") || "متابعة الوكالة")
       );
       const state = node("span", "talent-pipeline-stage stage-" + item.stage, stageLabels[item.stage]);
+      const followUpTask = item.entry
+        ? context.save.world.tasks.find((task) =>
+          task.category === "talent-follow-up" &&
+          task.prospectId === item.entry.id &&
+          ["open", "overdue"].includes(task.status)
+        )
+        : null;
       if (item.nextFollowUpDate) {
         const overdue = item.nextFollowUpDate < context.save.world.currentDate;
-        copy.append(node("small", overdue ? "talent-pipeline-followup is-overdue" : "talent-pipeline-followup",
-          (overdue ? "متابعة متأخرة منذ " : "المتابعة القادمة ") + formatHomeDate(item.nextFollowUpDate)));
+        const dueToday = item.nextFollowUpDate === context.save.world.currentDate;
+        const followUpClass = overdue ? "is-overdue" : dueToday ? "is-due" : "";
+        const followUpLabel = overdue
+          ? "متابعة متأخرة منذ "
+          : dueToday ? "موعد المتابعة اليوم " : "المتابعة القادمة ";
+        copy.append(node("small", "talent-pipeline-followup " + followUpClass,
+          followUpLabel + formatHomeDate(item.nextFollowUpDate)));
       }
       const lastContact = [...item.activity].reverse().find((event) => event.type === "contact");
       if (lastContact) {
@@ -1207,6 +1219,13 @@ function renderTalentPipeline(context) {
         actionButton(item.entry ? "إدارة المتابعة" : "إضافة لصندوق المواهب", "button-primary talent-pipeline-manage-button",
           () => context.manageTalentProspect(player))
       );
+      if (followUpTask) {
+        actions.append(actionButton(
+          followUpTask.status === "overdue" ? "تأكيد مراجعة المتابعة المتأخرة" : "تأكيد مراجعة المتابعة",
+          "button-outline talent-pipeline-complete-followup-button",
+          () => context.completeTask(followUpTask.id)
+        ));
+      }
       if (!item.isClient && !item.offer) {
         actions.append(actionButton(lastContact ? "تسجيل تواصل" : "تواصل أولي",
           "button-outline talent-pipeline-contact-button",
@@ -2674,8 +2693,9 @@ export function mountApp(root) {
     }
     const result = completeTaskInEngine(state.save, taskId);
     if (!result.changed) return;
+    const followUpResult = completeTalentProspectFollowUp(result.save, taskId);
     const previousSave = state.save;
-    state.save = result.save;
+    state.save = followUpResult.changed ? followUpResult.save : result.save;
     if (saveCareer()) render();
     else state.save = previousSave;
   }
@@ -2698,7 +2718,28 @@ export function mountApp(root) {
   }
 
   function openSeasonCalendar() {
-    const events = getUpcomingCareerEvents(state.save.world.currentDate, state.save.career.season, 365);
+    const currentDate = state.save.world.currentDate;
+    const currentDateTime = Date.parse(currentDate + "T00:00:00.000Z");
+    const horizonTime = currentDateTime + 365 * 86400000;
+    const followUpEvents = (state.save.world.tasks ?? [])
+      .filter((task) =>
+        task.category === "talent-follow-up" &&
+        task.status === "open" &&
+        task.dueDate >= currentDate &&
+        Date.parse(task.dueDate + "T00:00:00.000Z") <= horizonTime
+      )
+      .map((task) => ({
+        id: task.id,
+        date: task.dueDate,
+        type: "talent-follow-up-due",
+        title: task.title,
+        description: task.description,
+        daysUntil: Math.round((Date.parse(task.dueDate + "T00:00:00.000Z") - currentDateTime) / 86400000)
+      }));
+    const events = [
+      ...getUpcomingCareerEvents(currentDate, state.save.career.season, 365),
+      ...followUpEvents
+    ].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
     const content = node("div", "season-calendar-content");
     const intro = node("p", "modal-copy", "مواعيد الوكالة المجدولة خلال الـ365 يومًا القادمة. المواعيد تنظيمية داخل اللعبة، وليست جداول مباريات أو نوافذ انتقالات رسمية.");
     const list = node("div", "season-calendar-list");
@@ -2709,7 +2750,8 @@ export function mountApp(root) {
       "preseason-review": "مراجعة ما قبل الموسم",
       "midseason-review": "مراجعة منتصف الموسم",
       "season-review": "تقييم نهاية الموسم",
-      "season-closing": "ختام الموسم"
+      "season-closing": "ختام الموسم",
+      "talent-follow-up-due": "متابعة موهبة"
     };
     if (events.length === 0) {
       list.append(node("p", "career-activity-empty", "لا توجد أحداث مستقبلية في هذه الفترة."));
@@ -2721,7 +2763,11 @@ export function mountApp(root) {
         copy.append(
           node("strong", "", event.title),
           node("span", "", event.description),
-          node("small", "", (labels[event.type] ?? event.type) + " · الموسم " + formatHomeNumber(event.season) + " · بعد " + formatHomeNumber(event.daysUntil) + " يوم")
+          node("small", "", [
+            labels[event.type] ?? event.type,
+            Number.isInteger(event.season) ? "الموسم " + formatHomeNumber(event.season) : null,
+            Number.isInteger(event.daysUntil) ? (event.daysUntil === 0 ? "اليوم" : "بعد " + formatHomeNumber(event.daysUntil) + " يوم") : null
+          ].filter(Boolean).join(" · "))
         );
         row.append(date, copy);
         list.append(row);
