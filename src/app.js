@@ -599,8 +599,9 @@ function renderPlayers(context) {
     metricCard("الدوريات", WORLD_COUNTS.leagues, "دوريات مرجعية", "▤", "cyan"),
     metricCard("الأندية", WORLD_COUNTS.clubs, "أندية مرتبطة بالدوريات", "♜", "gold"),
     metricCard("المسابقات", WORLD_COUNTS.competitions, "محلية وقارية", "🏆", "cyan"),
-    metricCard("اللاعبون", WORLD_COUNTS.players, "ملفات خيالية", "⚽", "purple"),
-    metricCard("أصول الصور", WORLD_COUNTS.portraitAssets, "هويات رسومية ثابتة", "▧", "gold")
+    metricCard("اللاعبون", WORLD_COUNTS.players, "مواهب قابلة للاستكشاف", "⚽", "purple"),
+    metricCard("قوائم الأندية", WORLD_COUNTS.rosterPlayers, "18 لاعبًا في كل نادٍ", "◈", "cyan"),
+    metricCard("أصول الصور", WORLD_COUNTS.portraitAssets, "هويات المواهب الرسومية", "▧", "gold")
   );
 
   const toolbar = node("div", "player-library-toolbar");
