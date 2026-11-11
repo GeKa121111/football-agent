@@ -106,7 +106,7 @@ test.describe("Desktop experience", () => {
   test("negotiates and signs a player representation contract", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الوكالة");
-    await expect(page.locator(".representation-prospect-card")).toHaveCount(32);
+    await expect(page.locator(".representation-prospect-card")).toHaveCount(48);
 
     await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
     const modal = page.locator(".modal-overlay");
@@ -449,7 +449,7 @@ test.describe("Mobile experience", () => {
   test("searches the agency prospect pool without changing its source data", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الوكالة");
-    await expect(page.locator(".representation-prospect-card")).toHaveCount(32);
+    await expect(page.locator(".representation-prospect-card")).toHaveCount(48);
     const search = page.getByRole("searchbox", { name: "البحث عن لاعب لضمّه" });
     await search.fill("ياسين");
     await expect(page.locator(".representation-prospect-card")).toHaveCount(1);
@@ -457,7 +457,7 @@ test.describe("Mobile experience", () => {
     await search.fill("لا يوجد لاعب بهذا الاسم");
     await expect(page.locator(".empty-results")).toBeVisible();
     await page.getByRole("button", { name: "مسح البحث" }).click();
-    await expect(page.locator(".representation-prospect-card")).toHaveCount(32);
+    await expect(page.locator(".representation-prospect-card")).toHaveCount(48);
     await hasNoHorizontalOverflow(page);
   });
 
