@@ -277,6 +277,14 @@ test.describe("Mobile experience", () => {
     saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(saved.world.tasks[0].status).toBe("completed");
     expect(saved.world.tasks[0].completedDate).toBe("2026-07-06");
+    const completionEvent = saved.world.events.find((event) => event.type === "task-completed");
+    expect(completionEvent).toBeTruthy();
+    expect(saved.world.inbox).toContainEqual(expect.objectContaining({
+      eventId: completionEvent.id,
+      date: "2026-07-06",
+      title: completionEvent.title,
+      read: false
+    }));
 
     await page.locator(".message-read-button").click();
     saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
