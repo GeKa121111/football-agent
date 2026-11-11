@@ -662,6 +662,12 @@ test.describe("Mobile experience", () => {
       followUpDate: "2026-07-10",
       note: "تحدثنا مع اللاعب وينتظر مراجعة العرض."
     });
+    const pendingFollowUpTask = contactedSave.world.tasks.find((task) =>
+      task.category === "talent-follow-up" && task.prospectId === contactedEntry.id
+    );
+    expect(pendingFollowUpTask).toBeTruthy();
+    expect(pendingFollowUpTask.dueDate).toBe("2026-07-10");
+    const pendingFollowUpTaskId = pendingFollowUpTask.id;
     expect(contactedSave.agency.clients).toHaveLength(0);
     expect(contactedSave.agency.representation.offers).toHaveLength(0);
     expect(contactedSave.agency.representation.contracts).toHaveLength(0);
@@ -685,6 +691,12 @@ test.describe("Mobile experience", () => {
     const positiveSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(positiveSave.agency.talentPipeline.entries[0].activity.filter((event) => event.type === "contact")).toHaveLength(2);
     expect(positiveSave.agency.talentPipeline.entries[0].activity.at(-1).outcome).toBe("positive");
+    const rescheduledFollowUpTasks = positiveSave.world.tasks.filter((task) =>
+      task.category === "talent-follow-up" && ["open", "overdue"].includes(task.status)
+    );
+    expect(rescheduledFollowUpTasks).toHaveLength(1);
+    expect(rescheduledFollowUpTasks[0].id).toBe(pendingFollowUpTaskId);
+    expect(rescheduledFollowUpTasks[0].dueDate).toBe("2026-07-12");
     await page.locator(".talent-pipeline-offer-button").click();
     const offerDialog = page.getByRole("dialog", { name: "عرض تمثيل جديد" });
     await expect(offerDialog).toBeVisible();
@@ -708,6 +720,30 @@ test.describe("Mobile experience", () => {
     await expect(page.locator(".talent-pipeline-card")).toHaveCount(1);
     await expect(page.locator(".talent-pipeline-note")).toHaveText("مراجعة اللاعب بعد التقرير الأول");
 
+    await page.reload();
+    await navigateTo(page, "الكشافون");
+    await expect(page.getByRole("button", { name: "عرض التقرير" })).toBeVisible();
+
+    // The due date creates an agency reminder, then the user records the review.
+    await navigateTo(page, "الرئيسية");
+    for (let day = 0; day < 4; day += 1) {
+      await page.locator(".day-advance-button").click();
+    }
+    const dueSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(dueSave.world.currentDate).toBe("2026-07-12");
+    const dueEvents = dueSave.world.events.filter((event) => event.type === "talent-follow-up-due");
+    expect(dueEvents).toHaveLength(1);
+    expect(dueSave.world.inbox.some((message) => message.eventId === dueEvents[0].id && !message.read)).toBe(true);
+
+    await navigateTo(page, "الوكالة");
+    await page.locator(".talent-pipeline-complete-followup-button").click();
+    const reviewedSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const reviewedEntry = reviewedSave.agency.talentPipeline.entries[0];
+    expect(reviewedEntry.nextFollowUpDate).toBeNull();
+    expect(reviewedEntry.activity.at(-1).type).toBe("follow-up-reviewed");
+    expect(reviewedSave.world.tasks.find((task) => task.id === pendingFollowUpTaskId).status).toBe("completed");
+    expect(reviewedSave.agency.representation.offers).toHaveLength(1);
+    expect(reviewedSave.agency.clients).toHaveLength(0);
     await page.reload();
     await navigateTo(page, "الكشافون");
     await expect(page.getByRole("button", { name: "عرض التقرير" })).toBeVisible();
