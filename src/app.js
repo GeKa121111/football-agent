@@ -9,6 +9,7 @@ import { getWorldPlayerProfiles, getWorldSummary } from "./data/world-database.j
 import { createPlayerPortrait } from "./ui/player-portrait.js";
 import {
   advanceCareerDay,
+  advanceCareerDays,
   completeCareerTask as completeTaskInEngine,
   markCareerMessageRead,
   filterCareerEvents,
@@ -363,9 +364,10 @@ function renderDashboard(context) {
     dayStats.append(stat);
   });
   const dayAction = actionButton("⚽  ابدأ يوم جديد", "day-advance-button", context.advanceDay);
+  const weekAction = actionButton("تقدم أسبوعًا · 7 أيام", "week-advance-button", context.advanceWeek);
   const dayFoot = node("div", "career-day-foot");
-  dayFoot.append(node("span", "day-foot-dot"), node("span", "", "تقدم يومك يحدّث تاريخ المسيرة ويحفظه تلقائيًا"));
-  dayPanel.append(dayHeading, dayStats, dayAction, dayFoot);
+  dayFoot.append(node("span", "day-foot-dot"), node("span", "", "التقدم الأسبوعي يعالج كل يوم بالتتابع، بما في ذلك المواعيد والمهام المتأخرة"));
+  dayPanel.append(dayHeading, dayStats, dayAction, weekAction, dayFoot);
 
   const featureGrid = node("div", "home-feature-grid");
   const playersFeature = actionButton("", "home-feature-card feature-players", () => context.navigate("players"));
@@ -797,6 +799,28 @@ export function mountApp(root) {
     }
   }
 
+  function advanceWeek() {
+    if (!state.canWrite) {
+      toast(loaded.status === "unsupported"
+        ? "ملف الحفظ من إصدار أحدث؛ لا يمكن تقدم أسبوع."
+        : "ملف الحفظ غير صالح أو غير متاح؛ لم نغيّره.");
+      return;
+    }
+
+    const previousSave = state.save;
+    try {
+      state.save = advanceCareerDays(state.save, 7);
+      if (saveCareer()) {
+        render();
+        toast("تم تقدم 7 أيام بالترتيب، مع معالجة المواعيد والأحداث والمهام اليومية.");
+      } else {
+        state.save = previousSave;
+      }
+    } catch (error) {
+      toast("تعذر تقدم الأسبوع: " + error.message);
+    }
+  }
+
   function completeTask(taskId) {
     if (!state.canWrite) {
       toast("ملف الحفظ غير قابل للتعديل؛ لم نغيّره.");
@@ -1115,6 +1139,7 @@ export function mountApp(root) {
       upcomingEvents: getUpcomingCareerEvents(state.save.world.currentDate, state.save.career.season, 365),
       saveCareer,
       advanceDay,
+      advanceWeek,
       completeTask,
       markMessageRead,
       toast,

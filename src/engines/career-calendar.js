@@ -233,6 +233,22 @@ export function advanceCareerDay(save) {
   };
 }
 
+/**
+ * Advances several in-game days by applying the normal daily transition for
+ * every date in order. This preserves weekly/monthly/season events and task
+ * deadlines that would be skipped by jumping the date directly.
+ */
+export function advanceCareerDays(save, days) {
+  if (!Number.isInteger(days) || days < 1 || days > 31) {
+    throw new TypeError("يمكن تقدم المسيرة من يوم واحد إلى 31 يومًا في المرة الواحدة.");
+  }
+  let nextSave = save;
+  for (let offset = 0; offset < days; offset += 1) {
+    nextSave = advanceCareerDay(nextSave);
+  }
+  return nextSave;
+}
+
 export function completeCareerTask(save, taskId) {
   if (!save?.world || typeof taskId !== "string") {
     return { save, changed: false };

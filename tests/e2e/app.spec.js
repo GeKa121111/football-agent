@@ -198,6 +198,49 @@ test.describe("Mobile experience", () => {
   });
 
 
+  test("advances seven days sequentially and persists deadlines and season rollover", async ({ page }) => {
+    await page.goto("/");
+    await page.locator(".home-save-button").click();
+    await page.evaluate(() => {
+      const save = JSON.parse(localStorage.getItem("football-agent.save"));
+      save.world.currentDate = "2027-06-27";
+      save.world.events = [];
+      save.world.inbox = [];
+      save.world.tasks = [{
+        id: "task-week-skip-e2e",
+        title: "مهمة تنتهي أثناء الأسبوع",
+        description: "يجب تحويلها إلى متأخرة عند تجاوز موعدها.",
+        createdDate: "2027-06-27",
+        dueDate: "2027-06-28",
+        category: "weekly-review",
+        status: "open"
+      }];
+      save.career.day = 363;
+      save.career.week = 52;
+      save.career.season = 1;
+      localStorage.setItem("football-agent.save", JSON.stringify(save));
+    });
+    await page.reload();
+
+    await page.locator(".week-advance-button").click();
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.world.currentDate).toBe("2027-07-04");
+    expect(saved.career.day).toBe(370);
+    expect(saved.career.week).toBe(53);
+    expect(saved.career.season).toBe(2);
+    expect(saved.world.tasks[0].status).toBe("overdue");
+    expect(saved.world.tasks[0].overdueDate).toBe("2027-06-29");
+    expect(saved.world.events.some((event) => event.type === "weekly-briefing" && event.date === "2027-06-28")).toBe(true);
+    expect(saved.world.events.some((event) => event.type === "season-opening" && event.date === "2027-07-01")).toBe(true);
+    expect(saved.world.inbox.every((message) => saved.world.events.some((event) => event.id === message.eventId))).toBe(true);
+    await expect(page.locator(".toast-message")).toContainText("7 أيام");
+    await page.reload();
+    const restored = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(restored.world.currentDate).toBe("2027-07-04");
+    expect(restored.world.tasks[0].status).toBe("overdue");
+    await hasNoHorizontalOverflow(page);
+  });
+
   test("migrates a legacy save and persists weekly events, inbox and task actions", async ({ page }) => {
     await page.goto("/");
     const legacySave = {
