@@ -139,7 +139,7 @@ test("player accepts an offer that fits the player's commission and term limits"
   assert.equal(response.status, "signed");
   assert.equal(response.contract.commissionRate, preferences.preferredCommissionRate);
   assert.equal(response.contract.termDays, preferences.preferredTermDays);
-  assert.equal(response.contract.relationshipScore, 70);
+  assert.equal(response.contract.relationshipScore, preferences.prefersExclusive ? 70 : 62);
   assert.equal(isValidSave(response.save), true);
 });
 
@@ -495,6 +495,7 @@ test("missed client meetings reduce relationship and agency reputation after the
     termDays: preferences.preferredTermDays
   });
   const signed = evaluateRepresentationOffer(sent.save, sent.offer.id);
+  const initialReputation = getAgencyReputationScore(signed.save.agency.representation);
   const meetingDate = new Date(Date.parse(signed.save.world.currentDate + "T00:00:00.000Z") + 2 * 86400000)
     .toISOString().slice(0, 10);
   const scheduled = createRepresentationInteraction(signed.save, signed.contract.id, "meeting", meetingDate);
@@ -505,7 +506,7 @@ test("missed client meetings reduce relationship and agency reputation after the
   const contract = afterGrace.agency.representation.contracts.find((item) => item.id === signed.contract.id);
   assert.equal(missed.status, "missed");
   assert.equal(contract.relationshipScore, signed.contract.relationshipScore - 8);
-  assert.equal(getAgencyReputationScore(afterGrace.agency.representation), 50);
+  assert.equal(getAgencyReputationScore(afterGrace.agency.representation), initialReputation - 2);
   assert.equal(afterGrace.agency.representation.history[0].type, "meeting-missed");
   assert.equal(isValidSave(afterGrace), true);
 });
