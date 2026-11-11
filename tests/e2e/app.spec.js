@@ -182,6 +182,44 @@ test.describe("Mobile experience", () => {
     await expect(restoredFollow).toHaveAttribute("aria-pressed", "true");
   });
 
+  test("runs a paid scouting mission and persists its completed report", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الكشافون");
+    await page.getByRole("button", { name: /إطلاق بعثة كشف/ }).click();
+
+    await page.getByLabel("مستوى البعثة").selectOption("local");
+    await page.getByLabel("الدولة المستهدفة").selectOption("country-eg");
+    await page.getByLabel("المركز المستهدف").selectOption("all");
+    await expect(page.getByText(/2 لاعب ضمن نطاق البحث/)).toBeVisible();
+    await page.getByRole("button", { name: "تأكيد إطلاق البعثة" }).click();
+
+    const started = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(started.meta.version).toBe(3);
+    expect(started.agency.balance).toBe(95000);
+    expect(started.world.scouting.activeMissions).toHaveLength(1);
+    expect(started.world.scouting.reports).toHaveLength(0);
+
+    await navigateTo(page, "الرئيسية");
+    for (let day = 0; day < 7; day += 1) {
+      await page.locator(".day-advance-button").click();
+    }
+
+    const completed = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(completed.world.currentDate).toBe("2026-07-08");
+    expect(completed.world.scouting.activeMissions).toHaveLength(0);
+    expect(completed.world.scouting.reports).toHaveLength(1);
+
+    await navigateTo(page, "الكشافون");
+    await expect(page.getByRole("button", { name: "عرض التقرير" })).toBeVisible();
+    await page.getByRole("button", { name: "عرض التقرير" }).click();
+    await expect(page.getByRole("dialog", { name: "تقرير الكشافين" })).toBeVisible();
+    await expect(page.getByText("فجوة التطور المقدرة كبيرة مع مستوى ثقة مناسب في التقرير.").or(page.getByText("هناك مؤشر فني واعد، ويستحق اللاعب مشاهدة إضافية قبل أي قرار.")).or(page.getByText("المؤشرات الحالية لا تكفي لترشيح اللاعب كأولوية تعاقد."))).toBeVisible();
+
+    await page.reload();
+    await navigateTo(page, "الكشافون");
+    await expect(page.getByRole("button", { name: "عرض التقرير" })).toBeVisible();
+  });
+
   test("advances the career day and persists it across reloads", async ({ page }) => {
     await page.goto("/");
     await page.locator(".day-advance-button").click();
