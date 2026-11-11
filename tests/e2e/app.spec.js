@@ -209,7 +209,7 @@ test.describe("Desktop experience", () => {
     await expect(page.locator(".representation-trust")).toBeVisible();
   });
 
-  test("renders distinct SVG player portraits and reuses them in player details", async ({ page }) =>
+  test("renders distinct SVG player portraits and reuses them in player details", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "اللاعبون");
 
