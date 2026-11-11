@@ -442,7 +442,7 @@ test("rejects a completed task falsely marked as on-time after its deadline", ()
 });
 
 
-test("migrates version 4 agency saves into football season schema v5 without rewriting on read", () => {
+test("migrates version 4 agency saves into football season schema v6 without rewriting on read", () => {
   const legacy = createInitialSave("2026-07-01T00:00:00.000Z");
   legacy.meta.version = 4;
   legacy.agency.name = "Phase Four Agency";
@@ -460,6 +460,38 @@ test("migrates version 4 agency saves into football season schema v5 without rew
   assert.equal(result.save.world.football.season, result.save.career.season);
   assert.ok(result.save.world.football.fixtures.length > 0);
   assert.equal(result.save.world.football.results.length, 0);
+  assert.equal(isValidSave(result.save), true);
+  assert.equal(storage.getItem(STORAGE_KEY), raw, "migration must not rewrite a save on read");
+});
+
+test("migrates v5 player progress into the expanded 432-player squad roster without rewriting on read", () => {
+  const legacy = createInitialSave("2026-07-01T00:00:00.000Z");
+  legacy.meta.version = 5;
+  const development = legacy.world.football.playerDevelopment;
+  development.players = development.players.slice(0, 48);
+  development.players[0] = {
+    ...development.players[0],
+    appearances: 9,
+    minutesPlayed: 810,
+    goals: 4,
+    assists: 3,
+    averageMatchRating: 7.45
+  };
+  const preservedPlayer = structuredClone(development.players[0]);
+  const raw = JSON.stringify(legacy);
+  const storage = memoryStorage({ [STORAGE_KEY]: raw });
+
+  const result = readSave(storage);
+  assert.equal(result.status, "loaded");
+  assert.equal(result.migrated, true);
+  assert.equal(result.save.meta.version, SAVE_VERSION);
+  assert.equal(result.save.world.football.playerDevelopment.players.length, 432);
+  assert.deepEqual(
+    result.save.world.football.playerDevelopment.players.find((player) => player.playerId === preservedPlayer.playerId),
+    preservedPlayer
+  );
+  assert.ok(result.save.world.football.playerDevelopment.players.some((player) => player.playerId.startsWith("squad-")));
+  assert.equal(new Set(result.save.world.football.playerDevelopment.players.map((player) => player.playerId)).size, 432);
   assert.equal(isValidSave(result.save), true);
   assert.equal(storage.getItem(STORAGE_KEY), raw, "migration must not rewrite a save on read");
 });
