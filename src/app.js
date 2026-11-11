@@ -345,7 +345,7 @@ function renderDashboard(context) {
   intro.append(introCopy, introActions);
 
   const overview = node("section", "dashboard-overview");
-  const agencyCard = node("article", "dashboard-agency-card agent-profile-card");
+  const agencyCard = node("article", "dashboard-agency-card");
   const agencyTop = node("div", "dashboard-agency-top");
   const monogram = node("span", "dashboard-agency-monogram", "FA");
   const identity = node("div", "dashboard-agency-identity");
@@ -373,7 +373,7 @@ function renderDashboard(context) {
   reputationTrack.append(reputationFill);
   agencyCard.append(agencyTop, agencyStats, reputationHead, reputationTrack);
 
-  const dayCard = node("article", "dashboard-day-card career-day-panel");
+  const dayCard = node("article", "dashboard-day-card");
   const dayHead = node("div", "dashboard-day-head");
   dayHead.append(
     node("span", "", formatHomeDate(context.save.world.currentDate)),
