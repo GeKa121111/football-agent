@@ -190,6 +190,7 @@ test("migrates version 1 saves without losing career or agency progress", () => 
   delete legacy.world.events;
   delete legacy.world.inbox;
   delete legacy.world.tasks;
+  delete legacy.world.scouting;
 
   const raw = JSON.stringify(legacy);
   const storage = memoryStorage({ [STORAGE_KEY]: raw });
@@ -211,6 +212,7 @@ test("migrates version 1 saves without losing career or agency progress", () => 
   assert.deepEqual(result.save.world.events, []);
   assert.deepEqual(result.save.world.inbox, []);
   assert.deepEqual(result.save.world.tasks, []);
+  assert.deepEqual(result.save.world.scouting, { nextMissionSequence: 1, activeMissions: [], reports: [] });
   assert.equal(storage.getItem(STORAGE_KEY), raw, "reading must not rewrite the user's save");
 
   writeSave(result.save, storage);
@@ -218,6 +220,63 @@ test("migrates version 1 saves without losing career or agency progress", () => 
   assert.equal(persisted.status, "loaded");
   assert.equal(persisted.migrated, false);
   assert.equal(persisted.save.career.day, 42);
+});
+
+
+test("migrates version 2 saves to scouting schema v3 without rewriting on read", () => {
+  const legacy = createInitialSave("2026-07-01T00:00:00.000Z");
+  legacy.meta.version = 2;
+  delete legacy.world.scouting;
+  legacy.agency.balance = 456789;
+  const raw = JSON.stringify(legacy);
+  const storage = memoryStorage({ [STORAGE_KEY]: raw });
+
+  const result = readSave(storage);
+  assert.equal(result.status, "loaded");
+  assert.equal(result.migrated, true);
+  assert.equal(result.save.meta.version, SAVE_VERSION);
+  assert.equal(result.save.agency.balance, 456789);
+  assert.deepEqual(result.save.world.scouting, {
+    nextMissionSequence: 1,
+    activeMissions: [],
+    reports: []
+  });
+  assert.equal(storage.getItem(STORAGE_KEY), raw);
+});
+
+test("validates active scouting mission dates, costs and accuracy", () => {
+  const save = createInitialSave();
+  save.world.scouting = {
+    nextMissionSequence: 2,
+    activeMissions: [{
+      id: "scout-mission-1",
+      reportId: "scout-report-1",
+      type: "local",
+      name: "بعثة محلية",
+      countryId: "country-eg",
+      role: "all",
+      startDate: "2026-07-01",
+      dueDate: "2026-07-08",
+      durationDays: 7,
+      cost: 5000,
+      accuracy: 0.62,
+      targetCount: 2
+    }],
+    reports: []
+  };
+  assert.equal(isValidSave(save), true);
+
+  const invalidDueDate = structuredClone(save);
+  invalidDueDate.world.scouting.activeMissions[0].dueDate = "2026-07-09";
+  assert.equal(isValidSave(invalidDueDate), false);
+
+  const invalidAccuracy = structuredClone(save);
+  invalidAccuracy.world.scouting.activeMissions[0].accuracy = 1.5;
+  assert.equal(isValidSave(invalidAccuracy), false);
+
+  const invalidCost = structuredClone(save);
+  invalidCost.world.scouting.activeMissions[0].cost = -1;
+  assert.equal(isValidSave(invalidCost), false);
 });
 
 test("rejects duplicate activity IDs and inbox references to missing events", () => {

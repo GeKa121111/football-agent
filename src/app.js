@@ -5,7 +5,13 @@ import {
   readWatchlist,
   writeWatchlist
 } from "./core/storage.js";
-import { getWorldPlayerProfiles, getWorldSummary } from "./data/world-database.js";
+import { WORLD_DATABASE, getWorldPlayerProfiles, getWorldSummary } from "./data/world-database.js";
+import {
+  SCOUTING_MISSION_TYPES,
+  advanceScoutingMissions,
+  getScoutingDaysRemaining,
+  startScoutingMission
+} from "./engines/scouting.js";
 import { createPlayerPortrait } from "./ui/player-portrait.js";
 import {
   advanceCareerDay,
@@ -545,22 +551,98 @@ function renderPlayers(context) {
 
 function renderScouting(context) {
   const page = node("div", "page-content");
+  const scouting = context.scouting;
+  const activeMissions = scouting.activeMissions;
+  const reports = scouting.reports;
   page.append(
     node("p", "eyebrow", "شبكة اكتشاف المواهب"),
     node("h1", "page-title", "الكشافون"),
-    node("p", "page-subtitle", "استكشف ملفات اللاعبين من قاعدة بيانات العالم، وابدأ تكوين قائمة المتابعة. بعثات الكشافين وتقاريرهم الفعلية ضمن المرحلة السادسة.")
+    node("p", "page-subtitle", "أطلق بعثات بميزانية ومدة ودقة مختلفة، ثم راجع تقارير المواهب وأسباب ترشيح كل لاعب.")
+  );
+
+  const summary = node("div", "metrics-grid scouting-metrics");
+  summary.append(
+    metricCard("بعثات نشطة", activeMissions.length + " / 3", "الحد الأقصى المتزامن", "⌕", "cyan"),
+    metricCard("تقارير مكتملة", reports.length, "تقارير محفوظة في المسيرة", "▤", "purple"),
+    metricCard("ميزانية الوكالة", formatMoney(context.save.agency.balance), "الرصيد المتاح للبعثات", "◈", "gold")
   );
 
   const scoutBanner = node("section", "scout-banner");
+  const bannerCopy = node("div", "scout-banner-copy");
+  bannerCopy.append(
+    node("h2", "", "عينك على المستقبل"),
+    node("p", "", "قاعدة البحث الحالية تضم " + WORLD_PLAYERS.length + " ملفًا خياليًا من 8 دول. نتائج الكشافين تقديرات داخل المحاكاة وليست بيانات لاعبين حقيقية.")
+  );
   scoutBanner.append(
     node("div", "scout-symbol", "⌕"),
-    node("div", "scout-banner-copy"),
-    node("span", "scout-counter", WORLD_PLAYERS.length + " / ملفات لاعبين")
+    bannerCopy,
+    actionButton("＋ إطلاق بعثة كشف", "button-primary scout-launch-button", context.openScoutingMission)
   );
-  scoutBanner.children[1].append(
-    node("h2", "", "عينك على المستقبل"),
-    node("p", "", "ابحث بالاسم أو النادي أو الجنسية أو المركز، ثم أضف اللاعب لقائمة المتابعة.")
+
+  const operations = node("div", "scout-operations-grid");
+  const activePanel = node("section", "scout-operations-panel");
+  const activeHeading = node("div", "scout-operations-heading");
+  activeHeading.append(
+    node("h2", "", "البعثات الجارية"),
+    node("span", "scout-count", activeMissions.length + " نشطة")
   );
+  activePanel.append(activeHeading);
+  const activeList = node("div", "scout-mission-list");
+  if (activeMissions.length === 0) {
+    activeList.append(node("p", "scout-empty", "مفيش بعثات شغالة حاليًا. اختار الدولة والمستوى وابدأ أول مهمة كشف."));
+  } else {
+    activeMissions.forEach((mission) => {
+      const remaining = getScoutingDaysRemaining(mission, context.save.world.currentDate) ?? 0;
+      const progress = Math.round(((mission.durationDays - remaining) / mission.durationDays) * 100);
+      const row = node("article", "scout-mission-row");
+      const heading = node("div", "scout-mission-topline");
+      heading.append(
+        node("strong", "", mission.name),
+        node("span", "scout-mission-status", "قيد التنفيذ")
+      );
+      const scope = WORLD_DATABASE.countries.find((country) => country.id === mission.countryId)?.nameAr ?? "كل الدول";
+      const roleLabel = mission.role === "all" ? "كل المراكز" : mission.role;
+      const details = node("p", "scout-mission-details", scope + " · " + roleLabel + " · " + mission.targetCount + " لاعب محتمل");
+      const track = node("div", "scout-progress-track");
+      const bar = node("span", "scout-progress-bar");
+      bar.style.width = progress + "%";
+      track.append(bar);
+      const footer = node("div", "scout-mission-footer");
+      footer.append(
+        node("span", "", "الموعد: " + formatHomeDate(mission.dueDate)),
+        node("span", "", remaining === 0 ? "بانتظار التقرير" : "متبقي " + remaining + " يوم"),
+        node("span", "", "الدقة المستهدفة " + Math.round(mission.accuracy * 100) + "%")
+      );
+      row.append(heading, details, track, footer);
+      activeList.append(row);
+    });
+  }
+  activePanel.append(activeList);
+
+  const reportsPanel = node("section", "scout-operations-panel");
+  const reportsHeading = node("div", "scout-operations-heading");
+  reportsHeading.append(
+    node("h2", "", "تقارير الاستكشاف"),
+    node("span", "scout-count", reports.length + " تقرير")
+  );
+  reportsPanel.append(reportsHeading);
+  const reportList = node("div", "scout-report-list");
+  if (reports.length === 0) {
+    reportList.append(node("p", "scout-empty", "أول تقرير هيظهر هنا بعد انتهاء مدة بعثتك."));
+  } else {
+    reports.slice(0, 8).forEach((report) => {
+      const row = node("article", "scout-report-row");
+      const copy = node("div", "scout-report-copy");
+      copy.append(
+        node("strong", "", report.missionName),
+        node("span", "", formatHomeDate(report.completedDate) + " · " + report.candidateCount + " موهبة · دقة " + Math.round(report.accuracy * 100) + "%")
+      );
+      row.append(copy, actionButton("عرض التقرير", "button-outline scout-report-button", () => context.openScoutingReport(report)));
+      reportList.append(row);
+    });
+  }
+  reportsPanel.append(reportList);
+  operations.append(activePanel, reportsPanel);
 
   const toolbar = node("div", "list-toolbar");
   const search = node("input", "search-input");
@@ -630,7 +712,7 @@ function renderScouting(context) {
   search.addEventListener("input", refresh);
   position.addEventListener("change", refresh);
   refresh();
-  page.append(scoutBanner, toolbar, grid);
+  page.append(summary, scoutBanner, operations, toolbar, grid);
   return page;
 }
 
@@ -765,6 +847,133 @@ export function mountApp(root) {
     }
   }
 
+  function openScoutingMission() {
+    const form = node("div", "scout-launch-form");
+    const typeSelect = node("select", "filter-select");
+    typeSelect.setAttribute("aria-label", "مستوى البعثة");
+    Object.entries(SCOUTING_MISSION_TYPES).forEach(([value, config]) => {
+      const option = node("option", "", config.label + " · " + formatMoney(config.cost) + " · " + config.durationDays + " أيام · دقة " + Math.round(config.accuracy * 100) + "%");
+      option.value = value;
+      typeSelect.append(option);
+    });
+
+    const countrySelect = node("select", "filter-select");
+    countrySelect.setAttribute("aria-label", "الدولة المستهدفة");
+    const allCountries = node("option", "", "كل الدول");
+    allCountries.value = "all";
+    countrySelect.append(allCountries);
+    WORLD_DATABASE.countries.forEach((country) => {
+      const option = node("option", "", country.nameAr);
+      option.value = country.id;
+      countrySelect.append(option);
+    });
+
+    const roleSelect = node("select", "filter-select");
+    roleSelect.setAttribute("aria-label", "المركز المستهدف");
+    [["all", "كل المراكز"], ["هجوم", "الهجوم"], ["وسط", "الوسط"], ["دفاع", "الدفاع"], ["حراسة", "حراسة المرمى"]].forEach(([value, label]) => {
+      const option = node("option", "", label);
+      option.value = value;
+      roleSelect.append(option);
+    });
+
+    const preview = node("div", "scout-launch-preview");
+    const addField = (label, control) => {
+      const wrapper = node("label", "scout-form-field");
+      wrapper.append(node("span", "", label), control);
+      form.append(wrapper);
+    };
+    addField("مستوى الاستثمار", typeSelect);
+    addField("الدولة", countrySelect);
+    addField("المركز", roleSelect);
+
+    const refreshPreview = () => {
+      const config = SCOUTING_MISSION_TYPES[typeSelect.value];
+      const targets = WORLD_PLAYERS.filter((player) =>
+        (countrySelect.value === "all" || player.countryId === countrySelect.value) &&
+        (roleSelect.value === "all" || player.role === roleSelect.value)
+      );
+      preview.replaceChildren(
+        node("strong", "", "تكلفة " + formatMoney(config.cost)),
+        node("span", "", "مدة " + config.durationDays + " أيام · دقة تقديرية " + Math.round(config.accuracy * 100) + "%"),
+        node("span", "", targets.length + " لاعب ضمن نطاق البحث · رصيدك " + formatMoney(state.save.agency.balance))
+      );
+      if (targets.length === 0) {
+        preview.append(node("small", "scout-preview-warning", "لا توجد ملفات لاعبين مطابقة لهذا النطاق."));
+      } else if (state.save.agency.balance < config.cost) {
+        preview.append(node("small", "scout-preview-warning", "رصيد الوكالة لا يكفي لهذا المستوى."));
+      }
+    };
+    [typeSelect, countrySelect, roleSelect].forEach((control) => control.addEventListener("change", refreshPreview));
+    refreshPreview();
+
+    const confirm = actionButton("تأكيد إطلاق البعثة", "button-primary scout-confirm-button", () => {
+      if (!state.canWrite) {
+        toast("ملف الحفظ غير قابل للتعديل؛ لم نبدأ بعثة.");
+        return;
+      }
+      const previousSave = state.save;
+      const result = startScoutingMission(state.save, {
+        type: typeSelect.value,
+        countryId: countrySelect.value,
+        role: roleSelect.value
+      }, WORLD_PLAYERS);
+      if (!result.changed) {
+        toast(result.error);
+        return;
+      }
+      state.save = result.save;
+      if (saveCareer()) {
+        root.querySelector(".modal-overlay .icon-button")?.click();
+        render();
+        toast("بدأت " + result.mission.name + " بنجاح. موعد التقرير " + formatHomeDate(result.mission.dueDate) + ".");
+      } else {
+        state.save = previousSave;
+      }
+    });
+    confirm.disabled = !state.canWrite;
+    form.append(preview, confirm);
+    openModal("إطلاق بعثة كشف", [
+      node("p", "modal-copy", "كل مستوى يغيّر التكلفة والمدة ودقة التقدير. لا يمكن تشغيل أكثر من 3 بعثات في نفس الوقت."),
+      form
+    ], "إلغاء");
+  }
+
+  function openScoutingReport(report) {
+    const content = node("div", "scout-report-content");
+    const overview = node("div", "scout-report-overview");
+    overview.append(
+      node("strong", "", report.missionName),
+      node("span", "", "تاريخ الإكمال: " + formatHomeDate(report.completedDate)),
+      node("span", "", "التكلفة: " + formatMoney(report.cost) + " · المدة: " + report.durationDays + " أيام"),
+      node("span", "", "دقة البعثة: " + Math.round(report.accuracy * 100) + "% · ملفات في النطاق: " + report.candidateCount)
+    );
+    content.append(overview);
+    const list = node("div", "scout-report-findings");
+    if (report.findings.length === 0) {
+      list.append(node("p", "scout-empty", "لم ينتج عن البعثة ملفات كافية لإعداد ترشيحات."));
+    } else {
+      report.findings.forEach((finding) => {
+        const row = node("article", "scout-finding-row");
+        const heading = node("div", "scout-finding-heading");
+        heading.append(
+          node("strong", "", finding.playerName),
+          node("span", "scout-recommendation", finding.recommendation)
+        );
+        const subline = node("p", "scout-finding-subline", finding.position + " · " + finding.club + " · " + finding.country + " · " + finding.age + " سنة");
+        const stats = node("div", "scout-finding-stats");
+        stats.append(
+          statMini("التقييم المقدر", finding.estimatedRating),
+          statMini("الإمكانيات المقدرة", finding.estimatedPotential),
+          statMini("الثقة", finding.confidence + "%")
+        );
+        row.append(heading, subline, stats, node("p", "scout-finding-rationale", finding.rationale));
+        list.append(row);
+      });
+    }
+    content.append(list);
+    openModal("تقرير الكشافين", [content], "إغلاق التقرير");
+  }
+
   function saveCareer() {
     if (!state.canWrite) {
       toast(loaded.status === "unsupported" ? "ملف الحفظ من إصدار أحدث؛ لم نغيّره." : "ملف الحفظ غير صالح؛ لم نكتب فوقه.");
@@ -794,9 +1003,15 @@ export function mountApp(root) {
 
     const previousSave = state.save;
     try {
-      state.save = advanceCareerDay(state.save);
-      if (saveCareer()) render();
-      else state.save = previousSave;
+      const advancedSave = advanceCareerDay(state.save);
+      const scoutingResult = advanceScoutingMissions(advancedSave, WORLD_PLAYERS);
+      state.save = scoutingResult.save;
+      if (saveCareer()) {
+        render();
+        if (scoutingResult.completedReports.length > 0) {
+          toast("اكتملت بعثة كشف ووصل تقرير جديد إلى مكتبك.");
+        }
+      } else state.save = previousSave;
     } catch (error) {
       toast("تعذر تقدم التقويم: " + error.message);
     }
@@ -812,10 +1027,14 @@ export function mountApp(root) {
 
     const previousSave = state.save;
     try {
-      state.save = advanceCareerDays(state.save, 7);
+      const advancedSave = advanceCareerDays(state.save, 7);
+      const scoutingResult = advanceScoutingMissions(advancedSave, WORLD_PLAYERS);
+      state.save = scoutingResult.save;
       if (saveCareer()) {
         render();
-        toast("تم تقدم 7 أيام بالترتيب، مع معالجة المواعيد والأحداث والمهام اليومية.");
+        toast(scoutingResult.completedReports.length > 0
+          ? "تم تقدم أسبوع واكتمل تقرير بعثة كشف جديدة."
+          : "تم تقدم 7 أيام بالترتيب، مع معالجة المواعيد والأحداث والمهام اليومية.");
       } else {
         state.save = previousSave;
       }
@@ -1196,6 +1415,9 @@ export function mountApp(root) {
       markMessageRead,
       toast,
       watchlist: state.watchlist,
+      scouting: state.save.world.scouting,
+      openScoutingMission,
+      openScoutingReport,
       addToWatchlist
     };
     const views = {
