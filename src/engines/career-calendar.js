@@ -3,7 +3,7 @@ const MAX_MESSAGES = 90;
 const MAX_TASKS = 60;
 
 function parseCalendarDate(value) {
-  if (typeof value !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new TypeError("تاريخ المسيرة غير صالح.");
   }
   const date = new Date(value + "T00:00:00.000Z");
