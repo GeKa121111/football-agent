@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { advanceCareerDays } from "../src/engines/career-calendar.js";
 
 async function navigateTo(page, view) {
   const mobileNav = page.locator(".mobile-nav");
@@ -15,6 +16,20 @@ async function hasNoHorizontalOverflow(page) {
   }));
   expect(dimensions.document, JSON.stringify(dimensions)).toBeLessThanOrEqual(dimensions.viewport);
   expect(dimensions.body, JSON.stringify(dimensions)).toBeLessThanOrEqual(dimensions.viewport);
+}
+
+function advanceSaveToDate(save, targetDate) {
+  const current = Date.parse(save.world.currentDate + "T00:00:00.000Z");
+  const target = Date.parse(targetDate + "T00:00:00.000Z");
+  let days = Math.round((target - current) / 86400000);
+  if (days < 0) throw new Error("Target date must not precede the saved career date.");
+  let advanced = save;
+  while (days > 0) {
+    const step = Math.min(days, 31);
+    advanced = advanceCareerDays(advanced, step);
+    days -= step;
+  }
+  return advanced;
 }
 
 test.describe("Desktop experience", () => {
@@ -87,6 +102,88 @@ test.describe("Desktop experience", () => {
     expect(saved.agency.clients).toHaveLength(0);
     expect(saved.agency.representation.contracts[0].status).toBe("terminated");
     expect(saved.agency.representation.history[0].type).toBe("contract-terminated");
+  });
+
+  test("supports a second player counter and an agency counter before signing", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+    const offerModal = page.locator(".modal-overlay");
+    await offerModal.getByLabel("نسبة العمولة").selectOption("15");
+    await offerModal.getByLabel("مدة العقد").selectOption("1095");
+    await offerModal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+
+    await page.locator(".representation-evaluate-button").click();
+    await page.locator(".representation-counter-button").click();
+    let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    let offer = saved.agency.representation.offers[0];
+    const counterModal = page.locator(".modal-overlay");
+    await counterModal.getByLabel("نسبة العمولة في العرض المضاد").selectOption("15");
+    await counterModal.getByLabel("مدة العرض المضاد").selectOption("1095");
+    await counterModal.getByRole("button", { name: "إرسال العرض المضاد" }).click();
+
+    await expect(page.locator(".representation-offer-row.is-countered")).toBeVisible();
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    offer = saved.agency.representation.offers[0];
+    expect(offer.round).toBe(3);
+    expect(saved.agency.representation.history.some((entry) => entry.type === "agency-countered")).toBe(true);
+
+    await page.locator(".representation-counter-button").click();
+    const finalModal = page.locator(".modal-overlay");
+    await finalModal.getByLabel("نسبة العمولة في العرض المضاد").selectOption(String(offer.playerPreferences.preferredCommissionRate + 1));
+    await finalModal.getByLabel("مدة العرض المضاد").selectOption(String(offer.playerPreferences.preferredTermDays));
+    await finalModal.getByRole("button", { name: "إرسال العرض المضاد" }).click();
+
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.agency.representation.contracts).toHaveLength(1);
+    expect(saved.agency.representation.contracts[0].status).toBe("active");
+    expect(saved.agency.representation.offers[0].resolution).toBe("agency-countered");
+    expect(saved.agency.clients).toContain(saved.agency.representation.contracts[0].playerId);
+  });
+
+  test("renews a player's contract in the final 90 days without replacing the original mandate", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+    const offerModal = page.locator(".modal-overlay");
+    await offerModal.getByLabel("نسبة العمولة").selectOption("15");
+    await offerModal.getByLabel("مدة العقد").selectOption("1095");
+    await offerModal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+    await page.locator(".representation-evaluate-button").click();
+    await page.locator(".representation-accept-button").click();
+
+    let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const original = saved.agency.representation.contracts[0];
+    const targetDate = new Date(Date.parse(original.expiresOn + "T00:00:00.000Z") - 60 * 86400000)
+      .toISOString().slice(0, 10);
+    const nearExpirySave = advanceSaveToDate(saved, targetDate);
+    await page.evaluate((snapshot) => {
+      localStorage.setItem("football-agent.save", JSON.stringify(snapshot));
+    }, nearExpirySave);
+    await page.reload();
+    await navigateTo(page, "الوكالة");
+    await expect(page.locator(".representation-renew-button")).toBeVisible();
+    await page.locator(".representation-renew-button").click();
+
+    const renewalModal = page.locator(".modal-overlay");
+    const preferences = original.playerPreferences;
+    await renewalModal.getByLabel("عمولة التجديد").selectOption(String(preferences.preferredCommissionRate));
+    await renewalModal.getByLabel("مدة التجديد").selectOption(String(preferences.preferredTermDays));
+    await renewalModal.getByRole("button", { name: "إرسال عرض التجديد" }).click();
+
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.agency.representation.offers[0].kind).toBe("renewal");
+    await page.locator(".representation-evaluate-button").click();
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const renewed = saved.agency.representation.contracts[0];
+    expect(saved.agency.representation.contracts).toHaveLength(1);
+    expect(renewed.id).toBe(original.id);
+    expect(renewed.expiresOn).toBe(original.expiresOn);
+    expect(renewed.renewals).toHaveLength(1);
+    expect(renewed.renewals[0].startsOn).toBe(original.expiresOn);
+    expect(renewed.renewals[0].expiresOn).toBeGreaterThan(original.expiresOn);
+    expect(saved.agency.clients).toContain(renewed.playerId);
+    expect(saved.agency.representation.history.some((entry) => entry.type === "contract-renewed")).toBe(true);
   });
 
   test("renders distinct SVG player portraits and reuses them in player details", async ({ page }) => {
