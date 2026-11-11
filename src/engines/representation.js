@@ -708,6 +708,80 @@ export function acceptRepresentationCounterOffer(save, offerId, currentDate = sa
   );
 }
 
+/**
+ * Creates a renewal offer during the final 90 days of an active mandate.
+ * Renewals append a dated extension to the existing contract, preserving its
+ * original signing terms and the full amendment history.
+ */
+export function createRepresentationRenewalOffer(save, contractId, terms, currentDate = save?.world?.currentDate) {
+  const representation = save?.agency?.representation;
+  const contract = representation?.contracts?.find((item) => item.id === contractId);
+  if (!contract || contract.status !== "active") {
+    return { changed: false, save, error: "لا يوجد عقد نشط يمكن تجديده." };
+  }
+  if (!isCalendarDate(currentDate)) return { changed: false, save, error: "تاريخ المسيرة غير صالح." };
+  const expiresOn = getRepresentationContractExpiry(contract);
+  const remainingDays = Math.round((Date.parse(expiresOn + "T00:00:00.000Z") - Date.parse(currentDate + "T00:00:00.000Z")) / 86400000);
+  if (remainingDays < 1 || remainingDays > 90) {
+    return { changed: false, save, error: "يمكن فتح التجديد خلال آخر 90 يومًا من العقد فقط." };
+  }
+  if (!validTerms(terms?.commissionRate, terms?.termDays)) {
+    return { changed: false, save, error: "اختر عمولة من 5% إلى 15% ومدة تجديد سنة أو سنتين أو ثلاث سنوات." };
+  }
+  if (representation.offers.some((offer) =>
+    offer.kind === "renewal" && offer.renewalContractId === contract.id &&
+    ["pending", "countered"].includes(offer.status)
+  )) {
+    return { changed: false, save, error: "يوجد عرض تجديد مفتوح لهذا العقد بالفعل." };
+  }
+  if (representation.offers.length >= MAX_OFFERS || representation.history.length >= MAX_HISTORY ||
+      !Number.isSafeInteger(representation.nextOfferSequence) || representation.nextOfferSequence < 1) {
+    return { changed: false, save, error: "وصل سجل عروض التمثيل إلى الحد المتاح." };
+  }
+
+  const rating = contract.rating ?? 70;
+  const potential = Math.max(rating, contract.potential ?? 80);
+  const playerPreferences = contract.playerPreferences ?? getPlayerRepresentationProfile({
+    id: contract.playerId,
+    age: contract.age,
+    rating,
+    potential
+  });
+  const offer = {
+    id: "representation-offer-" + representation.nextOfferSequence,
+    kind: "renewal",
+    renewalContractId: contract.id,
+    playerId: contract.playerId,
+    playerName: contract.playerName,
+    age: contract.age,
+    club: contract.club,
+    position: contract.position,
+    rating,
+    potential,
+    playerPreferences,
+    commissionRate: terms.commissionRate,
+    termDays: terms.termDays,
+    createdDate: currentDate,
+    expiresDate: addDays(currentDate, OFFER_VALIDITY_DAYS),
+    status: "pending",
+    round: 1
+  };
+  let updated = {
+    ...representation,
+    nextOfferSequence: representation.nextOfferSequence + 1,
+    offers: [offer, ...representation.offers]
+  };
+  updated = nextHistory(updated, "renewal-offer-sent", offer, currentDate,
+    "أرسلت الوكالة عرض تجديد بعمولة " + terms.commissionRate + "% لمدة " + Math.round(terms.termDays / 365) + " سنة.",
+    { offerId: offer.id, contractId: contract.id });
+  return {
+    changed: true,
+    status: "pending",
+    offer,
+    save: { ...save, agency: { ...save.agency, representation: updated } }
+  };
+}
+
 /** Declines the player's counteroffer without creating a client relationship. */
 export function rejectRepresentationOffer(save, offerId, currentDate = save?.world?.currentDate) {
   const representation = save?.agency?.representation;
@@ -735,15 +809,23 @@ export function terminateRepresentationContract(save, contractId, currentDate = 
   if (!contract || contract.status !== "active") {
     return { changed: false, save, error: "عقد التمثيل غير نشط بالفعل." };
   }
-  if (!isCalendarDate(currentDate) || currentDate < contract.signedOn || currentDate >= contract.expiresOn) {
+  if (!isCalendarDate(currentDate) || currentDate < contract.signedOn || currentDate >= getRepresentationContractExpiry(contract)) {
     return { changed: false, save, error: "تاريخ إنهاء العقد غير صالح." };
   }
-  const updated = {
+  let updated = {
     ...representation,
     contracts: representation.contracts.map((item) => item.id === contractId
       ? { ...item, status: "terminated", endedOn: currentDate, relationshipScore: Math.max(0, item.relationshipScore - 15) }
       : item)
   };
+  for (const offer of representation.offers) {
+    if (offer.kind === "renewal" && offer.renewalContractId === contractId &&
+        ["pending", "countered"].includes(offer.status)) {
+      updated = replaceOffer(updated, offer.id, { status: "rejected", counterOffer: undefined });
+      updated = nextHistory(updated, "offer-rejected", offer, currentDate,
+        "أُغلق عرض التجديد بسبب إنهاء عقد التمثيل.", { offerId: offer.id, contractId });
+    }
+  }
   const history = nextHistory(updated, "contract-terminated", contract, currentDate,
     "أنهت الوكالة عقد التمثيل قبل موعد انتهائه.", { offerId: contract.offerId, contractId });
   const hasAnotherActiveContract = history.contracts.some((item) =>
@@ -774,7 +856,13 @@ export function advanceRepresentationState(save, currentDate = save?.world?.curr
   const expiredContracts = [];
 
   for (const offer of representation.offers) {
-    if (["pending", "countered"].includes(offer.status) && currentDate > offer.expiresDate) {
+    const renewalContract = offer.kind === "renewal"
+      ? representation.contracts.find((contract) => contract.id === offer.renewalContractId)
+      : null;
+    const renewalContractEnded = Boolean(renewalContract) &&
+      currentDate >= getRepresentationContractExpiry(renewalContract);
+    if (["pending", "countered"].includes(offer.status) &&
+        (currentDate > offer.expiresDate || renewalContractEnded)) {
       updated = replaceOffer(updated, offer.id, { status: "expired", counterOffer: undefined });
       updated = nextHistory(updated, "offer-expired", offer, currentDate,
         "انتهت صلاحية عرض التمثيل دون اتفاق.", { offerId: offer.id });
@@ -783,7 +871,7 @@ export function advanceRepresentationState(save, currentDate = save?.world?.curr
   }
 
   for (const contract of representation.contracts) {
-    if (contract.status === "active" && currentDate >= contract.expiresOn) {
+    if (contract.status === "active" && currentDate >= getRepresentationContractExpiry(contract)) {
       updated = {
         ...updated,
         contracts: updated.contracts.map((item) => item.id === contract.id
