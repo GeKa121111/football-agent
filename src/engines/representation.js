@@ -4,6 +4,7 @@ const MAX_OFFERS = 50;
 const MAX_CONTRACTS = 100;
 const MAX_HISTORY = 300;
 const MAX_INTERACTIONS = 300;
+const MAX_SIGNING_BONUS = 5000000;
 const INTERACTION_KINDS = new Set(["message", "call", "meeting"]);
 const INTERACTION_STATUSES = new Set(["pending_response", "scheduled", "resolved", "missed"]);
 const INTERACTION_OUTCOMES = new Set(["positive", "neutral", "negative"]);
@@ -56,6 +57,10 @@ function addDays(date, days) {
 function sequenceOf(id, prefix) {
   const match = new RegExp("^" + prefix + "-(\\d+)$").exec(id);
   return match ? Number(match[1]) : 0;
+}
+
+function validSigningBonus(value) {
+  return Number.isInteger(value) && value >= 0 && value <= MAX_SIGNING_BONUS;
 }
 
 function validTerms(commissionRate, termDays) {
@@ -183,6 +188,7 @@ function buildPlayerCounterOffer(offer) {
   return {
     commissionRate: clamp(preferences.preferredCommissionRate + concession, 5, 15),
     termDays: preferences.preferredTermDays,
+    signingBonus: offer.signingBonus ?? 0,
     representationType: preferences.prefersExclusive === true || agencyReputation >= 90
       ? "exclusive"
       : "non-exclusive"
@@ -291,6 +297,7 @@ function createContract(save, offer, terms, currentDate, resolution) {
     expiresOn: addDays(currentDate, terms.termDays),
     termDays: terms.termDays,
     commissionRate: terms.commissionRate,
+    signingBonus: terms.signingBonus ?? offer.signingBonus ?? 0,
     renewals: [],
     relationshipScore: clamp(
       (resolution === "counter-accepted" ? 68 : resolution === "agency-countered" ? 74 : 70) -
@@ -349,6 +356,7 @@ function commitRepresentationAgreement(save, offer, terms, currentDate, resoluti
       expiresOn: addDays(startsOn, terms.termDays),
       termDays: terms.termDays,
       commissionRate: terms.commissionRate,
+      signingBonus: terms.signingBonus ?? offer.signingBonus ?? 0,
       representationType: normalizeRepresentationType(terms.representationType ?? offer.representationType ?? contract.representationType)
     };
     let updated = {
@@ -440,6 +448,7 @@ export function isValidRepresentationState(representation, currentDate, clients 
         (offer.playerPreferences !== undefined && !isValidPlayerPreferences(offer.playerPreferences)) ||
         (offer.representationType !== undefined && !isValidRepresentationType(offer.representationType)) ||
         (offer.agencyReputation !== undefined && (!Number.isInteger(offer.agencyReputation) || offer.agencyReputation < 0 || offer.agencyReputation > 100)) ||
+        (offer.signingBonus !== undefined && !validSigningBonus(offer.signingBonus)) ||
         (offer.renewalContractId !== undefined && (typeof offer.renewalContractId !== "string" || !offer.renewalContractId.trim())) ||
         typeof offer.playerId !== "string" || !offer.playerId.trim() ||
         typeof offer.playerName !== "string" || !offer.playerName.trim() ||
@@ -462,6 +471,7 @@ export function isValidRepresentationState(representation, currentDate, clients 
     if (offer.status === "countered" || offer.status === "accepted" && offer.counterOffer !== undefined) {
       if (!isRecord(offer.counterOffer) ||
           !validTerms(offer.counterOffer.commissionRate, offer.counterOffer.termDays) ||
+          (offer.counterOffer.signingBonus !== undefined && !validSigningBonus(offer.counterOffer.signingBonus)) ||
           (offer.counterOffer.representationType !== undefined && !isValidRepresentationType(offer.counterOffer.representationType))) return false;
     } else if (offer.counterOffer !== undefined) {
       return false;
@@ -493,6 +503,7 @@ export function isValidRepresentationState(representation, currentDate, clients 
         !isCalendarDate(contract.signedOn) ||
         !isCalendarDate(contract.expiresOn) ||
         !validTerms(contract.commissionRate, contract.termDays) ||
+        (contract.signingBonus !== undefined && !validSigningBonus(contract.signingBonus)) ||
         contract.expiresOn !== addDays(contract.signedOn, contract.termDays) ||
         (contract.rating !== undefined && (!Number.isInteger(contract.rating) || contract.rating < 1 || contract.rating > 99)) ||
         (contract.potential !== undefined && (!Number.isInteger(contract.potential) || contract.potential < 1 || contract.potential > 99)) ||
@@ -519,6 +530,7 @@ export function isValidRepresentationState(representation, currentDate, clients 
           !isCalendarDate(renewal.startsOn) ||
           !isCalendarDate(renewal.expiresOn) ||
           !validTerms(renewal.commissionRate, renewal.termDays) ||
+          (renewal.signingBonus !== undefined && !validSigningBonus(renewal.signingBonus)) ||
           (renewal.representationType !== undefined && !isValidRepresentationType(renewal.representationType)) ||
           renewal.startsOn !== expectedRenewalStart ||
           renewal.expiresOn !== addDays(renewal.startsOn, renewal.termDays) ||
@@ -537,6 +549,7 @@ export function isValidRepresentationState(representation, currentDate, clients 
           !acceptedRenewalTerms ||
           acceptedRenewalTerms.commissionRate !== renewal.commissionRate ||
           acceptedRenewalTerms.termDays !== renewal.termDays ||
+          (acceptedRenewalTerms.signingBonus ?? 0) !== (renewal.signingBonus ?? 0) ||
           normalizeRepresentationType(acceptedRenewalTerms.representationType ?? renewalOffer.representationType) !== normalizeRepresentationType(renewal.representationType ?? renewalOffer.representationType)) return false;
       renewalOfferIds.add(renewal.offerId);
       expectedRenewalStart = renewal.expiresOn;
@@ -594,6 +607,7 @@ export function isValidRepresentationState(representation, currentDate, clients 
         contract.offerId !== offer.id ||
         contract.commissionRate !== acceptedTerms.commissionRate ||
         contract.termDays !== acceptedTerms.termDays ||
+        (contract.signingBonus ?? 0) !== (acceptedTerms.signingBonus ?? 0) ||
         normalizeRepresentationType(contract.representationType) !== normalizeRepresentationType(acceptedTerms.representationType ?? offer.representationType)
       ) {
         return false;
@@ -777,7 +791,7 @@ export function evaluateRepresentationOffer(save, offerId, currentDate = save?.w
     return { changed: false, save, error: "سجل التفاوض ممتلئ ولا يمكن إضافة رد جديد." };
   }
 
-  const terms = { commissionRate: offer.commissionRate, termDays: offer.termDays };
+  const terms = { commissionRate: offer.commissionRate, termDays: offer.termDays, signingBonus: offer.signingBonus ?? 0 };
   if (!playerAcceptsTerms(offer, terms)) {
     const counterOffer = buildPlayerCounterOffer(offer);
     let updated = replaceOffer(representation, offer.id, {
@@ -818,7 +832,8 @@ export function submitRepresentationCounterOffer(save, offerId, terms, currentDa
   if (!isCalendarDate(currentDate) || currentDate > offer.expiresDate) {
     return { changed: false, save, error: "انتهت صلاحية العرض قبل إرسال الرد." };
   }
-  if (!validTerms(terms?.commissionRate, terms?.termDays)) {
+  if (!validTerms(terms?.commissionRate, terms?.termDays) ||
+      (terms?.signingBonus !== undefined && !validSigningBonus(terms.signingBonus))) {
     return { changed: false, save, error: "شروط العرض المضاد غير صالحة." };
   }
   if (representation.history.length > MAX_HISTORY - 3) {
@@ -832,6 +847,7 @@ export function submitRepresentationCounterOffer(save, offerId, terms, currentDa
     ...offer,
     commissionRate: terms.commissionRate,
     termDays: terms.termDays,
+    signingBonus: terms.signingBonus ?? offer.counterOffer?.signingBonus ?? offer.signingBonus ?? 0,
     representationType: normalizeRepresentationType(terms.representationType ?? offer.counterOffer?.representationType ?? offer.representationType)
   };
   let updated = replaceOffer(representation, offer.id, {
@@ -927,8 +943,9 @@ export function createRepresentationRenewalOffer(save, contractId, terms, curren
     return { changed: false, save, error: "يمكن فتح التجديد خلال آخر 90 يومًا من العقد فقط." };
   }
   if (!validTerms(terms?.commissionRate, terms?.termDays) ||
+      (terms?.signingBonus !== undefined && !validSigningBonus(terms.signingBonus)) ||
       (terms?.representationType !== undefined && !isValidRepresentationType(terms.representationType))) {
-    return { changed: false, save, error: "اختر عمولة ومدة تجديد ونوع تمثيل صالح." };
+    return { changed: false, save, error: "اختر عمولة ومدة تجديد ومكافأة ونوع تمثيل صالح." };
   }
   if (representation.offers.some((offer) =>
     offer.kind === "renewal" && offer.renewalContractId === contract.id &&
