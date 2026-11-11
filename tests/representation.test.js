@@ -99,15 +99,18 @@ test("player can counter a high commission and long mandate, then sign when the 
   const response = evaluateRepresentationOffer(sent.save, sent.offer.id);
   assert.equal(response.changed, true);
   assert.equal(response.status, "countered");
-  assert.deepEqual(response.counterOffer, { commissionRate: 8, termDays: 365 });
+  assert.deepEqual(response.counterOffer, {
+    commissionRate: sent.offer.playerPreferences.preferredCommissionRate,
+    termDays: sent.offer.playerPreferences.preferredTermDays
+  });
   assert.equal(response.save.agency.clients.length, 0);
   assert.equal(response.save.agency.representation.offers[0].status, "countered");
 
   const accepted = acceptRepresentationCounterOffer(response.save, sent.offer.id);
   assert.equal(accepted.changed, true);
   assert.equal(accepted.status, "signed");
-  assert.equal(accepted.contract.commissionRate, 8);
-  assert.equal(accepted.contract.termDays, 365);
+  assert.equal(accepted.contract.commissionRate, sent.offer.playerPreferences.preferredCommissionRate);
+  assert.equal(accepted.contract.termDays, sent.offer.playerPreferences.preferredTermDays);
   assert.equal(accepted.contract.status, "active");
   assert.deepEqual(accepted.save.agency.clients, ["seed-test-player"]);
   assert.equal(accepted.save.agency.representation.offers[0].resolution, "counter-accepted");
@@ -119,14 +122,16 @@ test("player can counter a high commission and long mandate, then sign when the 
 });
 
 test("player accepts an offer that fits the player's commission and term limits", () => {
-  const sent = sendOffer(createInitialSave(), player({ age: 22, rating: 68, potential: 80 }), {
-    commissionRate: 9,
-    termDays: 730
+  const profile = player({ age: 22, rating: 68, potential: 80 });
+  const preferences = getPlayerRepresentationProfile(profile);
+  const sent = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays
   });
   const response = evaluateRepresentationOffer(sent.save, sent.offer.id);
   assert.equal(response.status, "signed");
-  assert.equal(response.contract.commissionRate, 9);
-  assert.equal(response.contract.termDays, 730);
+  assert.equal(response.contract.commissionRate, preferences.preferredCommissionRate);
+  assert.equal(response.contract.termDays, preferences.preferredTermDays);
   assert.equal(response.contract.relationshipScore, 70);
   assert.equal(isValidSave(response.save), true);
 });
@@ -143,9 +148,11 @@ test("agency can decline a counteroffer without creating a client", () => {
 });
 
 test("ending a mandate removes the active client but preserves the contract and history", () => {
-  const sent = sendOffer(createInitialSave(), player({ age: 22, rating: 68, potential: 80 }), {
-    commissionRate: 9,
-    termDays: 730
+  const profile = player({ age: 22, rating: 68, potential: 80 });
+  const preferences = getPlayerRepresentationProfile(profile);
+  const sent = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays
   });
   const signed = evaluateRepresentationOffer(sent.save, sent.offer.id);
   const atTerminationDate = advanceToDate(signed.save, "2026-08-01");
@@ -159,9 +166,11 @@ test("ending a mandate removes the active client but preserves the contract and 
 });
 
 test("calendar progression expires offers and contracts without dropping archival history", () => {
-  const sent = sendOffer(createInitialSave(), player({ age: 22, rating: 68, potential: 80 }), {
-    commissionRate: 9,
-    termDays: 365
+  const profile = player({ age: 22, rating: 68, potential: 80 });
+  const preferences = getPlayerRepresentationProfile(profile);
+  const sent = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays
   });
   const offerAtExpiry = advanceToDate(sent.save, "2026-08-01");
   const noResponse = advanceRepresentationState(offerAtExpiry, "2026-08-01");
@@ -169,9 +178,9 @@ test("calendar progression expires offers and contracts without dropping archiva
   assert.equal(noResponse.save.agency.representation.offers[0].status, "expired");
   assert.equal(isValidSave(noResponse.save), true);
 
-  const signedOffer = sendOffer(createInitialSave(), player({ age: 22, rating: 68, potential: 80 }), {
-    commissionRate: 9,
-    termDays: 365
+  const signedOffer = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays
   });
   const signed = evaluateRepresentationOffer(signedOffer.save, signedOffer.offer.id);
   const contractAtExpiry = advanceToDate(signed.save, "2027-07-01");
@@ -187,9 +196,11 @@ test("rejects invalid terms, tampered contracts, and active contracts missing fr
   const invalidTerms = sendOffer(createInitialSave(), player(), { commissionRate: 16, termDays: 365 });
   assert.equal(invalidTerms.changed, false);
 
-  const sent = sendOffer(createInitialSave(), player({ age: 22, rating: 68, potential: 80 }), {
-    commissionRate: 9,
-    termDays: 365
+  const profile = player({ age: 22, rating: 68, potential: 80 });
+  const preferences = getPlayerRepresentationProfile(profile);
+  const sent = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays
   });
   const signed = evaluateRepresentationOffer(sent.save, sent.offer.id);
   const badRate = structuredClone(signed.save);
