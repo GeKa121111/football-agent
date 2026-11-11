@@ -95,7 +95,7 @@ test("rejects invalid scopes, empty targets, insufficient funds and excess activ
   assert.equal(startScoutingMission(save, { type: "unknown" }, PLAYERS).changed, false);
   assert.equal(startScoutingMission(save, { type: "local", sourceId: "unknown-channel" }, PLAYERS).changed, false);
   assert.match(
-    startScoutingMission(save, { type: "local", countryId: "country-eg", role: "حراسة" }, PLAYERS).error,
+    startScoutingMission(save, { type: "local", countryId: "country-eg", role: "دفاع", sourceId: "academy" }, PLAYERS).error,
     /مفيش لاعبين/
   );
 
