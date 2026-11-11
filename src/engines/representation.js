@@ -905,6 +905,126 @@ export function createRepresentationRenewalOffer(save, contractId, terms, curren
   };
 }
 
+/**
+ * Sends a client message/call or schedules a meeting. Messages and calls
+ * resolve automatically when their response deadline is reached; meetings
+ * remain scheduled until the agent records the meeting outcome.
+ */
+export function createRepresentationInteraction(save, contractId, kind, meetingDate, currentDate = save?.world?.currentDate) {
+  const representation = save?.agency?.representation;
+  const contract = representation?.contracts?.find((item) => item.id === contractId);
+  if (!contract || contract.status !== "active") {
+    return { changed: false, save, error: "لا يوجد عقد نشط لهذا اللاعب." };
+  }
+  if (!isCalendarDate(currentDate) || !INTERACTION_KINDS.has(kind)) {
+    return { changed: false, save, error: "نوع التواصل أو تاريخ المسيرة غير صالح." };
+  }
+  const interactions = interactionList(representation);
+  if (interactions.length >= MAX_INTERACTIONS ||
+      !Number.isSafeInteger(interactionSequence(representation)) ||
+      representation.history.length >= MAX_HISTORY) {
+    return { changed: false, save, error: "وصل سجل تواصل العملاء إلى الحد المتاح." };
+  }
+
+  let dueDate;
+  let status;
+  if (kind === "meeting") {
+    if (!isCalendarDate(meetingDate)) {
+      return { changed: false, save, error: "حدد تاريخًا صالحًا للاجتماع." };
+    }
+    const daysUntilMeeting = Math.round((Date.parse(meetingDate + "T00:00:00.000Z") -
+      Date.parse(currentDate + "T00:00:00.000Z")) / 86400000);
+    if (daysUntilMeeting < 1 || daysUntilMeeting > 30) {
+      return { changed: false, save, error: "يمكن تحديد الاجتماع خلال الثلاثين يومًا القادمة." };
+    }
+    if (interactions.some((item) => item.contractId === contract.id && item.kind === "meeting" && item.status === "scheduled")) {
+      return { changed: false, save, error: "يوجد اجتماع مجدول بالفعل لهذا اللاعب." };
+    }
+    dueDate = meetingDate;
+    status = "scheduled";
+  } else {
+    if (interactions.some((item) => item.contractId === contract.id && item.kind === kind && item.status === "pending_response")) {
+      return { changed: false, save, error: kind === "message"
+        ? "هناك رسالة بانتظار رد اللاعب بالفعل."
+        : "هناك مكالمة بانتظار رد اللاعب بالفعل." };
+    }
+    dueDate = addDays(currentDate, kind === "message" ? 3 : 1);
+    status = "pending_response";
+  }
+
+  const interaction = {
+    id: "representation-interaction-" + interactionSequence(representation),
+    contractId: contract.id,
+    playerId: contract.playerId,
+    playerName: contract.playerName,
+    kind,
+    createdDate: currentDate,
+    dueDate,
+    status
+  };
+  let updated = {
+    ...representation,
+    nextInteractionSequence: interactionSequence(representation) + 1,
+    interactions: [interaction, ...interactions]
+  };
+  const historyType = kind === "meeting" ? "meeting-scheduled" : "message-sent";
+  const note = kind === "meeting"
+    ? "تم تحديد اجتماع مع اللاعب في " + dueDate + "."
+    : kind === "call"
+      ? "تم تسجيل مكالمة مع اللاعب، والرد متوقع خلال يوم."
+      : "تم إرسال رسالة للاعب، والرد متوقع خلال ثلاثة أيام.";
+  updated = nextHistory(updated, historyType, contract, currentDate, note, {
+    contractId: contract.id,
+    interactionId: interaction.id
+  });
+  return {
+    changed: true,
+    interaction,
+    save: { ...save, agency: { ...save.agency, representation: updated } }
+  };
+}
+
+/** Records the outcome of a scheduled client meeting within its grace period. */
+export function completeRepresentationMeeting(save, interactionId, outcome, currentDate = save?.world?.currentDate) {
+  const representation = save?.agency?.representation;
+  const interaction = interactionList(representation).find((item) => item.id === interactionId);
+  if (!interaction || interaction.kind !== "meeting" || interaction.status !== "scheduled") {
+    return { changed: false, save, error: "لا يوجد اجتماع مجدول يمكن تسجيل نتيجته." };
+  }
+  if (!isCalendarDate(currentDate) || !INTERACTION_OUTCOMES.has(outcome) ||
+      currentDate < interaction.dueDate || currentDate > addDays(interaction.dueDate, 7)) {
+    return { changed: false, save, error: "يمكن تسجيل نتيجة الاجتماع من موعده وحتى سبعة أيام بعده." };
+  }
+  const contract = representation.contracts.find((item) => item.id === interaction.contractId);
+  if (!contract || contract.status !== "active") {
+    return { changed: false, save, error: "عقد التمثيل لم يعد نشطًا." };
+  }
+  const relationshipDelta = outcome === "positive" ? 7 : outcome === "neutral" ? 3 : -6;
+  const reputationDelta = outcome === "positive" ? 2 : outcome === "neutral" ? 0 : -2;
+  let updated = {
+    ...representation,
+    contracts: representation.contracts.map((item) => item.id === contract.id
+      ? { ...item, relationshipScore: clamp(item.relationshipScore + relationshipDelta, 0, 100) }
+      : item)
+  };
+  updated = replaceInteraction(updated, interaction.id, {
+    status: "resolved",
+    outcome,
+    resolvedDate: currentDate
+  });
+  updated = adjustAgencyReputation(updated, reputationDelta);
+  const outcomeLabel = outcome === "positive" ? "إيجابية" : outcome === "neutral" ? "محايدة" : "سلبية";
+  updated = nextHistory(updated, "meeting-completed", interaction, currentDate,
+    "تم عقد الاجتماع وكانت نتيجته " + outcomeLabel + ".",
+    { contractId: contract.id, interactionId: interaction.id });
+  return {
+    changed: true,
+    interaction: updated.interactions.find((item) => item.id === interaction.id),
+    contract: updated.contracts.find((item) => item.id === contract.id),
+    save: { ...save, agency: { ...save.agency, representation: updated } }
+  };
+}
+
 /** Declines the player's counteroffer without creating a client relationship. */
 export function rejectRepresentationOffer(save, offerId, currentDate = save?.world?.currentDate) {
   const representation = save?.agency?.representation;
