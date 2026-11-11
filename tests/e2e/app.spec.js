@@ -187,7 +187,29 @@ test.describe("Desktop experience", () => {
     expect(saved.agency.representation.history.some((entry) => entry.type === "contract-renewed")).toBe(true);
   });
 
-  test("renders distinct SVG player portraits and reuses them in player details", async ({ page }) => {
+  test("manages player-agent trust through a dated interaction", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+    const offerModal = page.locator(".modal-overlay");
+    await offerModal.getByLabel("نسبة العمولة").selectOption("10");
+    await offerModal.getByLabel("مدة العقد").selectOption("730");
+    await offerModal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+    await page.locator(".representation-evaluate-button").click();
+    const accept = page.locator(".representation-accept-button");
+    if (await accept.isVisible()) await accept.click();
+    await expect(page.locator(".representation-contract-row")).toBeVisible();
+    await page.locator(".representation-contact-button").click();
+    await page.locator(".representation-interaction-choice").filter({ hasText: "اطمّن عليه" }).click();
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const contract = saved.agency.representation.contracts[0];
+    expect(contract.relationshipEvents).toHaveLength(1);
+    expect(contract.relationshipScore).toBeGreaterThanOrEqual(70);
+    expect(saved.agency.representation.history[0].type).toBe("relationship-event");
+    await expect(page.locator(".representation-trust")).toBeVisible();
+  });
+
+  test("renders distinct SVG player portraits and reuses them in player details", async ({ page }) =>
     await page.goto("/");
     await navigateTo(page, "اللاعبون");
 
