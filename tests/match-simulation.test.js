@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { simulateMatch } from "../src/engines/match-simulation.js";
+import { simulateMatch, MATCH_SIMULATION_BALANCE } from "../src/engines/match-simulation.js";
 
 const roles = [
   "حراسة",
@@ -41,7 +41,7 @@ test("simulates a complete match with two valid starting XIs", () => {
   const result = simulateMatch(fixture());
 
   assert.equal(result.status, "played");
-  assert.equal(result.simulationVersion, 1);
+  assert.equal(result.simulationVersion, 2);
   assert.equal(result.home.clubId, "club-al-ahly");
   assert.equal(result.away.clubId, "club-zamalek");
   assert.equal(result.playerPerformances.length, 22);
@@ -144,4 +144,40 @@ test("keeps all generated match data internally consistent across many seeds", (
     assert.ok(injuries.length <= 22);
     assert.ok(result.events.every((event) => event.id));
   }
+});
+
+test("keeps scoring, shot, injury and rating rates inside calibrated match ranges", () => {
+  const sampleSize = 2400;
+  let goals = 0;
+  let shots = 0;
+  let shotsOnTarget = 0;
+  let injuries = 0;
+  let ratingTotal = 0;
+  let ratingCount = 0;
+  for (let index = 0; index < sampleSize; index += 1) {
+    const result = simulateMatch(fixture({
+      id: "balance-match-" + index,
+      seed: "balance-seed-" + index
+    }));
+    goals += result.home.goals + result.away.goals;
+    shots += result.home.shots + result.away.shots;
+    shotsOnTarget += result.home.shotsOnTarget + result.away.shotsOnTarget;
+    if (result.events.some((event) => event.type === "injury")) injuries += 1;
+    for (const player of result.playerPerformances) {
+      ratingTotal += player.rating;
+      ratingCount += 1;
+    }
+  }
+
+  const averageGoals = goals / sampleSize;
+  const averageShots = shots / sampleSize;
+  const averageShotsOnTarget = shotsOnTarget / sampleSize;
+  const injuryMatchRate = injuries / sampleSize;
+  const averagePlayerRating = ratingTotal / ratingCount;
+  assert.ok(averageGoals >= 2.1 && averageGoals <= 3.6, "average goals: " + averageGoals);
+  assert.ok(averageShots >= 15 && averageShots <= 22, "average shots: " + averageShots);
+  assert.ok(averageShotsOnTarget >= 6 && averageShotsOnTarget <= 11, "average shots on target: " + averageShotsOnTarget);
+  assert.ok(injuryMatchRate >= 0.12 && injuryMatchRate <= 0.32, "injury match rate: " + injuryMatchRate);
+  assert.ok(averagePlayerRating >= 6.0 && averagePlayerRating <= 7.0, "average player rating: " + averagePlayerRating);
+  assert.equal(MATCH_SIMULATION_BALANCE.shotChancePerAttack, 0.60);
 });
