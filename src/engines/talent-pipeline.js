@@ -5,6 +5,7 @@ const MAX_NOTE_LENGTH = 500;
 const MAX_ACTIVITY_EVENTS = 200;
 const VALID_CONTACT_KINDS = new Set(["call", "message", "meeting"]);
 const VALID_CONTACT_OUTCOMES = new Set(["pending", "positive", "neutral", "negative", "no_response"]);
+const FOLLOW_UP_TASK_CATEGORY = "talent-follow-up";
 
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -60,11 +61,15 @@ function isValidActivityEvent(event, entry, currentDate) {
       (event.followUpDate === null || event.followUpDate === undefined ||
         (isCalendarDate(event.followUpDate) && event.followUpDate >= event.date));
   }
+  if (event.type === "follow-up-reviewed") {
+    return typeof event.taskId === "string" &&
+      /^talent-follow-up-task-\\d+$/.test(event.taskId);
+  }
   return false;
 }
 
 export function createInitialTalentPipelineState() {
-  return { nextSequence: 1, entries: [] };
+  return { nextSequence: 1, nextFollowUpTaskSequence: 1, entries: [] };
 }
 
 /**
@@ -75,6 +80,8 @@ export function isValidTalentPipelineState(state, currentDate) {
   if (state === undefined) return true;
   if (!isRecord(state) || !isCalendarDate(currentDate) ||
       !Number.isSafeInteger(state.nextSequence) || state.nextSequence < 1 ||
+      (state.nextFollowUpTaskSequence !== undefined &&
+        (!Number.isSafeInteger(state.nextFollowUpTaskSequence) || state.nextFollowUpTaskSequence < 1)) ||
       !Array.isArray(state.entries) || state.entries.length > MAX_ENTRIES) return false;
 
   const ids = new Set();
@@ -120,6 +127,58 @@ export function isValidTalentPipelineState(state, currentDate) {
   return highestSequence < state.nextSequence;
 }
 
+function syncTalentFollowUpTask(save, entry) {
+  const tasks = [...(save.world.tasks ?? [])];
+  const pipeline = save.agency.talentPipeline ?? createInitialTalentPipelineState();
+  const activeIndex = tasks.findIndex((task) =>
+    task.category === FOLLOW_UP_TASK_CATEGORY &&
+    task.prospectId === entry.id &&
+    ["open", "overdue"].includes(task.status)
+  );
+
+  if (entry.nextFollowUpDate && entry.stage !== "archived") {
+    const taskDetails = {
+      title: "متابعة اللاعب: " + entry.playerName,
+      description: "راجع التواصل مع " + entry.playerName + " (" + entry.club + ") وحدد الخطوة التالية من صندوق المواهب.",
+      dueDate: entry.nextFollowUpDate,
+      category: FOLLOW_UP_TASK_CATEGORY,
+      status: "open",
+      playerId: entry.playerId,
+      prospectId: entry.id,
+      playerName: entry.playerName
+    };
+
+    if (activeIndex >= 0) {
+      const currentTask = tasks[activeIndex];
+      const { overdueDate, completedDate, completedLate, completionReason, ...retained } = currentTask;
+      tasks[activeIndex] = { ...retained, ...taskDetails };
+    } else {
+      const sequence = pipeline.nextFollowUpTaskSequence ?? 1;
+      tasks.push({
+        id: "talent-follow-up-task-" + sequence,
+        ...taskDetails,
+        createdDate: save.world.currentDate
+      });
+      pipeline.nextFollowUpTaskSequence = sequence + 1;
+    }
+  } else if (activeIndex >= 0) {
+    const task = tasks[activeIndex];
+    tasks[activeIndex] = {
+      ...task,
+      status: "completed",
+      completedDate: save.world.currentDate,
+      completedLate: save.world.currentDate > task.dueDate,
+      completionReason: entry.stage === "archived" ? "archived" : "rescheduled"
+    };
+  }
+
+  return {
+    ...save,
+    agency: { ...save.agency, talentPipeline: pipeline },
+    world: { ...save.world, tasks }
+  };
+}
+
 export function getTalentProspect(pipeline, playerId) {
   if (typeof playerId !== "string" || !playerId.trim()) return null;
   return (Array.isArray(pipeline?.entries) ? pipeline.entries : [])
@@ -158,12 +217,12 @@ export function upsertTalentProspect(save, player, options = {}) {
   const sourceIds = [...new Set([...(existing?.sourceIds ?? []), ...suppliedSources])];
   const stage = options.stage ?? existing?.stage ?? "shortlisted";
   const note = options.note ?? existing?.note ?? "";
-  const nextFollowUpDate = Object.hasOwn(options, "nextFollowUpDate")
+  const requestedFollowUpDate = Object.hasOwn(options, "nextFollowUpDate")
     ? (options.nextFollowUpDate || null)
     : (existing?.nextFollowUpDate ?? null);
+  const nextFollowUpDate = stage === "archived" ? null : requestedFollowUpDate;
   if (!VALID_STAGES.has(stage) || typeof note !== "string" || note.length > MAX_NOTE_LENGTH ||
-      (nextFollowUpDate !== null && !isCalendarDate(nextFollowUpDate)) ||
-      (nextFollowUpDate !== null && nextFollowUpDate < (existing?.addedOn ?? currentDate))) {
+      (nextFollowUpDate !== null && (!isCalendarDate(nextFollowUpDate) || nextFollowUpDate < currentDate))) {
     return { changed: false, save, error: "مرحلة المتابعة أو الملاحظة أو الموعد المحدد غير صالح." };
   }
 
@@ -211,10 +270,14 @@ export function upsertTalentProspect(save, player, options = {}) {
     nextSequence: pipeline.nextSequence + (isNew ? 1 : 0),
     entries
   };
+  const nextSave = {
+    ...save,
+    agency: { ...save.agency, talentPipeline: nextPipeline }
+  };
   return {
     changed: true,
     entry,
-    save: { ...save, agency: { ...save.agency, talentPipeline: nextPipeline } }
+    save: syncTalentFollowUpTask(nextSave, entry)
   };
 }
 
@@ -298,4 +361,54 @@ export function recordTalentProspectContact(save, player, options = {}) {
     }
   };
   return { changed: true, entry: updatedEntry, contact, save: nextSave };
+}
+
+/**
+ * Completes the agency-side review of a scheduled prospect follow-up.
+ * The task is completed by the career calendar first; this records the review
+ * in the prospect history and clears the matching due date without contacting
+ * the player or changing representation/client status.
+ */
+export function completeTalentProspectFollowUp(save, taskId) {
+  if (!isCalendarDate(save?.world?.currentDate) || typeof taskId !== "string") {
+    return { changed: false, save };
+  }
+  const task = (save.world.tasks ?? []).find((item) =>
+    item.id === taskId &&
+    item.category === FOLLOW_UP_TASK_CATEGORY &&
+    item.status === "completed"
+  );
+  if (!task || typeof task.prospectId !== "string") return { changed: false, save };
+
+  const pipeline = save.agency?.talentPipeline;
+  const entry = getTalentProspect(pipeline, task.playerId);
+  if (!entry || entry.id !== task.prospectId || entry.nextFollowUpDate !== task.dueDate) {
+    return { changed: false, save };
+  }
+  if ((entry.activity?.length ?? 0) >= MAX_ACTIVITY_EVENTS) {
+    return { changed: false, save, error: "وصل سجل نشاط اللاعب إلى الحد الأقصى." };
+  }
+
+  const event = {
+    id: nextActivityId(entry.activity ?? []),
+    type: "follow-up-reviewed",
+    date: save.world.currentDate,
+    taskId,
+    note: "تمت مراجعة موعد المتابعة من أجندة الوكالة."
+  };
+  const updatedEntry = {
+    ...entry,
+    updatedOn: save.world.currentDate,
+    nextFollowUpDate: null,
+    activity: [...(entry.activity ?? []), event]
+  };
+  const nextPipeline = {
+    ...pipeline,
+    entries: pipeline.entries.map((item) => item.id === entry.id ? updatedEntry : item)
+  };
+  return {
+    changed: true,
+    entry: updatedEntry,
+    save: { ...save, agency: { ...save.agency, talentPipeline: nextPipeline } }
+  };
 }
