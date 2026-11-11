@@ -2,6 +2,7 @@ export const NAV_ITEMS = Object.freeze([
   Object.freeze({ id: "dashboard", label: "الرئيسية", icon: "⌂", hint: "ملخص الوكالة" }),
   Object.freeze({ id: "players", label: "اللاعبون", icon: "◉", hint: "قاعدة المواهب" }),
   Object.freeze({ id: "scouting", label: "الكشافون", icon: "⌕", hint: "اكتشاف اللاعبين" }),
+  Object.freeze({ id: "football", label: "المباريات", icon: "⚽", hint: "الموسم والتدريب" }),
   Object.freeze({ id: "market", label: "الانتقالات", icon: "⇄", hint: "فرص السوق" }),
   Object.freeze({ id: "agency", label: "الوكالة", icon: "▦", hint: "إدارة العملاء" })
 ]);
