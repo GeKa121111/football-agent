@@ -53,7 +53,7 @@ export function createPortraitAssignment(player, club = {}) {
   }
 
   const seed = hashIdentity(player.id);
-  const haircut = pick(seed, 0x9e3779b9, HAIR_STYLES);
+  const haircut = pick(seed, 0x452a31e8, HAIR_STYLES);
   const age = Number.isInteger(player.age) ? player.age : 20;
   const facialHair = age < 21
     ? pick(seed, 0x85ebca6b, ["none", "none", "none", "stubble"])
@@ -65,17 +65,17 @@ export function createPortraitAssignment(player, club = {}) {
     portraitVersion: PORTRAIT_LIBRARY_VERSION,
     portraitStyle: PORTRAIT_RENDER_STYLE,
     portraitSeed: seed,
-    skin: pick(seed, 0x27d4eb2f, SKIN_TONES),
-    hair: pick(seed, 0x165667b1, HAIR_TONES),
+    skin: pick(seed, 0xc60c64e8, SKIN_TONES),
+    hair: pick(seed, 0xb8eb80a5, HAIR_TONES),
     hairStyle: "hair-" + haircut,
     kit,
     kitLight: pick(seed, 0xd3a2646c, KIT_ACCENTS),
     appearance: Object.freeze({
-      faceShape: pick(seed, 0xfd7046c5, FACE_SHAPES),
+      faceShape: pick(seed, 0xa8c09e2f, FACE_SHAPES),
       haircut,
       facialHair,
       eyeColor: pick(seed, 0xb55a4f09, EYE_COLORS),
-      kitPattern: pick(seed, 0x94d049bb, KIT_PATTERNS)
+      kitPattern: pick(seed, 0x447e4060, KIT_PATTERNS)
     })
   });
 }
@@ -95,14 +95,36 @@ export function validatePortraitAssignments(players) {
   }
 
   for (const player of players) {
-    if (!Number.isInteger(player?.portraitVersion) || player.portraitVersion < 1) {
-      errors.push("إصدار صورة اللاعب غير صالح: " + (player?.id ?? "unknown"));
+    const playerId = player?.id ?? "unknown";
+    if (typeof player?.id !== "string" || !player.id.trim()) {
+      errors.push("معرف اللاعب مفقود من سجل الصورة.");
+    } else {
+      let expectedAssetId = null;
+      try {
+        expectedAssetId = getPortraitAssetId(player.id);
+      } catch {
+        errors.push("معرف اللاعب لا يصلح لربط أصل الصورة: " + playerId);
+      }
+      if (expectedAssetId && player.portraitAssetId !== expectedAssetId) {
+        errors.push("أصل الصورة لا يطابق معرف اللاعب: " + playerId);
+      }
+      if (Number.isInteger(player.portraitSeed) && player.portraitSeed !== hashIdentity(player.id)) {
+        errors.push("بذرة الصورة لا تطابق هوية اللاعب: " + playerId);
+      }
+    }
+    if (player?.portraitVersion !== PORTRAIT_LIBRARY_VERSION) {
+      errors.push("إصدار صورة اللاعب غير مدعوم: " + playerId);
     }
     if (player?.portraitStyle !== PORTRAIT_RENDER_STYLE) {
-      errors.push("نمط صورة اللاعب غير معروف: " + (player?.id ?? "unknown"));
+      errors.push("نمط صورة اللاعب غير معروف: " + playerId);
     }
     if (!Number.isInteger(player?.portraitSeed) || player.portraitSeed < 0) {
-      errors.push("بذرة صورة اللاعب غير صالحة: " + (player?.id ?? "unknown"));
+      errors.push("بذرة صورة اللاعب غير صالحة: " + playerId);
+    }
+    for (const [field, value] of [["البشرة", player?.skin], ["الشعر", player?.hair], ["القميص", player?.kit], ["تفاصيل القميص", player?.kitLight]]) {
+      if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) {
+        errors.push("لون " + field + " غير صالح في أصل صورة اللاعب: " + playerId);
+      }
     }
   }
 
