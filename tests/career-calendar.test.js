@@ -126,12 +126,13 @@ test("marks expired open tasks overdue once and creates a linked high-priority r
 
 test("allows a late task to be completed and records that it missed its due date", () => {
   const save = createInitialSave();
+  save.world.currentDate = "2026-07-03";
   save.world.tasks = [makeTask({ status: "overdue", overdueDate: "2026-07-02" })];
   const result = completeCareerTask(save, save.world.tasks[0].id);
   assert.equal(result.changed, true);
   assert.equal(result.save.world.tasks[0].status, "completed");
   assert.equal(result.save.world.tasks[0].completedLate, true);
-  assert.equal(result.save.world.tasks[0].completedDate, "2026-07-01");
+  assert.equal(result.save.world.tasks[0].completedDate, "2026-07-03");
   assert.ok(result.save.world.events.some((event) => event.type === "task-completed"));
   assert.equal(isValidSave(result.save), true);
 });
