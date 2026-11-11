@@ -756,14 +756,11 @@ test.describe("Mobile experience", () => {
     await expect(page.locator(".talent-pipeline-note")).toHaveText("مراجعة اللاعب بعد التقرير الأول");
 
     await page.reload();
-    await navigateTo(page, "الكشافون");
-    await expect(page.getByRole("button", { name: "عرض التقرير" })).toBeVisible();
-
-    // The contract handoff closed the pre-contract follow-up; the client is now
-    // managed through the representation dossier and its own interaction timeline.
-    await expect(page.locator(".talent-pipeline-owner")).toContainText("لم يتم التعيين");
-    await page.reload();
     await navigateTo(page, "الوكالة");
+
+    // The contract handoff releases scout ownership and closes pre-contract
+    // follow-up; the signed client remains in the unified agency pipeline.
+    await expect(page.locator(".talent-pipeline-owner")).toContainText("لم يتم التعيين");
     await expect(page.locator(".talent-pipeline-stage")).toHaveText("عميل حالي");
     await expect(page.locator(".representation-contract-row")).toHaveCount(1);
   });
