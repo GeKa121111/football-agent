@@ -48,8 +48,8 @@ function nextHistory(representation, type, player, date, note, references = {}) 
   const entry = {
     id: "representation-history-" + representation.nextHistorySequence,
     type,
-    playerId: player.id,
-    playerName: player.name,
+    playerId: player.playerId ?? player.id,
+    playerName: player.playerName ?? player.name,
     date,
     note,
     ...references
@@ -160,6 +160,8 @@ export function isValidRepresentationState(representation, currentDate, clients 
         !sequenceOf(offer.id, "representation-offer") ||
         typeof offer.playerId !== "string" || !offer.playerId.trim() ||
         typeof offer.playerName !== "string" || !offer.playerName.trim() ||
+        !Number.isInteger(offer.rating) || offer.rating < 1 || offer.rating > 99 ||
+        !Number.isInteger(offer.potential) || offer.potential < offer.rating || offer.potential > 99 ||
         !Number.isInteger(offer.age) || offer.age < 15 || offer.age > 45 ||
         typeof offer.club !== "string" || !offer.club.trim() ||
         typeof offer.position !== "string" || !offer.position.trim() ||
@@ -421,7 +423,7 @@ export function rejectRepresentationOffer(save, offerId, currentDate = save?.wor
   if (!isCalendarDate(currentDate) || currentDate > offer.expiresDate) {
     return { changed: false, save, error: "انتهت صلاحية العرض." };
   }
-  let updated = replaceOffer(representation, offer.id, { status: "rejected" });
+  let updated = replaceOffer(representation, offer.id, { status: "rejected", counterOffer: undefined });
   updated = nextHistory(updated, "offer-rejected", offer, currentDate,
     "تم رفض عرض التمثيل وإغلاق التفاوض.", { offerId: offer.id });
   return {
@@ -478,7 +480,7 @@ export function advanceRepresentationState(save, currentDate = save?.world?.curr
 
   for (const offer of representation.offers) {
     if (["pending", "countered"].includes(offer.status) && currentDate > offer.expiresDate) {
-      updated = replaceOffer(updated, offer.id, { status: "expired" });
+      updated = replaceOffer(updated, offer.id, { status: "expired", counterOffer: undefined });
       updated = nextHistory(updated, "offer-expired", offer, currentDate,
         "انتهت صلاحية عرض التمثيل دون اتفاق.", { offerId: offer.id });
       expiredOffers.push(offer.id);
