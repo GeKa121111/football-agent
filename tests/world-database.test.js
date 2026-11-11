@@ -10,17 +10,18 @@ import {
 
 test("ships a compact but connected multi-country world seed", () => {
   assert.deepEqual(getWorldSummary(), {
-    countries: 8,
-    leagues: 8,
-    competitions: 10,
-    clubs: 16,
-    players: 32
+    countries: 12,
+    leagues: 12,
+    competitions: 15,
+    clubs: 24,
+    players: 48,
+    portraitAssets: 48
   });
   assert.equal(validateWorldDatabase().valid, true);
 });
 
 
-test("balances scouting coverage across all eight countries and four general roles", () => {
+test("balances scouting coverage across all twelve countries and four general roles", () => {
   const roles = ["هجوم", "وسط", "دفاع", "حراسة"];
   for (const country of WORLD_DATABASE.countries) {
     const countryPlayers = WORLD_DATABASE.players.filter((player) => player.countryId === country.id);
@@ -144,4 +145,39 @@ test("seed data is immutable to protect shared simulation definitions", () => {
   assert.equal(Object.isFrozen(WORLD_DATABASE), true);
   assert.equal(Object.isFrozen(WORLD_DATABASE.players), true);
   assert.equal(Object.isFrozen(WORLD_DATABASE.players[0]), true);
+});
+
+
+test("all portrait asset identities are unique and tied to stable player IDs", () => {
+  const portraits = WORLD_DATABASE.players.map((player) => player.portraitAssetId);
+  assert.equal(portraits.length, WORLD_DATABASE.players.length);
+  assert.equal(new Set(portraits).size, portraits.length);
+  for (const player of WORLD_DATABASE.players) {
+    assert.equal(player.portraitAssetId, "portrait-" + player.id);
+    assert.equal(player.portraitVersion, 1);
+    assert.equal(player.portraitStyle, "illustrated-pro");
+    assert.ok(Number.isInteger(player.portraitSeed));
+  }
+});
+
+test("database rejects missing or duplicate portrait identities", () => {
+  const duplicate = structuredClone(WORLD_DATABASE);
+  duplicate.players[1].portraitAssetId = duplicate.players[0].portraitAssetId;
+  const duplicateResult = validateWorldDatabase(duplicate);
+  assert.equal(duplicateResult.valid, false);
+  assert.ok(duplicateResult.errors.some((error) => error.includes("معرفات أصول صور اللاعبين مكررة")));
+
+  const missing = structuredClone(WORLD_DATABASE);
+  delete missing.players[0].portraitAssetId;
+  assert.equal(validateWorldDatabase(missing).valid, false);
+});
+
+test("every club supplies the kit color used by its two fictional player portraits", () => {
+  const clubs = new Map(WORLD_DATABASE.clubs.map((club) => [club.id, club]));
+  const profiles = getWorldPlayerProfiles();
+  for (const player of profiles) {
+    assert.equal(player.kit, clubs.get(player.clubId).primaryColor);
+    assert.equal(player.clubColor, clubs.get(player.clubId).primaryColor);
+    assert.ok(player.kitLight);
+  }
 });
