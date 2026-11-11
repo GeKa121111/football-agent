@@ -432,7 +432,8 @@ test("messages and calls receive deterministic responses as career time advances
   assert.equal(duplicate.changed, false);
   assert.match(duplicate.error, /رسالة بانتظار رد/);
 
-  const afterReply = advanceToDate(message.save, message.interaction.dueDate);
+  const afterReplyDate = advanceToDate(message.save, message.interaction.dueDate);
+  const afterReply = advanceRepresentationState(afterReplyDate, message.interaction.dueDate).save;
   const storedInteraction = afterReply.agency.representation.interactions.find((item) => item.id === message.interaction.id);
   const updatedContract = afterReply.agency.representation.contracts.find((item) => item.id === signed.contract.id);
   assert.equal(storedInteraction.status, "resolved");
@@ -448,7 +449,8 @@ test("messages and calls receive deterministic responses as career time advances
   assert.equal(call.changed, true);
   assert.equal(call.interaction.kind, "call");
   assert.equal(call.interaction.dueDate, "2026-07-05");
-  const afterCall = advanceToDate(call.save, call.interaction.dueDate);
+  const afterCallDate = advanceToDate(call.save, call.interaction.dueDate);
+  const afterCall = advanceRepresentationState(afterCallDate, call.interaction.dueDate).save;
   assert.equal(afterCall.agency.representation.interactions.find((item) => item.id === call.interaction.id).status, "resolved");
   assert.equal(isValidSave(afterCall), true);
 });
@@ -499,9 +501,13 @@ test("missed client meetings reduce relationship and agency reputation after the
   const meetingDate = new Date(Date.parse(signed.save.world.currentDate + "T00:00:00.000Z") + 2 * 86400000)
     .toISOString().slice(0, 10);
   const scheduled = createRepresentationInteraction(signed.save, signed.contract.id, "meeting", meetingDate);
-  const afterGrace = advanceToDate(scheduled.save, new Date(
+  const afterGraceDate = new Date(
     Date.parse(meetingDate + "T00:00:00.000Z") + 8 * 86400000
-  ).toISOString().slice(0, 10));
+  ).toISOString().slice(0, 10);
+  const afterGrace = advanceRepresentationState(
+    advanceToDate(scheduled.save, afterGraceDate),
+    afterGraceDate
+  ).save;
   const missed = afterGrace.agency.representation.interactions.find((item) => item.id === scheduled.interaction.id);
   const contract = afterGrace.agency.representation.contracts.find((item) => item.id === signed.contract.id);
   assert.equal(missed.status, "missed");
