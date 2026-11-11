@@ -334,6 +334,30 @@ test.describe("Desktop experience", () => {
     await expect(page.locator(".modal-overlay")).toHaveCount(0);
   });
 
+  test("shows consistent expanded world coverage across player and scouting screens", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "اللاعبون");
+
+    const metrics = page.locator(".players-screen .world-metrics .metric-card");
+    await expect(metrics).toHaveCount(6);
+    await expect(metrics.filter({ hasText: "المسابقات" }).locator(".metric-value")).toHaveText("15");
+    await expect(metrics.filter({ hasText: "أصول الصور" }).locator(".metric-value")).toHaveText("48");
+    await expect(page.locator(".player-card .club-crest")).toHaveCount(48);
+
+    const crests = await page.locator(".player-card .club-crest").evaluateAll((items) => items.map((item) => ({
+      clubId: item.dataset.clubId,
+      color: item.dataset.clubColor,
+      pathCount: item.querySelectorAll("svg path").length,
+      label: item.getAttribute("aria-label")
+    })));
+    expect(new Set(crests.map((item) => item.clubId)).size).toBe(24);
+    expect(crests.every((item) => /^#[0-9a-f]{6}$/i.test(item.color))).toBe(true);
+    expect(crests.every((item) => item.pathCount >= 2 && item.label.includes("ليس الشعار الرسمي"))).toBe(true);
+
+    await navigateTo(page, "الكشافون");
+    await expect(page.locator(".scout-banner")).toContainText("من 12 دولة");
+  });
+
   test("renders distinct SVG player portraits and reuses them in player details", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "اللاعبون");
