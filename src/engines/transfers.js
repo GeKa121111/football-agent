@@ -429,7 +429,16 @@ export function isValidTransferState(state, currentDate, clients = [], represent
         !Number.isInteger(entry.commissionRate) || entry.commissionRate < 5 || entry.commissionRate > 15 ||
         !validMoney(entry.basisEur) || entry.amountEur !== Math.round(entry.basisEur * entry.commissionRate / 100)) return false;
     const contract = representation?.contracts?.find((item) => item.id === entry.representationContractId);
-    if (!contract || contract.playerId !== entry.playerId || getRepresentationContractCommission(contract, entry.date) !== entry.commissionRate) return false;
+    if (!contract || contract.playerId !== entry.playerId || entry.date < contract.signedOn ||
+        entry.date >= getRepresentationContractExpiry(contract) ||
+        (contract.endedOn && entry.date > contract.endedOn) ||
+        getRepresentationContractCommission(contract, entry.date) !== entry.commissionRate) return false;
+    const terms = offer.agreedTerms;
+    const contractWeeks = offer.type === "permanent"
+      ? terms.contractYears * 52
+      : Math.round(terms.loanMonths * 52 / 12);
+    const expectedBasis = terms.weeklyWageEur * contractWeeks + terms.signingBonusEur;
+    if (entry.basisEur !== expectedBasis) return false;
     ledgerTotal += entry.amountEur;
     highestLedger = Math.max(highestLedger, sequenceOf(entry.id, "transfer-ledger"));
   }
