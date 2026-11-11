@@ -1,6 +1,7 @@
 import { createInitialCareerCalendar } from "../engines/career-calendar.js";
 import { createInitialScoutingState, SCOUTING_MISSION_TYPES, SCOUTING_SCOUTS, SCOUTING_SOURCES } from "../engines/scouting.js";
 import { createInitialRepresentationState, isValidRepresentationState } from "../engines/representation.js";
+import { createInitialTalentPipelineState, isValidTalentPipelineState } from "../engines/talent-pipeline.js";
 
 export const STORAGE_KEY = "football-agent.save";
 export const SAVE_VERSION = 4;
@@ -25,7 +26,8 @@ export function createInitialSave(now = new Date().toISOString()) {
       balance: 100000,
       reputation: 1,
       clients: [],
-      representation: createInitialRepresentationState()
+      representation: createInitialRepresentationState(),
+      talentPipeline: createInitialTalentPipelineState()
     },
     world: {
       currentDate: "2026-07-01",
@@ -345,7 +347,8 @@ export function isValidSave(value) {
   if (![players, clubs, competitions, activeOffers].every(hasUniqueIds)) return false;
   return isValidActivityCollections(value.world) &&
     isValidScoutingState(value.world.scouting, currentDate) &&
-    isValidRepresentationState(value.agency.representation, currentDate, clients);
+    isValidRepresentationState(value.agency.representation, currentDate, clients) &&
+    isValidTalentPipelineState(value.agency.talentPipeline, currentDate);
 }
 
 export function readWatchlist(storage) {
@@ -403,7 +406,10 @@ function migrateSave(value) {
       ...value.agency,
       representation: isRecord(value.agency?.representation)
         ? value.agency.representation
-        : createInitialRepresentationState()
+        : createInitialRepresentationState(),
+      talentPipeline: isRecord(value.agency?.talentPipeline)
+        ? value.agency.talentPipeline
+        : createInitialTalentPipelineState()
     },
     world: {
       ...value.world,
