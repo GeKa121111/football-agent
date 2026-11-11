@@ -1268,7 +1268,7 @@ function renderMarket(context) {
   const transferState = context.transferState;
   const windowInfo = getTransferWindow(currentDate);
   const activeContracts = context.save.agency.representation.contracts.filter((contract) =>
-    contract.status === "active" && contract.expiresOn > currentDate
+    contract.status === "active" && getRepresentationContractExpiry(contract) > currentDate
   );
   const representedPlayers = activeContracts.map((contract) => ({
     contract,
