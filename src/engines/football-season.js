@@ -1,4 +1,4 @@
-import { WORLD_DATABASE } from "../data/world-database.js";
+import { WORLD_DATABASE, getWorldSquadPlayers } from "../data/world-database.js";
 import { simulateMatch } from "./match-simulation.js";
 import {
   createInitialPlayerDevelopmentState,
@@ -86,9 +86,9 @@ export function buildSimulationTeam(clubId, database = WORLD_DATABASE, playerDev
   const injuredPlayerIds = new Set((playerDevelopment?.players ?? [])
     .filter((player) => player.injuryDays > 0)
     .map((player) => player.playerId));
-  const realPlayers = database.players
+  const realPlayers = getWorldSquadPlayers(database)
     .filter((player) => player.clubId === clubId && !injuredPlayerIds.has(player.id))
-    .sort((a, b) => compareText(a.id, b.id));
+    .sort((a, b) => b.rating - a.rating || compareText(a.id, b.id));
   const unused = new Set(realPlayers.map((player) => player.id));
   const lineup = ROLE_SLOTS.map((role, slotIndex) => {
     const realPlayer = realPlayers.find((player) =>
@@ -121,11 +121,22 @@ export function buildSimulationTeam(clubId, database = WORLD_DATABASE, playerDev
     };
   });
 
+  const startingIds = new Set(lineup.filter((player) => player.simulationOnly !== true).map((player) => player.id));
+  const toSquadEntry = (player) => ({
+    id: player.id,
+    name: player.name,
+    role: player.role,
+    rating: player.rating,
+    potential: player.potential,
+    simulationOnly: false
+  });
   return {
     clubId: club.id,
     name: club.nameAr,
     strength: club.simulationProfile,
-    lineup
+    lineup,
+    squad: realPlayers.map(toSquadEntry),
+    bench: realPlayers.filter((player) => !startingIds.has(player.id)).map(toSquadEntry)
   };
 }
 
@@ -221,7 +232,7 @@ export function createInitialFootballState(season = 1, currentDate = "2026-07-01
     season,
     fixtures: generateSeasonFixtures(season, currentDate, database),
     results: [],
-    playerDevelopment: createInitialPlayerDevelopmentState(database.players)
+    playerDevelopment: createInitialPlayerDevelopmentState(getWorldSquadPlayers(database))
   };
 }
 
