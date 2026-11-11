@@ -284,6 +284,24 @@ export function advancePlayerDevelopmentDay(state, dateKey, season) {
   };
 }
 
+/**
+ * Adds newly introduced roster identities to an existing development save
+ * without resetting progress for players already present.
+ */
+export function mergePlayerDevelopmentRoster(state, players = []) {
+  if (!Array.isArray(players)) throw new TypeError("قائمة لاعبي التشكيلات غير صالحة.");
+  if (!isRecord(state) || !Array.isArray(state.players)) {
+    return createInitialPlayerDevelopmentState(players);
+  }
+  const existingIds = new Set(state.players.map((player) => player?.playerId));
+  const additions = players
+    .filter((player) => !existingIds.has(player.id))
+    .map(createDevelopmentPlayer);
+  return additions.length === 0
+    ? state
+    : { ...state, players: [...state.players, ...additions] };
+}
+
 /** Applies match minutes, output and injuries to real world players in the saved development state. */
 export function recordPlayerMatchPerformances(state, result, dateKey) {
   if (!isRecord(state) || !Array.isArray(state.players) ||
