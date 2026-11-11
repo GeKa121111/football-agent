@@ -223,7 +223,7 @@ test("migrates version 1 saves without losing career or agency progress", () => 
 });
 
 
-test("migrates version 2 saves to scouting schema v3 without rewriting on read", () => {
+test("migrates version 2 saves to schema v4 without rewriting on read", () => {
   const legacy = createInitialSave("2026-07-01T00:00:00.000Z");
   legacy.meta.version = 2;
   delete legacy.world.scouting;
