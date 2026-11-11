@@ -158,8 +158,12 @@ test.describe("Mobile experience", () => {
   test("filters scouting candidates and persists the watchlist", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الكشافون");
-    await page.getByLabel("تصفية حسب المركز").selectOption("هجوم");
+    const roleFilter = page.getByLabel("تصفية حسب المركز");
+    await roleFilter.selectOption("هجوم");
     await expect(page.locator(".player-card")).toHaveCount(2);
+    await roleFilter.selectOption("حراسة");
+    await expect(page.locator(".player-card")).toHaveCount(2);
+    await roleFilter.selectOption("all");
 
     await page.getByRole("searchbox", { name: "البحث في المواهب" }).fill("ياسين");
     await expect(page.locator(".player-card")).toHaveCount(1);
