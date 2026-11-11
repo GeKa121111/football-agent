@@ -440,3 +440,27 @@ test("rejects a completed task falsely marked as on-time after its deadline", ()
   }];
   assert.equal(isValidSave(save), false);
 });
+
+
+test("migrates version 4 agency saves into football season schema v5 without rewriting on read", () => {
+  const legacy = createInitialSave("2026-07-01T00:00:00.000Z");
+  legacy.meta.version = 4;
+  legacy.agency.name = "Phase Four Agency";
+  legacy.agency.balance = 654321;
+  legacy.world.currentDate = "2026-08-11";
+  delete legacy.world.football;
+  const raw = JSON.stringify(legacy);
+  const storage = memoryStorage({ [STORAGE_KEY]: raw });
+
+  const result = readSave(storage);
+  assert.equal(result.status, "loaded");
+  assert.equal(result.migrated, true);
+  assert.equal(result.save.meta.version, SAVE_VERSION);
+  assert.equal(result.save.agency.name, "Phase Four Agency");
+  assert.equal(result.save.agency.balance, 654321);
+  assert.equal(result.save.world.football.season, result.save.career.season);
+  assert.ok(result.save.world.football.fixtures.length > 0);
+  assert.equal(result.save.world.football.results.length, 0);
+  assert.equal(isValidSave(result.save), true);
+  assert.equal(storage.getItem(STORAGE_KEY), raw, "migration must not rewrite a save on read");
+});
