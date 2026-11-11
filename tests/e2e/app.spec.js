@@ -108,6 +108,7 @@ test.describe("Desktop experience", () => {
   test("plays scheduled matchdays and persists player training plans", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator(".football-screen")).toHaveCount(0);
+    await page.getByRole("button", { name: "حفظ المسيرة" }).click();
     const firstSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(firstSave.meta.version).toBe(5);
     expect(firstSave.world.football.fixtures.length).toBeGreaterThan(0);
