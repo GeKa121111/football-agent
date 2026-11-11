@@ -117,9 +117,11 @@ test("completes an agreed permanent transfer and records a EUR agent commission 
   const agreed = acceptTransferCounterOffer(countered.save, sent.offer.id, "2026-07-02");
   const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-02");
   assert.equal(completed.status, "completed");
-  assert.equal(completed.commissionEur, 10_000);
-  assert.equal(completed.save.world.transfers.earnedCommissionEur, 10_000);
+  assert.equal(completed.commissionEur, 322_000);
+  assert.equal(completed.save.world.transfers.earnedCommissionEur, 322_000);
   assert.equal(completed.save.world.transfers.ledger[0].currency, "EUR");
+  assert.equal(completed.save.world.transfers.ledger[0].basisEur, 3_220_000);
+  assert.equal(completed.save.world.transfers.ledger[0].commissionRate, 10);
   assert.equal(getPlayerCurrentClubId("player-1", "club-home", completed.save.world.transfers, "2026-07-02"), "club-target");
   assert.equal(completeTransfer(completed.save, sent.offer.id, "2026-07-02").changed, false);
   assert.equal(isValidTransferState(completed.save.world.transfers, "2026-07-02", completed.save.agency.clients, completed.save.agency.representation), true);
