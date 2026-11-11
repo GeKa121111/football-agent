@@ -22,7 +22,7 @@ import {
   startScoutingMission
 } from "./engines/scouting.js";
 import { createPlayerPortrait } from "./ui/player-portrait.js";
-import { upsertTalentProspect } from "./engines/talent-pipeline.js";
+import { getTalentProspect, upsertTalentProspect } from "./engines/talent-pipeline.js";
 import {
   createRepresentationOffer as createRepresentationOfferInEngine,
   evaluateRepresentationOffer as evaluateRepresentationOfferInEngine,
@@ -977,6 +977,202 @@ function renderMarket(context) {
   return page;
 }
 
+function getTalentPipelineRecords(context) {
+  const records = new Map();
+  const add = (playerId, sourceId) => {
+    const player = context.players.find((candidate) => candidate.id === playerId);
+    if (!player) return;
+    let record = records.get(playerId);
+    if (!record) {
+      record = { player, sourceIds: new Set(), entry: null };
+      records.set(playerId, record);
+    }
+    if (sourceId) record.sourceIds.add(sourceId);
+  };
+
+  const scouting = context.save.world.scouting;
+  (scouting?.reports ?? []).forEach((report) => {
+    (report.findings ?? []).forEach((finding) => add(finding.playerId, "scouting"));
+  });
+  (scouting?.observations ?? []).forEach((observation) => add(observation.playerId, "scouting"));
+  context.watchlist.forEach((playerId) => add(playerId, "watchlist"));
+
+  const representation = context.save.agency.representation;
+  representation.offers
+    .filter((offer) => ["pending", "countered"].includes(offer.status))
+    .forEach((offer) => add(offer.playerId, "manual"));
+  representation.contracts
+    .filter((contract) => contract.status === "active")
+    .forEach((contract) => add(contract.playerId, "manual"));
+  context.save.agency.clients.forEach((playerId) => add(playerId, "manual"));
+
+  const pipeline = context.save.agency.talentPipeline;
+  (pipeline?.entries ?? []).forEach((entry) => {
+    add(entry.playerId, null);
+    const record = records.get(entry.playerId);
+    if (record) {
+      record.entry = entry;
+      entry.sourceIds.forEach((sourceId) => record.sourceIds.add(sourceId));
+    }
+  });
+
+  return [...records.values()].map((record) => {
+    const playerId = record.player.id;
+    const offer = representation.offers.find((item) =>
+      item.playerId === playerId && ["pending", "countered"].includes(item.status)
+    );
+    const contract = representation.contracts.find((item) =>
+      item.playerId === playerId && item.status === "active"
+    );
+    const isClient = context.save.agency.clients.includes(playerId) || Boolean(contract);
+    const stage = isClient
+      ? "client"
+      : offer
+        ? "negotiating"
+        : record.entry?.stage ?? (record.sourceIds.has("watchlist") ? "shortlisted" : "discovered");
+    const sourceLabels = [];
+    if (record.sourceIds.has("scouting")) sourceLabels.push("تقارير الكشافين");
+    if (record.sourceIds.has("watchlist")) sourceLabels.push("قائمة المتابعة");
+    if (offer) sourceLabels.push("عرض تمثيل مفتوح");
+    if (isClient) sourceLabels.push("عميل حالي");
+    if (record.entry?.sourceIds.includes("manual")) sourceLabels.push("متابعة الوكالة");
+    return {
+      ...record,
+      offer,
+      contract,
+      isClient,
+      stage,
+      sourceLabels: [...new Set(sourceLabels)],
+      nextFollowUpDate: record.entry?.nextFollowUpDate ?? null,
+      note: record.entry?.note ?? ""
+    };
+  }).sort((a, b) => {
+    const order = { negotiating: 0, contacted: 1, shortlisted: 2, discovered: 3, client: 4, archived: 5 };
+    return order[a.stage] - order[b.stage] ||
+      (b.player.potential - a.player.potential) ||
+      a.player.name.localeCompare(b.player.name, "ar");
+  });
+}
+
+function renderTalentPipeline(context) {
+  const records = getTalentPipelineRecords(context);
+  const panel = node("section", "surface-card representation-panel talent-pipeline-panel");
+  const heading = node("div", "representation-heading");
+  heading.append(
+    node("div", "talent-pipeline-heading-copy"),
+    node("span", "representation-count", records.length + " ملف موحّد")
+  );
+  heading.children[0].append(
+    node("h2", "", "صندوق المواهب"),
+    node("p", "", "كل لاعب اكتشفته أو أضفته للمتابعة أو بدأت معه تفاوضًا يظهر هنا مرة واحدة.")
+  );
+  panel.append(heading);
+
+  const counts = node("div", "talent-pipeline-counts");
+  [
+    ["مكتشف", records.filter((item) => item.stage === "discovered").length],
+    ["متابعة", records.filter((item) => ["shortlisted", "contacted"].includes(item.stage)).length],
+    ["تفاوض", records.filter((item) => item.stage === "negotiating").length],
+    ["عملاء", records.filter((item) => item.stage === "client").length]
+  ].forEach(([label, value]) => {
+    const item = node("div", "talent-pipeline-count");
+    item.append(node("small", "", label), node("strong", "", String(value)));
+    counts.append(item);
+  });
+  panel.append(counts);
+
+  const toolbar = node("div", "talent-pipeline-toolbar");
+  const search = node("input", "search-input");
+  search.type = "search";
+  search.placeholder = "ابحث باللاعب أو النادي أو المركز...";
+  search.setAttribute("aria-label", "البحث في صندوق المواهب");
+  const filter = node("select", "filter-select");
+  filter.setAttribute("aria-label", "تصفية مرحلة المواهب");
+  [
+    ["active", "كل المواهب النشطة"],
+    ["discovered", "مكتشف حديثًا"],
+    ["shortlisted", "قائمة المتابعة"],
+    ["contacted", "تم التواصل"],
+    ["negotiating", "قيد التفاوض"],
+    ["client", "عملاء الوكالة"],
+    ["archived", "مؤرشفة"]
+  ].forEach(([value, label]) => {
+    const option = node("option", "", label);
+    option.value = value;
+    filter.append(option);
+  });
+  const resultCount = node("span", "representation-count", "");
+  resultCount.setAttribute("aria-live", "polite");
+  toolbar.append(search, filter, resultCount);
+  panel.append(toolbar);
+
+  const grid = node("div", "talent-pipeline-grid");
+  const stageLabels = {
+    discovered: "مكتشف",
+    shortlisted: "قائمة المتابعة",
+    contacted: "تم التواصل",
+    negotiating: "قيد التفاوض",
+    client: "عميل حالي",
+    archived: "مؤرشف"
+  };
+  const refresh = () => {
+    const query = search.value.trim().toLocaleLowerCase("ar");
+    const selectedStage = filter.value;
+    const filtered = records.filter((item) => {
+      const matchesStage = selectedStage === "active"
+        ? item.stage !== "archived"
+        : item.stage === selectedStage;
+      const matchesQuery = [
+        item.player.name, item.player.club, item.player.position,
+        item.player.country, item.player.league
+      ].some((value) => String(value ?? "").toLocaleLowerCase("ar").includes(query));
+      return matchesStage && matchesQuery;
+    });
+    resultCount.textContent = filtered.length + " نتيجة";
+    if (filtered.length === 0) {
+      grid.replaceChildren(emptyResults(
+        "صندوق المواهب فاضي حاليًا",
+        "ابدأ ببعثة كشف أو أضف لاعبًا لقائمة المتابعة، وهتلاقي كل الملفات هنا.",
+        "افتح شبكة الكشافين",
+        () => context.navigate("scouting")
+      ));
+      return;
+    }
+    grid.replaceChildren(...filtered.map((item) => {
+      const player = item.player;
+      const card = node("article", "talent-pipeline-card");
+      const portrait = node("div", "talent-pipeline-portrait");
+      portrait.append(playerArt(player));
+      const copy = node("div", "talent-pipeline-copy");
+      copy.append(
+        node("strong", "", player.name),
+        node("span", "", player.position + " · " + player.club + " · " + player.age + " سنة"),
+        node("small", "", "تقييم " + player.rating + " · إمكانيات " + player.potential),
+        node("small", "talent-pipeline-sources", item.sourceLabels.join(" · ") || "متابعة الوكالة")
+      );
+      const state = node("span", "talent-pipeline-stage stage-" + item.stage, stageLabels[item.stage]);
+      if (item.nextFollowUpDate) {
+        const overdue = item.nextFollowUpDate < context.save.world.currentDate;
+        copy.append(node("small", overdue ? "talent-pipeline-followup is-overdue" : "talent-pipeline-followup",
+          (overdue ? "متابعة متأخرة منذ " : "المتابعة القادمة ") + formatHomeDate(item.nextFollowUpDate)));
+      }
+      if (item.note) copy.append(node("small", "talent-pipeline-note", item.note));
+      const actions = node("div", "talent-pipeline-actions");
+      actions.append(
+        actionButton("ملف اللاعب", "button-outline talent-pipeline-profile-button", () => context.openPlayer(player)),
+        actionButton(item.entry ? "إدارة المتابعة" : "إضافة لصندوق المواهب", "button-primary talent-pipeline-manage-button",
+          () => context.manageTalentProspect(player))
+      );
+      card.append(portrait, copy, state, actions);
+      return card;
+    }));
+  };
+  search.addEventListener("input", refresh);
+  filter.addEventListener("change", refresh);
+  refresh();
+  return panel;
+}
+
 function renderAgency(context) {
   const page = node("div", "page-content rebuild-screen agency-screen");
   page.append(
@@ -1021,6 +1217,8 @@ function renderAgency(context) {
     metricCard("العقود النشطة", activeContracts.length, "عقود تمثيل سارية", "▤", "gold"),
     metricCard("سمعة الوكالة", getAgencyReputationScore(representation) + "/100", "سمعة الوكالة بين اللاعبين", "★", "cyan")
   );
+
+  const talentPipelinePanel = renderTalentPipeline(context);
 
   const contractsPanel = node("section", "surface-card representation-panel");
   const contractsHeading = node("div", "representation-heading");
@@ -1328,7 +1526,7 @@ function renderAgency(context) {
     roadmapRow("عقود التمثيل", "المرحلة الحالية", true),
     roadmapRow("سوق الانتقالات والتفاوض مع الأندية", "المرحلة الثامنة", false)
   );
-  page.append(overview, cards, contractsPanel, interactionsPanel, offersPanel, prospectsPanel, historyPanel, roadmap);
+  page.append(overview, cards, talentPipelinePanel, contractsPanel, interactionsPanel, offersPanel, prospectsPanel, historyPanel, roadmap);
   return page;
 }
 
@@ -1398,6 +1596,70 @@ export function mountApp(root) {
     if (!result.changed) { toast(result.error); return; }
     state.save = result.save;
     if (saveCareer()) { render(); toast("تم توقيع العقد السنوي مقابل " + formatMoney(result.fee) + " حتى " + formatHomeDate(result.contractExpiresOn) + "."); } else state.save = previousSave;
+  }
+
+  function manageTalentProspect(player) {
+    if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم نغيّر صندوق المواهب."); return; }
+    const existing = getTalentProspect(state.save.agency.talentPipeline, player.id);
+    const form = node("div", "talent-prospect-form");
+    const intro = node("p", "modal-copy", "سجّل مرحلة اللاعب وملاحظاتك وموعد المتابعة القادم. الملف يظل مرتبطًا بمعرّف اللاعب نفسه.");
+    const stage = node("select", "filter-select");
+    stage.setAttribute("aria-label", "مرحلة متابعة اللاعب");
+    [
+      ["discovered", "مكتشف"],
+      ["shortlisted", "قائمة المتابعة"],
+      ["contacted", "تم التواصل"],
+      ["archived", "أرشفة الملف"]
+    ].forEach(([value, label]) => {
+      const option = node("option", "", label);
+      option.value = value;
+      stage.append(option);
+    });
+    stage.value = existing?.stage ?? "shortlisted";
+    const note = node("textarea", "search-input");
+    note.setAttribute("aria-label", "ملاحظات الوكالة");
+    note.maxLength = 500;
+    note.rows = 3;
+    note.value = existing?.note ?? "";
+    note.placeholder = "اكتب ملخص المكالمة أو المطلوب في الخطوة القادمة...";
+    const followUp = node("input", "search-input");
+    followUp.type = "date";
+    followUp.setAttribute("aria-label", "موعد المتابعة القادمة");
+    followUp.min = state.save.world.currentDate;
+    followUp.value = existing?.nextFollowUpDate ?? "";
+    const addField = (label, control) => {
+      const wrapper = node("label", "scout-form-field representation-form-field");
+      wrapper.append(node("span", "", label), control);
+      form.append(wrapper);
+    };
+    addField("مرحلة اللاعب", stage);
+    addField("موعد المتابعة القادمة", followUp);
+    addField("ملاحظات الوكالة", note);
+    const saveButton = actionButton("حفظ متابعة المواهب", "button-primary talent-prospect-save-button", () => {
+      const sourceIds = [...(existing?.sourceIds ?? [])];
+      const hasScoutingRecord = (state.save.world.scouting?.reports ?? [])
+        .some((report) => (report.findings ?? []).some((finding) => finding.playerId === player.id)) ||
+        (state.save.world.scouting?.observations ?? []).some((item) => item.playerId === player.id);
+      if (hasScoutingRecord) sourceIds.push("scouting");
+      if (state.watchlist.has(player.id)) sourceIds.push("watchlist");
+      if (sourceIds.length === 0) sourceIds.push("manual");
+      const previousSave = state.save;
+      const result = upsertTalentProspect(state.save, player, {
+        sourceIds: [...new Set(sourceIds)],
+        stage: stage.value,
+        note: note.value,
+        nextFollowUpDate: followUp.value || null
+      });
+      if (!result.changed) { toast(result.error); return; }
+      state.save = result.save;
+      if (saveCareer()) {
+        root.querySelector(".modal-overlay .icon-button")?.click();
+        render();
+        toast("تم حفظ متابعة " + player.name + " في صندوق المواهب.");
+      } else state.save = previousSave;
+    });
+    form.append(intro, saveButton);
+    openModal("متابعة لاعب في صندوق المواهب", [form], "إلغاء");
   }
 
   function openRepresentationOffer(player) {
@@ -2110,6 +2372,10 @@ export function mountApp(root) {
         );
         const findingActions = node("div", "scout-finding-actions");
         if (player) {
+          findingActions.append(actionButton("إضافة لصندوق المواهب", "button-outline scout-finding-pipeline-button", () => {
+            root.querySelector(".modal-overlay .icon-button")?.click();
+            manageTalentProspect(player);
+          }));
           findingActions.append(actionButton("فتح ملف اللاعب", "button-outline scout-finding-profile-button", () => {
             root.querySelector(".modal-overlay .icon-button")?.click();
             openPlayer(player);
@@ -2651,6 +2917,7 @@ export function mountApp(root) {
       addToWatchlist,
       players: WORLD_PLAYERS,
       openRepresentationOffer,
+      manageTalentProspect,
       openRepresentationCounter,
       openRepresentationRenewal,
       openRepresentationClientDossier,
