@@ -151,7 +151,7 @@ test.describe("Mobile experience", () => {
     await expect(page.getByText("مفيش لاعبين مطابقين للبحث")).toBeVisible();
 
     await page.getByRole("button", { name: "مسح البحث" }).click();
-    await expect(page.locator(".player-card")).toHaveCount(4);
+    await expect(page.locator(".player-card")).toHaveCount(16);
     await hasNoHorizontalOverflow(page);
   });
 
