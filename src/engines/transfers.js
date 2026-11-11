@@ -147,7 +147,8 @@ export function evaluateTransferOffer(save, offerId, currentDate = save?.world?.
   const state = save?.world?.transfers;
   const offer = state?.offers?.find((item) => item.id === offerId);
   if (!offer || !["pending", "countered"].includes(offer.status)) return { changed: false, save, error: "عرض الانتقال غير متاح للرد." };
-  if (!isTransferCalendarDate(currentDate)) return { changed: false, save, error: "تاريخ المسيرة غير صالح." };
+  if (!isTransferCalendarDate(currentDate) || currentDate < offer.createdDate)
+    return { changed: false, save, error: "تاريخ الرد لا يمكن أن يسبق إرسال العرض." };
   if (currentDate > offer.expiresDate) return expireTransferOffer(save, offer, currentDate);
   if (!getTransferWindow(currentDate).active) return { changed: false, save, error: "انتهت نافذة الانتقالات قبل إتمام التفاوض." };
   const player = getPlayer(database, offer.playerId);
@@ -196,7 +197,8 @@ export function submitTransferCounterOffer(save, offerId, terms, currentDate = s
   const state = save?.world?.transfers;
   const offer = state?.offers?.find((item) => item.id === offerId);
   if (!offer || offer.status !== "countered") return { changed: false, save, error: "لا توجد شروط مضادة مفتوحة لهذا العرض." };
-  if (!isTransferCalendarDate(currentDate) || currentDate > offer.expiresDate || !getTransferWindow(currentDate).active)
+  if (!isTransferCalendarDate(currentDate) || currentDate < offer.createdDate ||
+      currentDate > offer.expiresDate || !getTransferWindow(currentDate).active)
     return { changed: false, save, error: "لا يمكن إرسال رد خارج مدة العرض أو نافذة الانتقالات." };
   if (!validTerms(offer.type, terms)) return { changed: false, save, error: "شروط الرد المالي أو مدة العقد غير صالحة." };
   if (offer.round >= 4) return { changed: false, save, error: "تم استنفاد جولات التفاوض الأربع." };
@@ -211,7 +213,8 @@ export function acceptTransferCounterOffer(save, offerId, currentDate = save?.wo
   const state = save?.world?.transfers;
   const offer = state?.offers?.find((item) => item.id === offerId);
   if (!offer || offer.status !== "countered" || !offer.counterOffer) return { changed: false, save, error: "لا يوجد عرض مضاد صالح لقبوله." };
-  if (!isTransferCalendarDate(currentDate) || currentDate > offer.expiresDate || !getTransferWindow(currentDate).active)
+  if (!isTransferCalendarDate(currentDate) || currentDate < offer.createdDate ||
+      currentDate > offer.expiresDate || !getTransferWindow(currentDate).active)
     return { changed: false, save, error: "انتهت صلاحية العرض أو نافذة الانتقالات." };
   let next = replaceOffer(state, offer.id, { status: "agreed", agreedDate: currentDate,
     agreedTerms: offer.counterOffer, counterOffer: null });
@@ -240,10 +243,13 @@ export function completeTransfer(save, offerId, currentDate = save?.world?.curre
   const state = save?.world?.transfers;
   const offer = state?.offers?.find((item) => item.id === offerId);
   if (!offer || offer.status !== "agreed" || !offer.agreedTerms) return { changed: false, save, error: "لا يمكن تنفيذ صفقة قبل اتفاق الطرفين على الشروط." };
-  if (!isTransferCalendarDate(currentDate) || currentDate < offer.createdDate || !getTransferWindow(currentDate).active)
-    return { changed: false, save, error: "تنفيذ الصفقة متاح فقط داخل نافذة الانتقالات." };
+  if (!isTransferCalendarDate(currentDate) || currentDate < offer.agreedDate || !getTransferWindow(currentDate).active)
+    return { changed: false, save, error: "تنفيذ الصفقة متاح فقط بعد الاتفاق وداخل نافذة الانتقالات." };
   if (state.moves.some((move) => move.playerId === offer.playerId && move.type === "loan" && move.status === "active"))
     return { changed: false, save, error: "اللاعب لديه إعارة نشطة بالفعل." };
+  const currentClubId = getPlayerCurrentClubId(offer.playerId, offer.fromClubId, state, currentDate);
+  if (currentClubId !== offer.fromClubId)
+    return { changed: false, save, error: "تغير النادي الحالي للاعب منذ بدء التفاوض؛ يجب فتح عرض جديد." };
   const mandate = getActiveRepresentationContract(save, offer.playerId, currentDate);
   if (!mandate) return { changed: false, save, error: "انتهى عقد التمثيل قبل إتمام الصفقة." };
   if (state.moves.length >= MAX_TRANSFER_MOVES || state.ledger.length >= MAX_TRANSFER_LEDGER ||
@@ -333,6 +339,7 @@ export function isValidTransferState(state, currentDate, clients = [], represent
   if (collections.some((items) => items.some((item) => !isRecord(item) || !validId(item.id)) ||
       new Set(items.map((item) => item.id)).size !== items.length)) return false;
   const offers = new Map();
+  const openOfferPlayers = new Set();
   let highestOffer = 0;
   for (const offer of state.offers) {
     if (!sequenceOf(offer.id, "transfer-offer") || !validId(offer.playerId) || !validId(offer.playerName) ||
@@ -361,7 +368,10 @@ export function isValidTransferState(state, currentDate, clients = [], represent
          !getTransferWindow(offer.completedDate).active ||
          getTransferWindow(offer.completedDate).window.id !== createdWindow.id)) return false;
     if (offer.status !== "completed" && offer.moveId !== null) return false;
-    if (["pending", "countered", "agreed"].includes(offer.status) && !clients.includes(offer.playerId)) return false;
+    if (["pending", "countered", "agreed"].includes(offer.status)) {
+      if (!clients.includes(offer.playerId) || openOfferPlayers.has(offer.playerId)) return false;
+      openOfferPlayers.add(offer.playerId);
+    }
     offers.set(offer.id, offer);
     highestOffer = Math.max(highestOffer, sequenceOf(offer.id, "transfer-offer"));
   }
