@@ -2,6 +2,9 @@ const VALID_SOURCES = new Set(["scouting", "watchlist", "manual"]);
 const VALID_STAGES = new Set(["discovered", "shortlisted", "contacted", "archived"]);
 const MAX_ENTRIES = 300;
 const MAX_NOTE_LENGTH = 500;
+const MAX_ACTIVITY_EVENTS = 200;
+const VALID_CONTACT_KINDS = new Set(["call", "message", "meeting"]);
+const VALID_CONTACT_OUTCOMES = new Set(["pending", "positive", "neutral", "negative", "no_response"]);
 
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -16,6 +19,48 @@ function isCalendarDate(value) {
 function sequenceOf(id) {
   const match = /^talent-prospect-(\d+)$/.exec(id);
   return match ? Number(match[1]) : 0;
+}
+
+function activitySequenceOf(id) {
+  const match = /^talent-activity-(\d+)$/.exec(id);
+  return match ? Number(match[1]) : 0;
+}
+
+function nextActivityId(activity = []) {
+  return "talent-activity-" + (activity.reduce((highest, event) =>
+    Math.max(highest, activitySequenceOf(event.id)), 0) + 1);
+}
+
+function appendStageActivity(activity, currentDate, fromStage, toStage, note = "") {
+  return [...activity, {
+    id: nextActivityId(activity),
+    type: "stage",
+    date: currentDate,
+    fromStage: fromStage ?? null,
+    toStage,
+    note
+  }];
+}
+
+function isValidActivityEvent(event, entry, currentDate) {
+  if (!isRecord(event) ||
+      typeof event.id !== "string" || !activitySequenceOf(event.id) ||
+      !isCalendarDate(event.date) || event.date < entry.addedOn ||
+      event.date > entry.updatedOn || event.date > currentDate ||
+      typeof event.note !== "string" || event.note.length > MAX_NOTE_LENGTH) return false;
+
+  if (event.type === "stage") {
+    return (event.fromStage === null || VALID_STAGES.has(event.fromStage)) &&
+      VALID_STAGES.has(event.toStage) &&
+      event.fromStage !== event.toStage;
+  }
+  if (event.type === "contact") {
+    return VALID_CONTACT_KINDS.has(event.kind) &&
+      VALID_CONTACT_OUTCOMES.has(event.outcome) &&
+      (event.followUpDate === null || event.followUpDate === undefined ||
+        (isCalendarDate(event.followUpDate) && event.followUpDate >= event.date));
+  }
+  return false;
 }
 
 export function createInitialTalentPipelineState() {
@@ -57,7 +102,14 @@ export function isValidTalentPipelineState(state, currentDate) {
           (!isCalendarDate(entry.nextFollowUpDate) || entry.nextFollowUpDate < entry.addedOn)) ||
         (entry.lastContactDate !== null && entry.lastContactDate !== undefined &&
           (!isCalendarDate(entry.lastContactDate) || entry.lastContactDate < entry.addedOn || entry.lastContactDate > entry.updatedOn)) ||
-        typeof entry.note !== "string" || entry.note.length > MAX_NOTE_LENGTH) return false;
+        typeof entry.note !== "string" || entry.note.length > MAX_NOTE_LENGTH ||
+        (entry.activity !== undefined &&
+          (!Array.isArray(entry.activity) || entry.activity.length > MAX_ACTIVITY_EVENTS ||
+            !entry.activity.every((event) => isValidActivityEvent(event, entry, currentDate)) ||
+            new Set(entry.activity.map((event) => event.id)).size !== entry.activity.length ||
+            entry.activity.some((event, index, events) =>
+              index > 0 && (event.date < events[index - 1].date ||
+                activitySequenceOf(event.id) <= activitySequenceOf(events[index - 1].id)))))) return false;
 
     const sequence = sequenceOf(entry.id);
     if (!sequence || sequence >= state.nextSequence || ids.has(entry.id) || playerIds.has(entry.playerId)) return false;
@@ -139,8 +191,19 @@ export function upsertTalentProspect(save, player, options = {}) {
     lastContactDate: stage === "contacted"
       ? (existing?.lastContactDate ?? currentDate)
       : (existing?.lastContactDate ?? null),
-    note
+    note,
+    activity: existing?.activity ?? []
   };
+  const stageChanged = isNew || existing.stage !== stage;
+  if (stageChanged) {
+    entry.activity = appendStageActivity(
+      entry.activity,
+      currentDate,
+      existing?.stage ?? null,
+      stage,
+      typeof options.stageNote === "string" ? options.stageNote.slice(0, MAX_NOTE_LENGTH) : ""
+    );
+  }
   const entries = isNew
     ? [entry, ...pipeline.entries]
     : pipeline.entries.map((item) => item.playerId === player.id ? entry : item);
@@ -153,4 +216,86 @@ export function upsertTalentProspect(save, player, options = {}) {
     entry,
     save: { ...save, agency: { ...save.agency, talentPipeline: nextPipeline } }
   };
+}
+
+
+/**
+ * Records an initial contact with a prospect before any representation contract
+ * exists. This is deliberately isolated from representation interactions,
+ * contracts, offers, and client membership.
+ */
+export function recordTalentProspectContact(save, player, options = {}) {
+  const currentDate = save?.world?.currentDate;
+  if (!isCalendarDate(currentDate)) {
+    return { changed: false, save, error: "تاريخ المسيرة غير صالح." };
+  }
+  const kind = options.kind;
+  const outcome = options.outcome;
+  const note = options.note ?? "";
+  const followUpDate = options.followUpDate || null;
+  if (!VALID_CONTACT_KINDS.has(kind) || !VALID_CONTACT_OUTCOMES.has(outcome) ||
+      typeof note !== "string" || note.length > MAX_NOTE_LENGTH ||
+      (followUpDate !== null &&
+        (!isCalendarDate(followUpDate) || followUpDate < currentDate)) ||
+      (outcome === "pending" && (!followUpDate || followUpDate <= currentDate))) {
+    return { changed: false, save, error: "بيانات التواصل أو نتيجة الاتصال أو موعد المتابعة غير صالحة." };
+  }
+
+  const representation = save?.agency?.representation;
+  if (!representation || save.agency.clients?.includes(player?.id) ||
+      representation.contracts?.some((contract) => contract.playerId === player?.id && contract.status === "active") ||
+      representation.offers?.some((offer) => offer.playerId === player?.id && ["pending", "countered"].includes(offer.status))) {
+    return { changed: false, save, error: "هذا اللاعب لديه عقد أو عرض تمثيل مفتوح بالفعل؛ استخدم مسار التفاوض الحالي." };
+  }
+
+  const existing = getTalentProspect(save?.agency?.talentPipeline, player?.id);
+  if ((existing?.activity?.length ?? 0) >= MAX_ACTIVITY_EVENTS) {
+    return { changed: false, save, error: "وصل سجل نشاط اللاعب إلى الحد الأقصى." };
+  }
+  const sourceIds = Array.isArray(options.sourceIds) && options.sourceIds.length > 0
+    ? [...new Set([...(existing?.sourceIds ?? []), ...options.sourceIds])]
+    : [...(existing?.sourceIds ?? ["manual"])];
+  const tracked = upsertTalentProspect(save, player, {
+    sourceIds,
+    stage: "contacted",
+    note,
+    nextFollowUpDate: followUpDate,
+    stageNote: "تم تسجيل أول تواصل مع اللاعب."
+  });
+  if (!tracked.changed) return tracked;
+
+  const entry = tracked.entry;
+  if ((entry.activity?.length ?? 0) >= MAX_ACTIVITY_EVENTS) {
+    return { changed: false, save, error: "وصل سجل نشاط اللاعب إلى الحد الأقصى." };
+  }
+  const contact = {
+    id: nextActivityId(entry.activity ?? []),
+    type: "contact",
+    date: currentDate,
+    kind,
+    outcome,
+    followUpDate,
+    note
+  };
+  const updatedEntry = {
+    ...entry,
+    lastContactDate: currentDate,
+    nextFollowUpDate: followUpDate,
+    note,
+    activity: [...(entry.activity ?? []), contact]
+  };
+  const entries = tracked.save.agency.talentPipeline.entries.map((item) =>
+    item.playerId === player.id ? updatedEntry : item
+  );
+  const nextSave = {
+    ...tracked.save,
+    agency: {
+      ...tracked.save.agency,
+      talentPipeline: {
+        ...tracked.save.agency.talentPipeline,
+        entries
+      }
+    }
+  };
+  return { changed: true, entry: updatedEntry, contact, save: nextSave };
 }
