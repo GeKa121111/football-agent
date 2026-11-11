@@ -9,13 +9,23 @@ const CONTRACT_STATUSES = new Set(["active", "terminated", "expired"]);
 const HISTORY_TYPES = new Set([
   "offer-sent",
   "player-countered",
+  "agency-countered",
   "offer-accepted",
   "offer-rejected",
   "offer-expired",
   "contract-signed",
+  "contract-renewed",
+  "renewal-offer-sent",
   "contract-terminated",
   "contract-expired"
 ]);
+const PERSONALITIES = Object.freeze({
+  ambitious: "طموح",
+  loyal: "وفيّ",
+  pragmatic: "عملي",
+  cautious: "حذر",
+  professional: "احترافي"
+});
 
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -42,6 +52,109 @@ function validTerms(commissionRate, termDays) {
   return Number.isInteger(commissionRate) &&
     commissionRate >= 5 && commissionRate <= 15 &&
     CONTRACT_TERMS.includes(termDays);
+}
+
+
+function stableHash(value) {
+  let hash = 2166136261;
+  for (const character of String(value)) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function isValidPlayerPreferences(value) {
+  return isRecord(value) &&
+    Object.hasOwn(PERSONALITIES, value.personality) &&
+    Number.isInteger(value.ambition) && value.ambition >= 1 && value.ambition <= 5 &&
+    Number.isInteger(value.loyalty) && value.loyalty >= 1 && value.loyalty <= 5 &&
+    Number.isInteger(value.professionalism) && value.professionalism >= 1 && value.professionalism <= 5 &&
+    Number.isInteger(value.preferredCommissionRate) && value.preferredCommissionRate >= 5 && value.preferredCommissionRate <= 15 &&
+    CONTRACT_TERMS.includes(value.preferredTermDays);
+}
+
+/**
+ * Stable, identity-based player preferences. These are generated once when an
+ * offer is created and then snapshotted so a player's negotiation stance
+ * cannot change between reloads or browser sessions.
+ */
+export function getPlayerRepresentationProfile(player) {
+  const id = typeof player?.id === "string" ? player.id : "unknown-player";
+  const hash = stableHash(id);
+  const personalities = Object.keys(PERSONALITIES);
+  const personality = personalities[hash % personalities.length];
+  const ambition = 1 + ((hash >>> 3) % 5);
+  const loyalty = 1 + ((hash >>> 7) % 5);
+  const professionalism = 1 + ((hash >>> 11) % 5);
+  const rating = Number.isInteger(player?.rating) ? player.rating : 70;
+  const age = Number.isInteger(player?.age) ? player.age : 25;
+  const baseCommission = rating >= 80 ? 8 : rating >= 72 ? 9 : 10;
+  const commissionAdjustment =
+    (ambition >= 4 ? -1 : 0) +
+    (professionalism >= 4 ? -1 : 0) +
+    (loyalty >= 4 ? 1 : 0);
+  const preferredCommissionRate = clamp(baseCommission + commissionAdjustment, 7, 12);
+  const preferredTermDays = age <= 20
+    ? (loyalty >= 4 ? 730 : 365)
+    : (loyalty >= 4 ? 1095 : 730);
+  return {
+    personality,
+    ambition,
+    loyalty,
+    professionalism,
+    preferredCommissionRate,
+    preferredTermDays
+  };
+}
+
+function getOfferPreferences(offer) {
+  if (isValidPlayerPreferences(offer.playerPreferences)) return offer.playerPreferences;
+  return getPlayerRepresentationProfile({
+    id: offer.playerId,
+    age: offer.age,
+    rating: offer.rating,
+    potential: offer.potential
+  });
+}
+
+export function getRepresentationContractExpiry(contract) {
+  const renewals = Array.isArray(contract?.renewals) ? contract.renewals : [];
+  return renewals.length > 0 ? renewals[renewals.length - 1].expiresOn : contract?.expiresOn;
+}
+
+export function getRepresentationContractCommission(contract, currentDate) {
+  let commissionRate = contract?.commissionRate ?? 0;
+  const renewals = Array.isArray(contract?.renewals) ? contract.renewals : [];
+  for (const renewal of renewals) {
+    if (isCalendarDate(currentDate) && currentDate >= renewal.startsOn) {
+      commissionRate = renewal.commissionRate;
+    }
+  }
+  return commissionRate;
+}
+
+function playerAcceptsTerms(offer, terms) {
+  const preferences = getOfferPreferences(offer);
+  const commissionAllowance = preferences.preferredCommissionRate + (offer.round >= 2 ? 1 : 0);
+  const minimumTerm = offer.round >= 3
+    ? Math.max(365, preferences.preferredTermDays - 365)
+    : preferences.preferredTermDays;
+  return terms.commissionRate <= commissionAllowance && terms.termDays >= minimumTerm;
+}
+
+function buildPlayerCounterOffer(offer) {
+  const preferences = getOfferPreferences(offer);
+  const concession = offer.round >= 2 ? 1 : 0;
+  const termConcession = offer.round >= 3 ? 365 : 0;
+  return {
+    commissionRate: clamp(preferences.preferredCommissionRate + concession, 5, 15),
+    termDays: Math.max(365, preferences.preferredTermDays - termConcession)
+  };
 }
 
 function nextHistory(representation, type, player, date, note, references = {}) {
@@ -81,11 +194,15 @@ function createContract(save, offer, terms, currentDate, resolution) {
     age: offer.age,
     club: offer.club,
     position: offer.position,
+    rating: offer.rating,
+    potential: offer.potential,
+    playerPreferences: getOfferPreferences(offer),
     signedOn: currentDate,
     expiresOn: addDays(currentDate, terms.termDays),
     termDays: terms.termDays,
     commissionRate: terms.commissionRate,
-    relationshipScore: resolution === "counter-accepted" ? 65 : 70,
+    renewals: [],
+    relationshipScore: resolution === "counter-accepted" ? 68 : resolution === "agency-countered" ? 74 : 70,
     status: "active"
   };
   let updated = {
