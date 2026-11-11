@@ -425,17 +425,20 @@ test("allows a mission started before contract expiry to finish after the contra
 test("simulates scouting contracts and paid missions across two season boundaries without overspending", () => {
   let save = createInitialSave(); const hired = signScoutingContract(save, "scout-iberian-network"); assert.equal(hired.changed, true); save = hired.save;
   const schedule = new Map([[0,"local"],[100,"regional"],[200,"local"],[300,"elite"],[400,"local"],[500,"regional"],[600,"local"]]);
-  let completedReportCount = 0; let lowestObservedBalance = save.agency.balance;
+  let completedReportCount = 0; const completedReports = []; let lowestObservedBalance = save.agency.balance;
+  assert.equal(PLAYERS.length, 32, "long-run balance test must use the expanded 32-player pool");
   for (let day = 0; day < 732; day += 1) {
     if (day === 340) { const renewal = renewScoutingContract(save, "scout-iberian-network"); assert.equal(renewal.changed, true); assert.equal(renewal.fee, 8000); save = renewal.save; }
     const missionType = schedule.get(day);
     if (missionType) { const started = startScoutingMission(save, { type: missionType, countryId: "all", role: "all", scoutId: "scout-iberian-network" }, PLAYERS); assert.equal(started.changed, true, started.error); save = started.save; lowestObservedBalance = Math.min(lowestObservedBalance, save.agency.balance); }
     save = advanceCareerDay(save); const result = advanceScoutingMissions(save, PLAYERS); save = result.save;
-    completedReportCount += result.completedReports.length; lowestObservedBalance = Math.min(lowestObservedBalance, save.agency.balance); assert.ok(save.agency.balance >= 0);
+    completedReportCount += result.completedReports.length; completedReports.push(...result.completedReports); lowestObservedBalance = Math.min(lowestObservedBalance, save.agency.balance); assert.ok(save.agency.balance >= 0);
   }
-  assert.equal(completedReportCount, 7); assert.equal(save.career.season, 3); assert.equal(save.world.currentDate, "2028-07-02");
+  assert.equal(completedReportCount, 7); assert.equal(completedReports.length, 7); assert.equal(save.career.season, 3); assert.equal(save.world.currentDate, "2028-07-02");
+  assert.ok(completedReports.every((report) => report.candidateCount === PLAYERS.length), "each long-run report must cover all 32 players");
+  assert.ok(completedReports.every((report) => report.findings.length === 6), "each report must retain the six best findings");
   assert.equal(save.agency.balance, 5000); assert.equal(lowestObservedBalance, 5000); assert.equal(save.world.scouting.reports.length, 7);
-  assert.ok(save.world.scouting.observations.length > 0); assert.equal(isValidSave(save), true);
+  assert.equal(save.world.scouting.observations.length, 42, "seven reports should retain six player observations each"); assert.equal(isValidSave(save), true);
   const staff = getScoutingRoster(save.world.scouting, save.world.currentDate).find((scout) => scout.id === "scout-iberian-network"); assert.equal(staff.isContractExpired, true);
   const rejected = startScoutingMission(save, { type: "local", countryId: "all", role: "all", scoutId: "scout-iberian-network" }, PLAYERS);
   assert.equal(rejected.changed, false); assert.match(rejected.error, /انتهى عقد الكشاف/);
