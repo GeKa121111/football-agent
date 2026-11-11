@@ -39,16 +39,36 @@ test("creates a clean scouting state and defines transparent mission trade-offs"
 
 test("filters candidates through distinct discovery channels without changing the world seed", () => {
   assert.equal(SCOUTING_SOURCES.length, 5);
-  assert.equal(getScoutingCandidates(PLAYERS).length, 16);
-  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "academy" }).length, 9);
-  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "club-network" }).length, 7);
-  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "youth-tournament" }).length, 9);
-  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "agent-referral" }).length, 7);
+  assert.equal(getScoutingCandidates(PLAYERS).length, 32);
+  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "academy" }).length, 17);
+  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "club-network" }).length, 15);
+  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "youth-tournament" }).length, 17);
+  assert.equal(getScoutingCandidates(PLAYERS, { sourceId: "agent-referral" }).length, 15);
   assert.deepEqual(
     getScoutingCandidates(PLAYERS, { countryId: "country-eg", role: "هجوم", sourceId: "academy" }).map((player) => player.id),
     ["demo-yassin-adel"]
   );
   assert.deepEqual(getScoutingCandidates(PLAYERS, { sourceId: "unknown-channel" }), []);
+});
+
+
+test("can launch a valid scouting scope for every country and general role", () => {
+  const countries = ["country-eg", "country-ma", "country-tn", "country-gb", "country-es", "country-de", "country-fr", "country-it"];
+  const roles = ["هجوم", "وسط", "دفاع", "حراسة"];
+
+  for (const countryId of countries) {
+    for (const role of roles) {
+      const candidates = getScoutingCandidates(PLAYERS, { countryId, role });
+      assert.equal(candidates.length, 1, countryId + " / " + role);
+      const started = startScoutingMission(createInitialSave(), {
+        type: "local", countryId, role
+      }, PLAYERS);
+      assert.equal(started.changed, true, countryId + " / " + role + ": " + started.error);
+      assert.equal(started.mission.targetCount, 1);
+      assert.equal(started.mission.countryId, countryId);
+      assert.equal(started.mission.role, role);
+    }
+  }
 });
 
 test("starts a scoped mission, charges its exact cost and does not mutate the source save", () => {
@@ -63,7 +83,7 @@ test("starts a scoped mission, charges its exact cost and does not mutate the so
   assert.equal(result.mission.startDate, "2026-07-01");
   assert.equal(result.mission.dueDate, "2026-07-08");
   assert.equal(result.mission.durationDays, 7);
-  assert.equal(result.mission.targetCount, 2);
+  assert.equal(result.mission.targetCount, 4);
   assert.equal(result.save.agency.balance, 95000);
   assert.equal(save.agency.balance, 100000);
   assert.equal(result.save.world.scouting.activeMissions.length, 1);
@@ -75,7 +95,7 @@ test("rejects invalid scopes, empty targets, insufficient funds and excess activ
   assert.equal(startScoutingMission(save, { type: "unknown" }, PLAYERS).changed, false);
   assert.equal(startScoutingMission(save, { type: "local", sourceId: "unknown-channel" }, PLAYERS).changed, false);
   assert.match(
-    startScoutingMission(save, { type: "local", countryId: "country-eg", role: "حراسة" }, PLAYERS).error,
+    startScoutingMission(save, { type: "local", countryId: "country-eg", role: "دفاع", sourceId: "academy" }, PLAYERS).error,
     /مفيش لاعبين/
   );
 
@@ -126,7 +146,7 @@ test("completes due missions into explainable reports only when their duration e
   assert.equal(report.completedDate, "2026-07-15");
   assert.equal(report.durationDays, 14);
   assert.equal(report.cost, SCOUTING_MISSION_TYPES.regional.cost);
-  assert.equal(report.candidateCount, 2);
+  assert.equal(report.candidateCount, 4);
   assert.ok(report.findings.length > 0 && report.findings.length <= 6);
   for (const finding of report.findings) {
     assert.ok(finding.estimatedRating >= 1 && finding.estimatedRating <= 99);

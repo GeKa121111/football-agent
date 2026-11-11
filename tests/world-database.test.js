@@ -14,9 +14,27 @@ test("ships a compact but connected multi-country world seed", () => {
     leagues: 8,
     competitions: 10,
     clubs: 16,
-    players: 16
+    players: 32
   });
   assert.equal(validateWorldDatabase().valid, true);
+});
+
+
+test("balances scouting coverage across all eight countries and four general roles", () => {
+  const roles = ["هجوم", "وسط", "دفاع", "حراسة"];
+  for (const country of WORLD_DATABASE.countries) {
+    const countryPlayers = WORLD_DATABASE.players.filter((player) => player.countryId === country.id);
+    assert.equal(countryPlayers.length, 4, country.id);
+    assert.deepEqual(
+      [...new Set(countryPlayers.map((player) => player.role))].sort(),
+      [...roles].sort(),
+      country.id + " must expose every scouting role"
+    );
+  }
+
+  for (const club of WORLD_DATABASE.clubs) {
+    assert.equal(WORLD_DATABASE.players.filter((player) => player.clubId === club.id).length, 2, club.id);
+  }
 });
 
 test("each entity collection has stable unique IDs", () => {
