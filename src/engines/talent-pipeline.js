@@ -40,7 +40,7 @@ function appendStageActivity(activity, currentDate, fromStage, toStage, note = "
     fromStage: fromStage ?? null,
     toStage,
     note
-  }];
+  }].slice(-MAX_ACTIVITY_EVENTS);
 }
 
 function isValidActivityEvent(event, entry, currentDate) {
@@ -386,10 +386,6 @@ export function completeTalentProspectFollowUp(save, taskId) {
   if (!entry || entry.id !== task.prospectId || entry.nextFollowUpDate !== task.dueDate) {
     return { changed: false, save };
   }
-  if ((entry.activity?.length ?? 0) >= MAX_ACTIVITY_EVENTS) {
-    return { changed: false, save, error: "وصل سجل نشاط اللاعب إلى الحد الأقصى." };
-  }
-
   const event = {
     id: nextActivityId(entry.activity ?? []),
     type: "follow-up-reviewed",
@@ -401,7 +397,7 @@ export function completeTalentProspectFollowUp(save, taskId) {
     ...entry,
     updatedOn: save.world.currentDate,
     nextFollowUpDate: null,
-    activity: [...(entry.activity ?? []), event]
+    activity: [...(entry.activity ?? []), event].slice(-MAX_ACTIVITY_EVENTS)
   };
   const nextPipeline = {
     ...pipeline,
