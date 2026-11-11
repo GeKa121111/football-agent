@@ -257,6 +257,40 @@ test.describe("Desktop experience", () => {
     expect(saved.agency.representation.reputationScore).toBeGreaterThanOrEqual(startingReputation);
   });
 
+  test("opens a consolidated client dossier with contract terms and relationship history", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+    const offerModal = page.locator(".modal-overlay");
+    await offerModal.getByLabel("نسبة العمولة").selectOption("15");
+    await offerModal.getByLabel("مدة العقد").selectOption("1095");
+    await offerModal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+    await page.locator(".representation-evaluate-button").click();
+    await page.locator(".representation-accept-button").click();
+
+    let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const contract = saved.agency.representation.contracts[0];
+    expect(saved.agency.clients).toContain(contract.playerId);
+    await page.locator(".representation-message-button").click();
+
+    await page.locator(".representation-client-dossier-button").click();
+    const dossier = page.getByRole("dialog", { name: "ملف العميل" });
+    await expect(dossier).toBeVisible();
+    await expect(dossier.locator(".representation-dossier-hero h3")).toHaveText(contract.playerName);
+    await expect(dossier.getByRole("heading", { name: "العلاقة والثقة" })).toBeVisible();
+    await expect(dossier.getByRole("heading", { name: "العقد الحالي" })).toBeVisible();
+    await expect(dossier.locator(".representation-dossier-stat")).toHaveCount(6);
+    await expect(dossier.getByText(/تمثيل حصري|تمثيل غير حصري/).first()).toBeVisible();
+    await expect(dossier.getByRole("heading", { name: "الرسائل والاجتماعات" })).toBeVisible();
+    await expect(dossier.getByText("بانتظار الرد").first()).toBeVisible();
+    await expect(dossier.getByRole("heading", { name: "سجل العلاقة" })).toBeVisible();
+
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.agency.representation.interactions[0].contractId).toBe(contract.id);
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".modal-overlay")).toHaveCount(0);
+  });
+
   test("renders distinct SVG player portraits and reuses them in player details", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "اللاعبون");

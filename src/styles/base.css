@@ -1110,3 +1110,24 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   .representation-contract-row .representation-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
   .representation-contract-row .representation-actions button { min-width: 0; }
 }
+
+
+/* Phase 7 follow-up — consolidated client dossier */
+.representation-client-dossier { display: flex; min-width: 0; flex-direction: column; gap: 13px; }
+.representation-dossier-hero,
+.representation-dossier-section { min-width: 0; padding: 13px; border: 1px solid rgba(166,145,216,.14); border-radius: 12px; background: rgba(9,15,30,.48); }
+.representation-dossier-hero h3 { margin: 5px 0; color: #f0e9ff; font-size: 16px; }
+.representation-dossier-hero p { margin: 5px 0 0; color: #9eaac3; font-size: 10px; line-height: 1.7; }
+.representation-dossier-status { color: #bca7e7 !important; }
+.representation-dossier-section h3 { margin: 0 0 10px; color: #e9e3f8; font-size: 12px; }
+.representation-dossier-trust { color: #a9e2cd; font-size: 23px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.representation-dossier-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.representation-dossier-stat { display: flex; min-width: 0; flex-direction: column; gap: 5px; padding: 10px; border: 1px solid rgba(166,145,216,.12); border-radius: 9px; background: rgba(17,24,44,.62); }
+.representation-dossier-stat span { color: #8996b1; font-size: 8px; }
+.representation-dossier-stat strong { color: #e5def5; font-size: 11px; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .representation-dossier-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 390px) {
+  .representation-dossier-grid { grid-template-columns: minmax(0,1fr); }
+}

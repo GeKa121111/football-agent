@@ -924,6 +924,7 @@ function renderAgency(context) {
             : "متبقي " + remainingDays + " يومًا على العقد")
       );
       const actions = node("div", "representation-actions");
+      actions.append(actionButton("ملف العميل", "button-outline representation-client-dossier-button", () => context.openRepresentationClientDossier(contract.id)));
       actions.append(actionButton("رسالة", "button-outline representation-message-button", () => context.sendRepresentationInteraction(contract.id, "message")));
       actions.append(actionButton("اتصال", "button-outline representation-call-button", () => context.sendRepresentationInteraction(contract.id, "call")));
       actions.append(actionButton("اجتماع", "button-outline representation-meeting-button", () => context.openRepresentationMeeting(contract.id)));
@@ -1359,6 +1360,168 @@ export function mountApp(root) {
       } else state.save = previousSave;
     }));
     openModal("تجديد عقد التمثيل", [form], "إغلاق");
+  }
+
+  function openRepresentationClientDossier(contractId) {
+    const representation = state.save.agency.representation;
+    const contract = representation.contracts.find((item) => item.id === contractId);
+    if (!contract) { toast("ملف العميل غير موجود في سجل الوكالة."); return; }
+
+    const currentDate = state.save.world.currentDate;
+    const offer = representation.offers.find((item) => item.id === contract.offerId);
+    const activeType = getRepresentationContractType(contract, currentDate);
+    const activeCommission = getRepresentationContractCommission(contract, currentDate);
+    const expiryDate = getRepresentationContractExpiry(contract);
+    const remainingDays = Math.max(0, Math.round((Date.parse(expiryDate + "T00:00:00.000Z") -
+      Date.parse(currentDate + "T00:00:00.000Z")) / 86400000));
+    const interactions = (representation.interactions ?? [])
+      .filter((item) => item.contractId === contract.id);
+    const pendingInteractions = interactions.filter((item) =>
+      ["pending_response", "scheduled"].includes(item.status)
+    );
+    const renewals = contract.renewals ?? [];
+    const playerHistory = representation.history
+      .filter((entry) => entry.playerId === contract.playerId)
+      .slice(0, 12);
+
+    const content = node("div", "representation-client-dossier");
+    const hero = node("section", "representation-dossier-hero");
+    hero.append(
+      node("span", "agency-label", "ملف عميل الوكالة"),
+      node("h3", "", contract.playerName),
+      node("p", "", contract.position + " · " + contract.club + " · " + contract.age + " سنة"),
+      node("p", "representation-dossier-status", (contract.status === "active" ? "عميل نشط" : "عقد مؤرشف") +
+        " · " + (activeType === "exclusive" ? "تمثيل حصري" : "تمثيل غير حصري"))
+    );
+    content.append(hero);
+
+    const relationship = node("section", "representation-dossier-section");
+    relationship.append(
+      node("h3", "", "العلاقة والثقة"),
+      node("div", "representation-dossier-trust", contract.relationshipScore + "/100"),
+      node("p", "representation-intro", "حالة العلاقة: " + getRepresentationRelationshipLabel(contract.relationshipScore)),
+      node("p", "representation-intro", "سمعة الوكالة: " + getAgencyReputationScore(representation) + "/100")
+    );
+    content.append(relationship);
+
+    const termsPanel = node("section", "representation-dossier-section");
+    termsPanel.append(node("h3", "", "العقد الحالي"));
+    const termsGrid = node("div", "representation-dossier-grid");
+    const termCards = [
+      ["العمولة السارية", activeCommission + "%"],
+      ["تاريخ التوقيع", formatHomeDate(contract.signedOn)],
+      ["نهاية العقد", formatHomeDate(expiryDate)],
+      ["المتبقي", remainingDays + " يوم"],
+      ["نوع التفويض", activeType === "exclusive" ? "حصري" : "غير حصري"],
+      ["مدة العقد الأصلية", Math.round(contract.termDays / 365) + " سنة"]
+    ];
+    termCards.forEach(([label, value]) => {
+      const tile = node("div", "representation-dossier-stat");
+      tile.append(node("span", "", label), node("strong", "", value));
+      termsGrid.append(tile);
+    });
+    termsPanel.append(termsGrid);
+    if (offer) {
+      termsPanel.append(node("p", "representation-intro",
+        "عرض التمثيل الأصلي: عمولة " + offer.commissionRate + "% · " +
+        Math.round(offer.termDays / 365) + " سنة · " + formatHomeDate(offer.createdDate)));
+    }
+    content.append(termsPanel);
+
+    const renewalsPanel = node("section", "representation-dossier-section");
+    renewalsPanel.append(
+      node("h3", "", "تاريخ التجديدات"),
+      node("span", "representation-count", renewals.length + " تمديد")
+    );
+    if (renewals.length === 0) {
+      renewalsPanel.append(node("p", "representation-empty", "لم يتم تجديد العقد حتى الآن."));
+    } else {
+      const renewalList = node("div", "representation-history-list");
+      renewals.forEach((renewal, index) => {
+        const row = node("div", "representation-history-row");
+        row.append(
+          node("strong", "", "التجديد " + (index + 1)),
+          node("span", "", formatHomeDate(renewal.signedOn) + " · يبدأ " + formatHomeDate(renewal.startsOn)),
+          node("small", "", (renewal.representationType === "non-exclusive" ? "غير حصري" : "حصري") +
+            " · عمولة " + renewal.commissionRate + "% · حتى " + formatHomeDate(renewal.expiresOn))
+        );
+        renewalList.append(row);
+      });
+      renewalsPanel.append(renewalList);
+    }
+    content.append(renewalsPanel);
+
+    const followupsPanel = node("section", "representation-dossier-section");
+    followupsPanel.append(
+      node("h3", "", "الرسائل والاجتماعات"),
+      node("span", "representation-count", pendingInteractions.length + " متابعة مفتوحة")
+    );
+    if (interactions.length === 0) {
+      followupsPanel.append(node("p", "representation-empty", "لسه مفيش رسائل أو مكالمات أو اجتماعات مسجلة."));
+    } else {
+      const interactionList = node("div", "representation-history-list");
+      interactions.slice(0, 12).forEach((interaction) => {
+        const kindLabel = interaction.kind === "meeting" ? "اجتماع" : interaction.kind === "call" ? "مكالمة" : "رسالة";
+        const statusLabel = interaction.status === "pending_response" ? "بانتظار الرد"
+          : interaction.status === "scheduled" ? "موعد مجدول"
+            : interaction.status === "missed" ? "موعد فائت"
+              : interaction.outcome === "positive" ? "نتيجة إيجابية"
+                : interaction.outcome === "neutral" ? "نتيجة محايدة" : "نتيجة سلبية";
+        const row = node("div", "representation-history-row");
+        row.append(
+          node("strong", "", kindLabel + " · " + statusLabel),
+          node("span", "", formatHomeDate(interaction.createdDate) + " · الموعد " + formatHomeDate(interaction.dueDate)),
+          node("small", "", interaction.resolvedDate
+            ? "أُغلقت في " + formatHomeDate(interaction.resolvedDate)
+            : "لم تُغلق بعد")
+        );
+        interactionList.append(row);
+      });
+      followupsPanel.append(interactionList);
+    }
+    content.append(followupsPanel);
+
+    const historyPanel = node("section", "representation-dossier-section");
+    historyPanel.append(
+      node("h3", "", "سجل العلاقة"),
+      node("span", "representation-count", playerHistory.length + " حدث حديث")
+    );
+    if (playerHistory.length === 0) {
+      historyPanel.append(node("p", "representation-empty", "لا توجد أحداث محفوظة لهذا العميل."));
+    } else {
+      const historyList = node("div", "representation-history-list");
+      const historyLabels = {
+        "offer-sent": "إرسال عرض تمثيل",
+        "player-countered": "عرض مضاد من اللاعب",
+        "agency-countered": "عرض مضاد من الوكالة",
+        "offer-accepted": "قبول الشروط",
+        "offer-rejected": "رفض العرض",
+        "offer-expired": "انتهاء صلاحية العرض",
+        "contract-signed": "توقيع العقد",
+        "contract-renewed": "تجديد العقد",
+        "renewal-offer-sent": "عرض تجديد",
+        "message-sent": "إرسال رسالة",
+        "message-replied": "رد اللاعب",
+        "meeting-scheduled": "تحديد اجتماع",
+        "meeting-completed": "اجتماع مكتمل",
+        "meeting-missed": "اجتماع فائت",
+        "contract-terminated": "إنهاء التمثيل",
+        "contract-expired": "انتهاء العقد"
+      };
+      playerHistory.forEach((entry) => {
+        const row = node("div", "representation-history-row");
+        row.append(
+          node("strong", "", historyLabels[entry.type] ?? entry.type),
+          node("span", "", formatHomeDate(entry.date)),
+          node("small", "", entry.note)
+        );
+        historyList.append(row);
+      });
+      historyPanel.append(historyList);
+    }
+    content.append(historyPanel);
+
+    openModal("ملف العميل", [content], "إغلاق");
   }
 
   function sendRepresentationInteraction(contractId, kind) {
@@ -2194,6 +2357,7 @@ export function mountApp(root) {
       openRepresentationOffer,
       openRepresentationCounter,
       openRepresentationRenewal,
+      openRepresentationClientDossier,
       sendRepresentationInteraction,
       openRepresentationMeeting,
       openRepresentationMeetingOutcome,
