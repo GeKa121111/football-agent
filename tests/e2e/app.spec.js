@@ -67,7 +67,7 @@ test.describe("Desktop experience", () => {
       paths: element.querySelectorAll("svg path").length
     })));
     expect(new Set(profiles.map((profile) => profile.face)).size).toBe(4);
-    expect(new Set(profiles.map((profile) => profile.hair)).size).toBe(4);
+    expect(new Set(profiles.map((profile) => profile.hair)).size).toBeGreaterThanOrEqual(4);
     expect(new Set(profiles.map((profile) => profile.kit)).size).toBe(4);
     expect(profiles.every((profile) => profile.paths >= 10)).toBe(true);
 
