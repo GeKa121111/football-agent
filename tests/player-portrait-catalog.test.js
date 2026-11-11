@@ -12,7 +12,10 @@ function clubById(clubId) {
 }
 
 test("all world players receive a unique, complete portrait asset identity", () => {
-  const assignments = WORLD_DATABASE.players.map((player) => createPortraitAssignment(player, clubById(player.clubId)));
+  const assignments = WORLD_DATABASE.players.map((player) => ({
+    ...player,
+    ...createPortraitAssignment(player, clubById(player.clubId))
+  }));
   const validation = validatePortraitAssignments(assignments);
   assert.equal(validation.valid, true, validation.errors.join(" "));
   assert.equal(new Set(assignments.map((player) => player.portraitAssetId)).size, 48);
