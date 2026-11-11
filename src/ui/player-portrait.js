@@ -209,6 +209,7 @@ export function createPlayerPortrait(player, { featured = false } = {}) {
   const sequence = ++portraitSequence;
   const gradientId = `portrait-bg-${sequence}`;
   const faceId = `portrait-face-${sequence}`;
+  const faceGlowId = `portrait-face-glow-${sequence}`;
   const shirtClipId = `portrait-shirt-${sequence}`;
 
   const wrapper = document.createElement("div");
@@ -241,6 +242,18 @@ export function createPlayerPortrait(player, { featured = false } = {}) {
   addGradient(defs, faceId, [
     ["0%", profile.skin], ["55%", profile.skin], ["100%", "#7f4e3d", 0.95]
   ], { x1: "0", y1: "0", x2: "1", y2: "0.7" });
+  const faceGlow = svgElement("radialGradient", defs, {
+    id: faceGlowId, cx: "34%", cy: "24%", r: "78%"
+  });
+  svgElement("stop", faceGlow, {
+    offset: "0%", "stop-color": "#fff6e9", "stop-opacity": 0.24
+  });
+  svgElement("stop", faceGlow, {
+    offset: "54%", "stop-color": "#fff6e9", "stop-opacity": 0.055
+  });
+  svgElement("stop", faceGlow, {
+    offset: "100%", "stop-color": "#fff6e9", "stop-opacity": 0
+  });
 
   const shirtPath = "M82 183 Q94 178 105 180 L120 190 L135 180 Q148 178 158 183 C181 188 198 199 209 221 L231 300 H9 L31 221 C42 199 59 188 82 183 Z";
   const shirtClip = svgElement("clipPath", defs, { id: shirtClipId });
@@ -324,6 +337,22 @@ export function createPlayerPortrait(player, { featured = false } = {}) {
     "stroke-linejoin": "round"
   });
   svgElement("path", athlete, {
+    d: "M108 185 L120 195 L132 185",
+    fill: "none",
+    stroke: "#ffffff",
+    "stroke-opacity": 0.3,
+    "stroke-width": 1.25,
+    "stroke-linecap": "round"
+  });
+  svgElement("path", athlete, {
+    d: "M55 205 Q67 194 84 193 M185 193 Q202 194 213 205",
+    fill: "none",
+    stroke: profile.kitLight,
+    "stroke-opacity": 0.3,
+    "stroke-width": 2,
+    "stroke-linecap": "round"
+  });
+  svgElement("path", athlete, {
     d: "M89 194 L100 300 M151 194 L140 300",
     fill: "none",
     stroke: profile.kitLight,
@@ -373,6 +402,26 @@ export function createPlayerPortrait(player, { featured = false } = {}) {
     fill: `url(#${faceId})`
   });
   svgElement("path", athlete, {
+    d: FACE_PATHS[profile.faceShape],
+    fill: `url(#${faceGlowId})`
+  });
+  svgElement("path", athlete, {
+    d: "M91 139 Q100 145 109 139 M131 139 Q140 145 149 139",
+    fill: "none",
+    stroke: "#8d5145",
+    "stroke-opacity": 0.13,
+    "stroke-width": 4.5,
+    "stroke-linecap": "round"
+  });
+  svgElement("path", athlete, {
+    d: "M96 146 Q102 149 108 146 M132 146 Q138 149 144 146",
+    fill: "none",
+    stroke: "#fff2e2",
+    "stroke-opacity": 0.16,
+    "stroke-width": 2,
+    "stroke-linecap": "round"
+  });
+  svgElement("path", athlete, {
     d: "M85 119 Q88 151 105 169",
     fill: "none",
     stroke: "#6f453a",
@@ -412,6 +461,14 @@ export function createPlayerPortrait(player, { featured = false } = {}) {
     stroke: "#794f41",
     "stroke-opacity": 0.66,
     "stroke-width": 2.6,
+    "stroke-linecap": "round"
+  });
+  svgElement("path", athlete, {
+    d: "M121 125 Q117 137 120 140",
+    fill: "none",
+    stroke: "#fff3e5",
+    "stroke-opacity": 0.34,
+    "stroke-width": 1.45,
     "stroke-linecap": "round"
   });
   svgElement("path", athlete, {
