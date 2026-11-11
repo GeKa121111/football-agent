@@ -286,9 +286,12 @@ test.describe("Mobile experience", () => {
       read: false
     }));
 
-    await page.locator(".message-read-button").click();
+    await page.locator(".message-read-button").first().click();
     saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(saved.world.inbox[0].read).toBe(true);
+    expect(saved.world.inbox.some((message) =>
+      message.eventId === completionEvent.id && message.read === false
+    )).toBe(true);
     await page.reload();
     await expect(page.locator(".career-operations")).toBeVisible();
     await expect(page.getByText("تمت القراءة")).toBeVisible();
