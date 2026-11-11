@@ -28,6 +28,7 @@ import {
   recordTalentProspectContact,
   completeTalentProspectFollowUp,
   assignTalentProspectStaff,
+  handoffTalentProspectToClientManagement,
   MAX_PROSPECTS_PER_SCOUT
 } from "./engines/talent-pipeline.js";
 import {
@@ -2408,13 +2409,9 @@ export function mountApp(root) {
   }
 
   function handoffProspectToClientManagement(save, result) {
-    if (result.status !== "signed" || !result.contract?.playerId) return result.save;
-    const handoff = assignTalentProspectStaff(
-      result.save,
-      result.contract.playerId,
-      null,
-      "contract-signed"
-    );
+    if (result.status !== "signed" || !result.contract?.playerId ||
+        !getTalentProspect(save.agency.talentPipeline, result.contract.playerId)) return result.save;
+    const handoff = handoffTalentProspectToClientManagement(result.save, result.contract.playerId);
     return handoff.changed ? handoff.save : result.save;
   }
 
@@ -3298,7 +3295,7 @@ export function mountApp(root) {
         const previousSave = state.save;
         const result = submitRepresentationCounterOfferInEngine(state.save, offerId, terms);
         if (!result.changed) { toast(result.error); return; }
-        state.save = result.save;
+        state.save = handoffProspectToClientManagement(result.save, result);
         if (saveCareer()) { render(); toast("تم تحديث نتيجة التفاوض."); } else state.save = previousSave;
       },
       rejectRepresentationOffer,
