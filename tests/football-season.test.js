@@ -147,16 +147,25 @@ test("calculates competition standings from saved results with deterministic tie
   const state = {
     results: [
       {
+        season: 1,
         competitionId: competition.id,
         home: { clubId: ahly, goals: 2 },
         away: { clubId: zamalek, goals: 0 }
       },
       {
+        season: 1,
         competitionId: competition.id,
         home: { clubId: zamalek, goals: 1 },
         away: { clubId: ahly, goals: 1 }
+      },
+      {
+        season: 2,
+        competitionId: competition.id,
+        home: { clubId: zamalek, goals: 8 },
+        away: { clubId: ahly, goals: 0 }
       }
-    ]
+    ],
+    season: 1
   };
   const table = getCompetitionStandings(state, competition.id);
   assert.equal(table.length, 2);
