@@ -354,7 +354,7 @@ test("bounds completed task history without evicting open or overdue work", () =
     createdDate: "2025-12-01",
     dueDate: "2025-12-20",
     completedDate: new Date(Date.UTC(2026, 0, 1 + index)).toISOString().slice(0, 10),
-    completedLate: false,
+    completedLate: true,
     category: "completed-history",
     status: "completed"
   }));
