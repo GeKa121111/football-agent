@@ -593,7 +593,7 @@ function renderScouting(context) {
   const roster = getScoutingRoster(scouting, context.save.world.currentDate);
   teamHeading.append(
     node("h2", "", "طاقم الكشافين"),
-    node("span", "scout-count", roster.filter((scout) => !scout.isBusy).length + " متاح من " + roster.length)
+    node("span", "scout-count", roster.filter((scout) => !scout.isBusy && !scout.isContractExpired).length + " متاح من " + roster.length)
   );
   const teamGrid = node("div", "scout-team-grid");
   const levelThresholds = [0, 60, 140, 250, 400];
