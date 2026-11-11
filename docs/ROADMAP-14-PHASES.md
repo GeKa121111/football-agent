@@ -378,3 +378,10 @@
 - دُمج [PR #34](https://github.com/GeKa121111/football-agent/pull/34) بالالتزام `3deb6f7a0f0363a56f3eb162272754998fddd8e4`.
 - نجح [GitHub Actions PR run #121](https://github.com/GeKa121111/football-agent/actions/runs/43059646097) في الوحدة وPlaywright والصياغة والبناء.
 - أُضيف تحقق صريح لتغطية 32 مرشحًا في كل تقرير و42 ملاحظة عبر سبع بعثات في اختبار 732 يومًا.
+
+
+### إصلاح مسار نشر GitHub Pages
+
+- كشف سجل نشر PR #34 أن تثبيت Chromium باستخدام `--with-deps` يفرض تنزيل حزم إضافية من مرايا Ubuntu، وفشل بسبب تعذر DNS.
+- يطابق التغيير الجديد أمر تثبيت المتصفح في Workflow التحقق الناجح: `npx playwright install chromium`.
+- يظل النشر غير معتمد حتى نجاح Workflow Pages بعد دمج الإصلاح.
