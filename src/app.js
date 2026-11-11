@@ -3887,6 +3887,11 @@ export function mountApp(root) {
   }
 
   function render({ focusMain = false } = {}) {
+    const currentPlayers = WORLD_PLAYERS.map((player) => {
+      const clubId = getPlayerCurrentClubId(player.id, player.clubId, state.save.world.transfers, state.save.world.currentDate);
+      const club = WORLD_DATABASE.clubs.find((item) => item.id === clubId);
+      return club ? { ...player, clubId, club: club.nameAr, clubShortName: club.shortName, clubColor: club.primaryColor } : player;
+    });
     const context = {
       save: state.save,
       navigate,
@@ -3910,7 +3915,7 @@ export function mountApp(root) {
       signScoutingContract,
       renewScoutingContract,
       addToWatchlist,
-      players: WORLD_PLAYERS,
+      players: currentPlayers,
       transferState: state.save.world.transfers,
       createTransferProposal,
       evaluateTransferOffer,
