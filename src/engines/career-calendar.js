@@ -171,14 +171,26 @@ export function completeCareerTask(save, taskId) {
     return { save, changed: false };
   }
 
+  const completedLate = task.status === "overdue";
+  const completionEvent = {
+    id: "event-" + save.world.currentDate + "-task-completed-" + taskId,
+    date: save.world.currentDate,
+    type: "task-completed",
+    title: "تم إنجاز مهمة: " + task.title,
+    description: completedLate
+      ? "اكتملت المهمة بعد موعدها المحدد. تم تسجيل الإنجاز المتأخر في سجل الوكالة."
+      : "اكتملت المهمة في موعدها وتم تحديث سجل الوكالة.",
+    priority: "normal"
+  };
   return {
     changed: true,
     save: {
       ...save,
       world: {
         ...save.world,
+        events: [...(save.world.events ?? []), completionEvent].slice(-MAX_EVENTS),
         tasks: save.world.tasks.map((item) => item.id === taskId
-          ? { ...item, status: "completed", completedDate: save.world.currentDate, completedLate: item.status === "overdue" }
+          ? { ...item, status: "completed", completedDate: save.world.currentDate, completedLate }
           : item)
       }
     }

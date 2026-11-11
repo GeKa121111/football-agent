@@ -9,6 +9,19 @@ import {
 } from "../src/engines/career-calendar.js";
 import { isValidSave } from "../src/core/storage.js";
 
+function makeTask(overrides = {}) {
+  return {
+    id: "task-unit-overdue",
+    title: "مراجعة مهمة الاختبار",
+    description: "مهمة لاختبار دورة التسليم.",
+    createdDate: "2026-07-01",
+    dueDate: "2026-07-01",
+    category: "weekly-review",
+    status: "open",
+    ...overrides
+  };
+}
+
 test("advances the date, day and week without mutating the original save", () => {
   const save = createInitialSave();
   save.career.day = 6;
@@ -98,8 +111,7 @@ test("rejects an invalid calendar date instead of silently advancing it", () => 
 
 test("marks expired open tasks overdue once and creates a linked high-priority reminder", () => {
   const save = createInitialSave();
-  const task = { ...save.world.tasks[0], dueDate: "2026-07-01" };
-  save.world.tasks = [task];
+  save.world.tasks = [makeTask()];
   const next = advanceCareerDay(save);
 
   assert.equal(next.world.tasks[0].status, "overdue");
@@ -114,12 +126,13 @@ test("marks expired open tasks overdue once and creates a linked high-priority r
 
 test("allows a late task to be completed and records that it missed its due date", () => {
   const save = createInitialSave();
-  save.world.tasks[0] = { ...save.world.tasks[0], status: "overdue", overdueDate: "2026-07-02" };
+  save.world.tasks = [makeTask({ status: "overdue", overdueDate: "2026-07-02" })];
   const result = completeCareerTask(save, save.world.tasks[0].id);
   assert.equal(result.changed, true);
   assert.equal(result.save.world.tasks[0].status, "completed");
   assert.equal(result.save.world.tasks[0].completedLate, true);
   assert.equal(result.save.world.tasks[0].completedDate, "2026-07-01");
+  assert.ok(result.save.world.events.some((event) => event.type === "task-completed"));
   assert.equal(isValidSave(result.save), true);
 });
 
