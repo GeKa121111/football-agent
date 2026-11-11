@@ -487,11 +487,11 @@ function emptyResults(title, description, actionLabel, callback) {
 }
 
 function renderPlayers(context) {
-  const page = node("div", "page-content");
+  const page = node("div", "page-content rebuild-screen players-screen");
   page.append(
-    node("p", "eyebrow", "إدارة المواهب"),
-    node("h1", "page-title", "اللاعبون"),
-    node("p", "page-subtitle", "قاعدة بيانات تأسيسية مترابطة للاعبين والأندية والدوريات والبطولات. ملفات اللاعبين خيالية ومخصصة للمحاكاة.")
+    node("p", "eyebrow rebuild-page-kicker", "إدارة المواهب"),
+    node("h1", "page-title rebuild-page-title", "اللاعبون"),
+    node("p", "page-subtitle rebuild-page-subtitle", "قاعدة بيانات تأسيسية مترابطة للاعبين والأندية والدوريات والبطولات. ملفات اللاعبين خيالية ومخصصة للمحاكاة.")
   );
 
   const worldStats = node("div", "metrics-grid world-metrics");
@@ -549,14 +549,14 @@ function renderPlayers(context) {
 }
 
 function renderScouting(context) {
-  const page = node("div", "page-content");
+  const page = node("div", "page-content rebuild-screen scouting-screen");
   const scouting = context.scouting;
   const activeMissions = scouting.activeMissions;
   const reports = scouting.reports;
   page.append(
-    node("p", "eyebrow", "شبكة اكتشاف المواهب"),
-    node("h1", "page-title", "الكشافون"),
-    node("p", "page-subtitle", "أطلق بعثات بميزانية ومدة ودقة مختلفة، ثم راجع تقارير المواهب وأسباب ترشيح كل لاعب.")
+    node("p", "eyebrow rebuild-page-kicker", "شبكة اكتشاف المواهب"),
+    node("h1", "page-title rebuild-page-title", "الكشافون"),
+    node("p", "page-subtitle rebuild-page-subtitle", "أطلق بعثات بميزانية ومدة ودقة مختلفة، ثم راجع تقارير المواهب وأسباب ترشيح كل لاعب.")
   );
 
   const summary = node("div", "metrics-grid scouting-metrics");
@@ -778,11 +778,11 @@ function renderScouting(context) {
 }
 
 function renderMarket(context) {
-  const page = node("div", "page-content");
+  const page = node("div", "page-content rebuild-screen market-screen");
   page.append(
-    node("p", "eyebrow", "حركة الأندية والصفقات"),
-    node("h1", "page-title", "سوق الانتقالات"),
-    node("p", "page-subtitle", "نظرة أولية على فرص السوق. التفاوض وإتمام الصفقات سيُنفذان في المرحلة الثامنة.")
+    node("p", "eyebrow rebuild-page-kicker", "حركة الأندية والصفقات"),
+    node("h1", "page-title rebuild-page-title", "سوق الانتقالات"),
+    node("p", "page-subtitle rebuild-page-subtitle", "نظرة أولية على فرص السوق. التفاوض وإتمام الصفقات سيُنفذان في المرحلة الثامنة.")
   );
   const summary = node("div", "market-summary");
   summary.append(
@@ -816,11 +816,11 @@ function renderMarket(context) {
 }
 
 function renderAgency(context) {
-  const page = node("div", "page-content");
+  const page = node("div", "page-content rebuild-screen agency-screen");
   page.append(
-    node("p", "eyebrow", "إدارة أعمالك"),
-    node("h1", "page-title", "الوكالة"),
-    node("p", "page-subtitle", "ابنِ قائمة عملائك، تفاوض على شروط التمثيل، واهتم بالثقة والتواصل والمواعيد.")
+    node("p", "eyebrow rebuild-page-kicker", "إدارة أعمالك"),
+    node("h1", "page-title rebuild-page-title", "الوكالة"),
+    node("p", "page-subtitle rebuild-page-subtitle", "ابنِ قائمة عملائك، تفاوض على شروط التمثيل، واهتم بالثقة والتواصل والمواعيد.")
   );
 
   const agency = context.save.agency;
