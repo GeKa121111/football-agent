@@ -26,6 +26,10 @@ function player(overrides = {}) {
   };
 }
 
+function withCurrentDate(save, currentDate) {
+  return { ...save, world: { ...save.world, currentDate } };
+}
+
 function sendOffer(save, profile = player(), terms = { commissionRate: 15, termDays: 1095 }) {
   return createRepresentationOffer(save, profile, terms);
 }
@@ -128,7 +132,8 @@ test("ending a mandate removes the active client but preserves the contract and 
     termDays: 730
   });
   const signed = evaluateRepresentationOffer(sent.save, sent.offer.id);
-  const ended = terminateRepresentationContract(signed.save, signed.contract.id, "2026-08-01");
+  const atTerminationDate = withCurrentDate(signed.save, "2026-08-01");
+  const ended = terminateRepresentationContract(atTerminationDate, signed.contract.id, "2026-08-01");
   assert.equal(ended.changed, true);
   assert.deepEqual(ended.save.agency.clients, []);
   assert.equal(ended.save.agency.representation.contracts[0].status, "terminated");
@@ -142,7 +147,8 @@ test("calendar progression expires offers and contracts without dropping archiva
     commissionRate: 9,
     termDays: 365
   });
-  const noResponse = advanceRepresentationState(sent.save, "2026-08-01");
+  const offerAtExpiry = withCurrentDate(sent.save, "2026-08-01");
+  const noResponse = advanceRepresentationState(offerAtExpiry, "2026-08-01");
   assert.deepEqual(noResponse.expiredOffers, [sent.offer.id]);
   assert.equal(noResponse.save.agency.representation.offers[0].status, "expired");
   assert.equal(isValidSave(noResponse.save), true);
@@ -152,7 +158,8 @@ test("calendar progression expires offers and contracts without dropping archiva
     termDays: 365
   });
   const signed = evaluateRepresentationOffer(signedOffer.save, signedOffer.offer.id);
-  const expired = advanceRepresentationState(signed.save, "2027-07-01");
+  const contractAtExpiry = withCurrentDate(signed.save, "2027-07-01");
+  const expired = advanceRepresentationState(contractAtExpiry, "2027-07-01");
   assert.deepEqual(expired.expiredContracts, [signed.contract.id]);
   assert.equal(expired.save.agency.representation.contracts[0].status, "expired");
   assert.deepEqual(expired.save.agency.clients, []);
