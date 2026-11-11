@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createInitialSave } from "../src/core/storage.js";
 import {
   advanceCareerDay,
+  advanceCareerDays,
   completeCareerTask,
   markCareerMessageRead,
   filterCareerEvents,
@@ -77,6 +78,43 @@ test("starts a new season on July 1 and creates a season planning task", () => {
   assert.equal(next.career.season, 2);
   assert.ok(next.world.events.some((event) => event.type === "season-opening"));
   assert.ok(next.world.tasks.some((task) => task.category === "season-planning"));
+});
+
+test("advances a week day-by-day across a deadline and season boundary", () => {
+  const save = createInitialSave();
+  save.world.currentDate = "2027-06-27";
+  save.world.events = [];
+  save.world.inbox = [];
+  save.world.tasks = [makeTask({ id: "task-weekly-skip", dueDate: "2027-06-28" })];
+  save.career.day = 363;
+  save.career.week = 52;
+  save.career.season = 1;
+
+  const next = advanceCareerDays(save, 7);
+
+  assert.equal(next.world.currentDate, "2027-07-04");
+  assert.equal(next.career.day, 370);
+  assert.equal(next.career.week, 53);
+  assert.equal(next.career.season, 2);
+  assert.equal(next.world.tasks[0].status, "overdue");
+  assert.equal(next.world.tasks[0].overdueDate, "2027-06-29");
+  assert.ok(next.world.events.some((event) => event.id === "event-2027-06-28-weekly-briefing"));
+  assert.ok(next.world.events.some((event) => event.id === "event-2027-07-01-monthly-market"));
+  assert.ok(next.world.events.some((event) => event.id === "event-2027-07-01-season-opening"));
+  assert.ok(next.world.events.some((event) => event.type === "task-overdue" && event.date === "2027-06-29"));
+  assert.equal(new Set(next.world.events.map((event) => event.id)).size, next.world.events.length);
+  assert.equal(next.world.inbox.every((message) => next.world.events.some((event) => event.id === message.eventId)), true);
+  assert.equal(save.world.currentDate, "2027-06-27");
+  assert.equal(save.world.tasks[0].status, "open");
+  assert.equal(isValidSave(next), true);
+});
+
+test("rejects invalid multi-day advances instead of silently changing the save", () => {
+  const save = createInitialSave();
+  for (const days of [0, -1, 1.5, 32, "7"]) {
+    assert.throws(() => advanceCareerDays(save, days), /من يوم واحد إلى 31 يومًا/);
+  }
+  assert.equal(save.world.currentDate, "2026-07-01");
 });
 
 test("completes a task once and keeps unknown or completed tasks unchanged", () => {
