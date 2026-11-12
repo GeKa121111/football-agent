@@ -650,6 +650,7 @@ function emptyResults(title, description, actionLabel, callback) {
 }
 
 function renderPlayers(context) {
+  const availablePlayers = context.players ?? WORLD_PLAYERS;
   const page = node("div", "page-content rebuild-screen players-screen");
   page.append(
     node("p", "eyebrow rebuild-page-kicker", "إدارة المواهب"),
@@ -693,7 +694,7 @@ function renderPlayers(context) {
   const allCountries = node("option", "", "كل الجنسيات");
   allCountries.value = "all";
   country.append(allCountries);
-  [...new Map(WORLD_PLAYERS.map((player) => [player.country, player.country])).keys()]
+  [...new Map(availablePlayers.map((player) => [player.country, player.country])).keys()]
     .sort((a, b) => a.localeCompare(b, "ar"))
     .forEach((name) => {
       const option = node("option", "", name);
@@ -706,7 +707,7 @@ function renderPlayers(context) {
   const allLeagues = node("option", "", "كل الدوريات");
   allLeagues.value = "all";
   league.append(allLeagues);
-  [...new Map(WORLD_PLAYERS.map((player) => [player.leagueId, player.league])).entries()]
+  [...new Map(availablePlayers.map((player) => [player.leagueId, player.league])).entries()]
     .sort((a, b) => a[1].localeCompare(b[1], "ar"))
     .forEach(([id, name]) => {
       const option = node("option", "", name);
@@ -736,7 +737,6 @@ function renderPlayers(context) {
     const selectedRole = role.value;
     const selectedCountry = country.value;
     const selectedLeague = league.value;
-    const availablePlayers = context.players ?? WORLD_PLAYERS;
     const filtered = availablePlayers.filter((player) => {
       const matchesText = [player.name, player.club, player.position, player.country, player.league]
         .some((value) => String(value ?? "").toLocaleLowerCase("ar").includes(query));
