@@ -506,6 +506,17 @@ test("rejects corrupted football schedules and dangling results", () => {
       : fixture)
   };
   assert.equal(isValidFootballState(badSchedule, "2026-07-01", 1), false);
+
+  const cup = WORLD_DATABASE.competitions.find((competition) => competition.type === "cup");
+  const badCupParticipant = {
+    ...initial,
+    fixtures: initial.fixtures.map((fixture) =>
+      fixture.competitionId === cup.id
+        ? { ...fixture, homeClubId: "club-marseille" }
+        : fixture
+    )
+  };
+  assert.equal(isValidFootballState(badCupParticipant, "2026-07-01", 1), false);
   assert.equal(isValidFootballState({ ...initial, results: [{ id: "missing" }] }, "2026-07-01", 1), false);
 });
 
