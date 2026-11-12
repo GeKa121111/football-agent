@@ -88,7 +88,7 @@ test("rejects responses and completion dates that predate their offer or agreeme
   assert.equal(acceptTransferCounterOffer(countered.save, sent.offer.id, "2026-06-30").changed, false);
 
   const agreed = acceptTransferCounterOffer(countered.save, sent.offer.id, "2026-07-02");
-  assert.equal(completeTransfer(agreed.save, sent.offer.id, "2026-07-01").changed, false);
+  assert.equal(completeTransfer(agreed.save, sent.offer.id, "2026-07-01", database).changed, false);
 });
 
 test("club responses are deterministic and may counter a low bid", () => {
@@ -152,15 +152,15 @@ test("completes an agreed permanent transfer and records a EUR agent commission 
   const sent = send();
   const countered = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
   const agreed = acceptTransferCounterOffer(countered.save, sent.offer.id, "2026-07-02");
-  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-02");
+  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-02", database);
   assert.equal(completed.status, "completed", completed.error ?? "Transfer completion failed without an error message.");
   assert.equal(completed.commissionEur, 322_000);
   assert.equal(completed.save.world.transfers.earnedCommissionEur, 322_000);
   assert.equal(completed.save.world.transfers.ledger[0].currency, "EUR");
   assert.equal(completed.save.world.transfers.ledger[0].basisEur, 3_220_000);
   assert.equal(completed.save.world.transfers.ledger[0].commissionRate, 10);
-  assert.equal(getPlayerCurrentClubId("player-1", "club-home", completed.save.world.transfers, "2026-07-02"), "club-target");
-  assert.equal(completeTransfer(completed.save, sent.offer.id, "2026-07-02").changed, false);
+  assert.equal(getPlayerCurrentClubId("player-1", "club-home", completed.save.world.transfers, "2026-07-02", database), "club-target");
+  assert.equal(completeTransfer(completed.save, sent.offer.id, "2026-07-02", database).changed, false);
   assert.equal(isValidTransferState(completed.save.world.transfers, "2026-07-02", completed.save.agency.clients, completed.save.agency.representation), true);
 });
 
@@ -168,7 +168,7 @@ test("retains completed historical deals after an agency mandate ends", () => {
   const sent = send();
   const countered = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
   const agreed = acceptTransferCounterOffer(countered.save, sent.offer.id, "2026-07-02");
-  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-02");
+  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-02", database);
   assert.equal(isValidTransferState(completed.save.world.transfers, "2026-07-02", [], completed.save.agency.representation), true);
 });
 
@@ -176,14 +176,14 @@ test("returns a loan to the most recent permanent club after an earlier permanen
   const permanentOffer = send();
   const countered = evaluateTransferOffer(permanentOffer.save, permanentOffer.offer.id, "2026-07-01", database);
   const agreed = acceptTransferCounterOffer(countered.save, permanentOffer.offer.id, "2026-07-02");
-  const permanentMove = completeTransfer(agreed.save, permanentOffer.offer.id, "2026-07-02");
+  const permanentMove = completeTransfer(agreed.save, permanentOffer.offer.id, "2026-07-02", database);
   assert.equal(getPlayerCurrentClubId("player-1", "club-home", permanentMove.save.world.transfers, "2026-07-02", database), "club-target");
 
   const loanOffer = createTransferOffer(permanentMove.save, "player-1", "club-other", "loan",
     loanTerms, "2026-07-03", database);
   assert.equal(loanOffer.offer.fromClubId, "club-target");
   const loanAgreed = evaluateTransferOffer(loanOffer.save, loanOffer.offer.id, "2026-07-03", database);
-  const loanMove = completeTransfer(loanAgreed.save, loanOffer.offer.id, "2026-07-03");
+  const loanMove = completeTransfer(loanAgreed.save, loanOffer.offer.id, "2026-07-03", database);
   assert.equal(getPlayerCurrentClubId("player-1", "club-home", loanMove.save.world.transfers, "2026-12-31", database), "club-other");
 
   const returned = advanceTransferState(loanMove.save, "2027-01-03");
@@ -195,13 +195,13 @@ test("supports loans, tracks the temporary club, and returns the player on the d
   const sent = send(makeSave(), "loan", loanTerms);
   const response = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
   assert.equal(response.status, "agreed");
-  const completed = completeTransfer(response.save, sent.offer.id, "2026-07-01");
+  const completed = completeTransfer(response.save, sent.offer.id, "2026-07-01", database);
   assert.equal(completed.status, "completed");
   assert.equal(completed.move.returnDate, "2027-01-01");
-  assert.equal(getPlayerCurrentClubId("player-1", "club-home", completed.save.world.transfers, "2026-12-31"), "club-target");
+  assert.equal(getPlayerCurrentClubId("player-1", "club-home", completed.save.world.transfers, "2026-12-31", database), "club-target");
   const returned = advanceTransferState(completed.save, "2027-01-01");
   assert.deepEqual(returned.returnedLoans, [completed.move.id]);
-  assert.equal(getPlayerCurrentClubId("player-1", "club-home", returned.save.world.transfers, "2027-01-01"), "club-home");
+  assert.equal(getPlayerCurrentClubId("player-1", "club-home", returned.save.world.transfers, "2027-01-01", database), "club-home");
   assert.equal(isValidTransferState(returned.save.world.transfers, "2027-01-01", returned.save.agency.clients, returned.save.agency.representation), true);
 });
 
@@ -274,7 +274,7 @@ test("rejects impossible transfer timelines and inconsistent permanent/loan move
 
   const countered = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
   const agreed = acceptTransferCounterOffer(countered.save, sent.offer.id, "2026-07-02");
-  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-02");
+  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-02", database);
 
   const badClub = structuredClone(completed.save.world.transfers);
   badClub.moves[0].toClubId = "club-other";
@@ -287,7 +287,7 @@ test("rejects impossible transfer timelines and inconsistent permanent/loan move
 
   const loanOffer = send(makeSave(), "loan", loanTerms);
   const loanAgreed = evaluateTransferOffer(loanOffer.save, loanOffer.offer.id, "2026-07-01", database);
-  const loanCompleted = completeTransfer(loanAgreed.save, loanOffer.offer.id, "2026-07-01");
+  const loanCompleted = completeTransfer(loanAgreed.save, loanOffer.offer.id, "2026-07-01", database);
   assert.equal(isValidTransferState(loanCompleted.save.world.transfers, "2027-01-01",
     loanCompleted.save.agency.clients, loanCompleted.save.agency.representation), false,
     "a loan past its return date must be advanced and marked returned");
@@ -303,7 +303,7 @@ test("safely rejects malformed representation contract collections", () => {
   const sent = send();
   const countered = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
   const agreed = acceptTransferCounterOffer(countered.save, sent.offer.id, "2026-07-02");
-  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-02");
+  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-02", database);
   const malformed = { ...completed.save.agency.representation, contracts: {} };
   assert.equal(isValidTransferState(completed.save.world.transfers, "2026-07-02",
     completed.save.agency.clients, malformed), false);
@@ -321,7 +321,7 @@ test("rejects malformed, duplicated or financially inconsistent transfer state",
   const sentForLedger = send();
   const countered = evaluateTransferOffer(sentForLedger.save, sentForLedger.offer.id, "2026-07-01", database);
   const agreed = acceptTransferCounterOffer(countered.save, sentForLedger.offer.id, "2026-07-02");
-  const completed = completeTransfer(agreed.save, sentForLedger.offer.id, "2026-07-02");
+  const completed = completeTransfer(agreed.save, sentForLedger.offer.id, "2026-07-02", database);
   const wrongBasis = structuredClone(completed.save.world.transfers);
   wrongBasis.ledger[0].basisEur += 1;
   assert.equal(isValidTransferState(wrongBasis, "2026-07-02", completed.save.agency.clients, completed.save.agency.representation), false);
@@ -355,7 +355,7 @@ test("uses league-specific registration windows and roster limits", async () => 
 test("turns an expired permanent contract into a free agent", () => {
   const sent = send(makeSave("2026-07-01"), "permanent", { ...permanentTerms, contractYears: 1 });
   const agreed = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
-  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-01");
+  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-01", database);
   const advanced = advanceTransferState(completed.save, "2027-07-01", database);
   assert.deepEqual(advanced.expiredContracts, ["player-1"]);
   assert.equal(advanced.save.world.transfers.moves[0].status, "expired");
@@ -367,7 +367,7 @@ test("turns an expired permanent contract into a free agent", () => {
 test("exercises a loan purchase option and keeps the purchased club registration", () => {
   const sent = send(makeSave(), "loan", loanTerms);
   const agreed = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
-  const loan = completeTransfer(agreed.save, sent.offer.id, "2026-07-01");
+  const loan = completeTransfer(agreed.save, sent.offer.id, "2026-07-01", database);
   const purchased = exerciseLoanOption(loan.save, loan.move.id, "2026-07-02", database);
   assert.equal(purchased.changed, true);
   assert.equal(purchased.action, "option-exercised");
