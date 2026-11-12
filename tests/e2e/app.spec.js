@@ -526,6 +526,53 @@ test.describe("Desktop experience", () => {
     await hasNoHorizontalOverflow(page);
   });
 
+  test("exercises an agreed loan purchase and converts it into a permanent transfer", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+    const modal = page.locator(".modal-overlay");
+    await modal.getByLabel("نسبة العمولة").selectOption("15");
+    await modal.getByLabel("مدة العقد").selectOption("1095");
+    await modal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+    await page.locator(".representation-evaluate-button").click();
+    await page.locator(".representation-accept-button").click();
+
+    let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const playerId = saved.agency.clients[0];
+    await navigateTo(page, "الانتقالات");
+    await page.getByLabel("نوع الصفقة").selectOption("loan");
+    await page.getByLabel("بند أحقية الشراء / الشراء الإلزامي (€)").fill("500000");
+    await page.getByLabel("مدة العقد / الإعارة").selectOption("6");
+    await page.getByLabel("الراتب الأسبوعي باليورو").fill("10000");
+    await page.getByRole("button", { name: "إرسال العرض للنادي" }).click();
+
+    const deal = page.locator(".transfer-deal-card").first();
+    await expect(deal).toContainText("بانتظار رد النادي");
+    await deal.getByRole("button", { name: "محاكاة رد النادي" }).click();
+    await expect(page.locator(".transfer-status-agreed")).toBeVisible();
+    await page.locator(".transfer-status-agreed").getByRole("button", { name: "تنفيذ الصفقة" }).click();
+
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const loan = saved.world.transfers.moves.find((move) => move.type === "loan");
+    expect(loan.playerId).toBe(playerId);
+    expect(loan.status).toBe("active");
+    expect(loan.optionToBuyEur).toBe(500000);
+
+    const loanRow = page.locator(".transfer-move-row").filter({ hasText: loan.playerName });
+    await loanRow.getByRole("button", { name: /تفعيل خيار الشراء/ }).click();
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const purchasedLoan = saved.world.transfers.moves.find((move) => move.id === loan.id);
+    const permanentMove = saved.world.transfers.moves.find((move) =>
+      move.type === "permanent" && move.playerId === playerId
+    );
+    expect(purchasedLoan.status).toBe("purchased");
+    expect(permanentMove.status).toBe("active");
+    expect(permanentMove.feeEur).toBe(500000);
+    expect(saved.world.transfers.offers[0].purchaseClause).toBe("option");
+    await expect(page.locator(".transfer-move-row")).toContainText(loan.playerName);
+    await hasNoHorizontalOverflow(page);
+  });
+
   test("requires an active representation contract before offering a transfer", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الانتقالات");
