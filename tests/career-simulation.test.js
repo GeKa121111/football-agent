@@ -278,3 +278,150 @@ test("runs a multi-system career, saves and reloads it, then resumes without los
   assert.equal(resumed.world.scouting.reports.length, loaded.save.world.scouting.reports.length);
   assert.ok(resumed.world.football.results.length >= loaded.save.world.football.results.length);
 });
+
+
+test("runs one complete integrated career season and resumes it safely after a save reload", () => {
+  let save = signFirstClient(createInitialSave("2026-07-01T00:00:00.000Z")).save;
+  const transferPlayer = WORLD_DATABASE.players.find((player) => player.id === PLAYERS[0].id);
+  assert.ok(transferPlayer);
+  const sourceClub = WORLD_DATABASE.clubs.find((club) => club.id === transferPlayer.clubId);
+  const destinationClub = WORLD_DATABASE.clubs.find((club) =>
+    club.id !== sourceClub.id && club.leagueId === sourceClub.leagueId
+  );
+  assert.ok(sourceClub);
+  assert.ok(destinationClub);
+
+  const transfer = createTransferOffer(save, transferPlayer.id, destinationClub.id, "permanent", {
+    feeEur: Math.round(transferPlayer.marketValueEur * 1.1),
+    weeklyWageEur: 20000,
+    signingBonusEur: 100000,
+    contractYears: 3
+  });
+  assert.equal(transfer.changed, true, transfer.error);
+  const decision = evaluateTransferOffer(transfer.save, transfer.offer.id);
+  assert.equal(decision.status, "agreed", decision.error);
+  const completedTransfer = completeTransfer(decision.save, transfer.offer.id);
+  assert.equal(completedTransfer.status, "completed", completedTransfer.error);
+  save = completedTransfer.save;
+
+  const clientContract = save.agency.representation.contracts.find((item) =>
+    item.playerId === PLAYERS[0].id
+  );
+  assert.ok(clientContract);
+  const interaction = createRepresentationInteraction(save, clientContract.id, "message");
+  assert.equal(interaction.changed, true, interaction.error);
+  save = interaction.save;
+
+  const hired = hireAgencyEmployee(save, "analyst");
+  assert.equal(hired.changed, true, hired.error);
+  save = hired.save;
+  const sponsorship = signAgencySponsorship(save, "local-media");
+  assert.equal(sponsorship.changed, true, sponsorship.error);
+  save = sponsorship.save;
+  const credit = takeAgencyCredit(save, "working-capital");
+  assert.equal(credit.changed, true, credit.error);
+  save = credit.save;
+
+  const mission = startScoutingMission(save, {
+    type: "local",
+    countryId: "country-eg",
+    role: "all",
+    sourceId: "academy"
+  }, PLAYERS);
+  assert.equal(mission.changed, true, mission.error);
+  save = mission.save;
+
+  const trainingPlan = setPlayerTrainingPlan(
+    save.world.football.playerDevelopment,
+    PLAYERS[0].id,
+    "technical",
+    "normal"
+  );
+  assert.equal(trainingPlan.changed, true);
+  save = {
+    ...save,
+    world: {
+      ...save.world,
+      football: {
+        ...save.world.football,
+        playerDevelopment: trainingPlan.state
+      }
+    }
+  };
+
+  const firstSeasonFixtureCount = save.world.football.fixtures
+    .filter((fixture) => fixture.season === 1).length;
+  assert.ok(firstSeasonFixtureCount > 0);
+  const storageRecords = new Map();
+  const storage = {
+    getItem(key) { return storageRecords.has(key) ? storageRecords.get(key) : null; },
+    setItem(key, value) { storageRecords.set(key, String(value)); },
+    removeItem(key) { storageRecords.delete(key); }
+  };
+
+  let advancedDays = 0;
+  while (advancedDays < 365) {
+    const step = Math.min(31, 365 - advancedDays);
+    save = advanceCareerSimulationDays(save, step, PLAYERS).save;
+    advancedDays += step;
+    assert.equal(isValidSave(save), true, "save must remain valid on day " + advancedDays);
+    assert.equal(
+      save.world.currentDate,
+      new Date(Date.parse("2026-07-01T00:00:00.000Z") + advancedDays * 86400000)
+        .toISOString().slice(0, 10)
+    );
+
+    if (advancedDays === 186) {
+      writeSave(save, storage, save.world.currentDate + "T12:00:00.000Z");
+      const loaded = readSave(storage);
+      assert.equal(loaded.status, "loaded");
+      assert.equal(loaded.migrated, false);
+      save = loaded.save;
+      assert.equal(isValidSave(save), true, "mid-season restored save must remain valid");
+    }
+  }
+
+  assert.equal(save.world.currentDate, "2027-07-01");
+  assert.equal(save.career.season, 2);
+  assert.equal(save.world.football.season, 2);
+  assert.equal(
+    save.world.football.results.filter((result) => result.season === 1).length,
+    firstSeasonFixtureCount
+  );
+  assert.equal(
+    save.world.football.fixtures.filter((fixture) =>
+      fixture.season === 1 && fixture.status === "scheduled"
+    ).length,
+    0
+  );
+  assert.equal(new Set(save.world.football.results.map((result) => result.id)).size,
+    save.world.football.results.length);
+  assert.ok(save.world.football.fixtures.some((fixture) =>
+    fixture.season === 2 && fixture.status === "scheduled"
+  ));
+  assert.ok(save.world.football.playerDevelopment.trainingHistory.length > 0);
+  assert.ok(save.world.scouting.reports.some((report) => report.missionId === mission.mission.id));
+  assert.equal(
+    save.agency.representation.interactions.find((item) => item.id === interaction.interaction.id).status,
+    "resolved"
+  );
+  assert.ok(save.agency.management.ledger.some((entry) =>
+    entry.type === "weekly-operations"
+  ));
+  assert.ok(save.agency.management.ledger.some((entry) =>
+    entry.type === "sponsorship-income" && entry.incomeKind === "weekly"
+  ));
+  assert.ok(save.agency.management.ledger.some((entry) =>
+    entry.type === "credit-repayment"
+  ));
+  assert.equal(
+    getPlayerCurrentClubId(
+      transferPlayer.id,
+      transferPlayer.clubId,
+      save.world.transfers,
+      save.world.currentDate
+    ),
+    destinationClub.id
+  );
+  assert.equal(isValidSave(save), true);
+});
