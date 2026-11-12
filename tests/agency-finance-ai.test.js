@@ -226,3 +226,37 @@ test("clubs independently monitor agency clients and raise enquiries during open
   assert.equal(uniqueClubs.size,playerInterests.length);
   assert.equal(isValidSave(nextWeek.save),true);
 });
+
+
+test("retains a new competitor offer after the rival history reaches its rolling cap", () => {
+  const initial = createInitialSave();
+  const rival = initial.agency.management.competitors[0];
+  rival.lastActionDate = "2026-06-29";
+  rival.pendingOffers = Array.from({ length:40 },(_,index) => ({
+    id:"rival-offer-old-" + index,
+    playerId:"historic-player-" + index,
+    playerName:"Historic Player " + index,
+    position:"وسط",
+    rating:65,
+    potential:75,
+    commissionRate:10,
+    offeredDate:"2026-06-20",
+    dueDate:"2026-06-23",
+    status:"rejected",
+    decisionDate:"2026-06-23"
+  }));
+  assert.equal(isValidSave(initial),true);
+
+  const monday = advanceCareerSimulationDays(initial,5,PLAYERS);
+  const afterMonday = monday.save.agency.management.competitors.find((item) => item.id === rival.id);
+  const newOffer = afterMonday.pendingOffers.find((item) => item.offeredDate === "2026-07-06");
+  assert.ok(newOffer);
+  assert.equal(afterMonday.pendingOffers.length,40);
+
+  const resolved = advanceCareerSimulationDays(monday.save,3,PLAYERS);
+  const afterResolution = resolved.save.agency.management.competitors.find((item) => item.id === rival.id);
+  const savedOffer = afterResolution.pendingOffers.find((item) => item.id === newOffer.id);
+  assert.ok(savedOffer);
+  assert.ok(["accepted","rejected"].includes(savedOffer.status));
+  assert.equal(isValidSave(resolved.save),true);
+});
