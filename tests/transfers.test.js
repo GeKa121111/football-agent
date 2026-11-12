@@ -873,6 +873,27 @@ test("stops an old permanent deal from counting performances after a later retur
     settled.save.agency.representation,
     database
   ), true);
+
+  const postExpiryMatch = {
+    date: "2029-07-02",
+    playerPerformances: [{
+      playerId: "player-1", playerName: "لاعب تجريبي", clubId: "club-target",
+      minutesPlayed: 90, goals: 0
+    }]
+  };
+  const advanced = advanceTransferState({
+    ...settled.save,
+    world: {
+      ...settled.save.world,
+      football: { ...settled.save.world.football, results: [firstMatch, returnMatch, postExpiryMatch] }
+    }
+  }, "2029-07-02", database);
+  const expiredOriginalMove = advanced.save.world.transfers.moves.find((move) => move.id === firstMove.move.id);
+  assert.equal(expiredOriginalMove.status, "expired");
+  const afterExpirySettlement = settleTransferPerformanceBonuses(advanced.save, "2029-07-02", database);
+  assert.equal(afterExpirySettlement.paidBonuses.length, 0);
+  assert.equal(afterExpirySettlement.save.world.transfers.moves
+    .find((move) => move.id === firstMove.move.id).performanceAppearances, 1);
 });
 
 
