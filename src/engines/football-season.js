@@ -382,7 +382,11 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
 }
 
 function isValidMatchResult(result, fixture) {
-  if (!isRecord(result) || result.id !== fixture.id || result.date !== fixture.date ||
+  const validGroupReference = fixture.groupId
+    ? result?.groupId === fixture.groupId
+    : result?.groupId === undefined || result?.groupId === null;
+  if (!isRecord(result) || !validGroupReference ||
+      result.id !== fixture.id || result.date !== fixture.date ||
       result.status !== "played" || result.season !== fixture.season ||
       !isRecord(result.home) || !isRecord(result.away) ||
       result.home.clubId !== fixture.homeClubId ||
@@ -436,15 +440,20 @@ export function isValidFootballState(state, currentDate, season, database = WORL
   if (!expectedPlayerIds.every((playerId) => savedPlayerIds.has(playerId))) return false;
 
   const clubIds = new Set(database.clubs.map((club) => club.id));
-  const competitionIds = new Set(database.competitions.map((competition) => competition.id));
+  const competitionById = new Map(database.competitions.map((competition) => [competition.id, competition]));
+  const competitionIds = new Set(competitionById.keys());
+  const groupIdsByCompetition = new Map([...competitionById].map(([competitionId, competition]) => [
+    competitionId,
+    new Map(buildCompetitionGroups(competition, database).map((group) => [group.id, new Set(group.clubIds)]))
+  ]));
   const fixtureById = new Map(state.fixtures.map((fixture) => [fixture.id, fixture]));
   if (!state.fixtures.every((fixture) =>
     isRecord(fixture) &&
     Number.isSafeInteger(fixture.season) && fixture.season >= 1 && fixture.season <= season &&
     competitionIds.has(fixture.competitionId) &&
     (fixture.groupId === undefined || fixture.groupId === null ||
-      buildCompetitionGroups(database.competitions.find((item) => item.id === fixture.competitionId), database)
-        .some((group) => group.id === fixture.groupId)) &&
+      groupIdsByCompetition.get(fixture.competitionId)?.get(fixture.groupId)?.has(fixture.homeClubId) &&
+      groupIdsByCompetition.get(fixture.competitionId)?.get(fixture.groupId)?.has(fixture.awayClubId)) &&
     typeof fixture.competitionName === "string" && fixture.competitionName.trim() &&
     dateValue(fixture.date) !== null &&
     Number.isSafeInteger(fixture.round) && fixture.round >= 1 &&
