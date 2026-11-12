@@ -525,8 +525,9 @@ export function exerciseLoanOption(save, moveId, currentDate = save?.world?.curr
 export function recallLoan(save, moveId, currentDate = save?.world?.currentDate) {
   const state = save?.world?.transfers;
   const loan = state?.moves?.find((move) => move.id === moveId);
-  if (!loan || loan.type !== "loan" || loan.status !== "active" || loan.recallable !== true) {
-    return { changed: false, save, error: "عقد الإعارة لا يتضمن بند استدعاء مبكر." };
+  if (!loan || loan.type !== "loan" || loan.status !== "active" || loan.recallable !== true ||
+      loan.mandatoryBuy === true) {
+    return { changed: false, save, error: "عقد الإعارة لا يتضمن استدعاءً مبكرًا متاحًا أو يتضمن شراءً إلزاميًا." };
   }
   if (!isTransferCalendarDate(currentDate) || currentDate < loan.effectiveDate ||
       currentDate >= (loan.recallReturnDate ?? loan.returnDate)) {
