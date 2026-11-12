@@ -388,11 +388,11 @@ test("archives competition tables once a new season starts and exposes retained 
 
   const history = getCompetitionSeasonHistory(nextSeason, competition.id, database);
   assert.equal(history.length, 2);
-  assert.equal(history[0].season, 1);
-  assert.equal(history[0].complete, true);
-  assert.equal(history[1].season, 2);
-  assert.equal(history[1].matchesPlayed, 0);
-  assert.equal(history[1].matchesScheduled, 2);
+  assert.equal(history[0].season, 2);
+  assert.equal(history[0].matchesPlayed, 0);
+  assert.equal(history[0].matchesScheduled, 2);
+  assert.equal(history[1].season, 1);
+  assert.equal(history[1].complete, true);
 });
 
 test("rejects corrupted football schedules and dangling results", () => {
