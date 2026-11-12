@@ -145,7 +145,8 @@ export function getPlayerCurrentClubIdFromState(playerId, fallbackClubId, transf
   const moves = (transferState?.moves ?? [])
     .filter((move) => move.playerId === playerId && move.effectiveDate <= currentDate &&
       (move.status === "active" || (move.status === "purchased" && currentDate < move.purchasedDate)) &&
-      (move.type !== "loan" || currentDate < (move.recallReturnDate ?? move.returnDate)))
+      (move.type !== "loan" || !isDate(move.recallReturnDate ?? move.returnDate) ||
+        currentDate < (move.recallReturnDate ?? move.returnDate)))
     .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate) ||
       Number(a.id.split("-").pop()) - Number(b.id.split("-").pop()));
   if (freeAgent && !moves.some((move) => move.type === "permanent" && move.effectiveDate >= freeAgent.sinceDate)) return null;
@@ -230,7 +231,8 @@ export function getClubTransferFinancials(clubId, transferState, currentDate, da
     const latestMove = (transferState?.moves ?? [])
       .filter((move) => move.playerId === player.id && move.effectiveDate <= currentDate &&
         (move.status === "active" || (move.status === "purchased" && currentDate < move.purchasedDate)) &&
-        (move.type !== "loan" || currentDate < (move.recallReturnDate ?? move.returnDate)))
+        (move.type !== "loan" || !isDate(move.recallReturnDate ?? move.returnDate) ||
+        currentDate < (move.recallReturnDate ?? move.returnDate)))
       .sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate) ||
         Number(b.id.split("-").pop()) - Number(a.id.split("-").pop()))[0];
     const wage = latestMove ? latestMove.weeklyWageEur : estimateWeeklyWage(player);
