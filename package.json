@@ -10,7 +10,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test",
     "check": "node scripts/check-syntax.js",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:live": "playwright test --config=playwright.live.config.js"
   },
   "devDependencies": {
     "vite": "^6.0.0",
