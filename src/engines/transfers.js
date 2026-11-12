@@ -502,13 +502,13 @@ export function advanceTransferState(save, currentDate = save?.world?.currentDat
 
 export function isValidTransferState(state, currentDate, clients = [], representation = null) {
   if (!isRecord(state) || !isTransferCalendarDate(currentDate) || !Array.isArray(clients) ||
-      !["nextOfferSequence", "nextMoveSequence", "nextHistorySequence", "nextLedgerSequence"].every((key) => Number.isSafeInteger(state[key]) && state[key] >= 1) ||
+      !["nextOfferSequence", "nextMoveSequence", "nextHistorySequence", "nextLedgerSequence", "nextFinanceSequence"].every((key) => Number.isSafeInteger(state[key]) && state[key] >= 1) ||
       !validMoney(state.earnedCommissionEur) ||
       !Array.isArray(state.offers) || state.offers.length > MAX_TRANSFER_OFFERS ||
       !Array.isArray(state.moves) || state.moves.length > MAX_TRANSFER_MOVES ||
       !Array.isArray(state.history) || state.history.length > MAX_TRANSFER_HISTORY ||
-      !Array.isArray(state.ledger) || state.ledger.length > MAX_TRANSFER_LEDGER) return false;
-  const collections = [state.offers, state.moves, state.history, state.ledger];
+      !Array.isArray(state.ledger) || state.ledger.length > MAX_TRANSFER_LEDGER ||\n      !Array.isArray(state.financeLedger) || state.financeLedger.length > MAX_CLUB_FINANCE_ENTRIES ||\n      !Array.isArray(state.freeAgents) || state.freeAgents.length > 5000) return false;
+  const collections = [state.offers, state.moves, state.history, state.ledger, state.financeLedger];
   if (collections.some((items) => items.some((item) => !isRecord(item) || !validId(item.id)) ||
       new Set(items.map((item) => item.id)).size !== items.length)) return false;
   const offers = new Map();
@@ -563,7 +563,7 @@ export function isValidTransferState(state, currentDate, clients = [], represent
         move.fromClubId !== offer.fromClubId || move.toClubId !== offer.toClubId ||
         !isTransferCalendarDate(move.effectiveDate) || move.effectiveDate > currentDate ||
         move.effectiveDate !== offer.completedDate || move.effectiveDate < offer.agreedDate ||
-        !["active", "returned"].includes(move.status) || !validMoney(move.feeEur) ||
+        !["active", "returned", "purchased", "expired"].includes(move.status) || !validMoney(move.feeEur) ||
         !validMoney(move.loanFeeEur) || !validMoney(move.optionToBuyEur) || !validMoney(move.weeklyWageEur)) return false;
     if (move.type === "loan") {
       const terms = offer.agreedTerms;
@@ -577,12 +577,12 @@ export function isValidTransferState(state, currentDate, clients = [], represent
         if (activeLoans.has(move.playerId)) return false;
         activeLoans.add(move.playerId);
       }
-    } else if (move.status !== "active" || move.returnDate !== null ||
+    } else if (!["active", "expired"].includes(move.status) || move.returnDate !== null ||
         move.loanFeeEur !== 0 || move.optionToBuyEur !== 0 ||
         move.feeEur !== offer.agreedTerms.feeEur ||
         move.weeklyWageEur !== offer.agreedTerms.weeklyWageEur ||
         !Number.isInteger(move.contractYears) || move.contractYears !== offer.agreedTerms.contractYears ||
-        move.contractYears < 1 || move.contractYears > 5) return false;
+        move.contractYears < 1 || move.contractYears > 5 ||\n        move.contractEndDate !== addMonths(move.effectiveDate, move.contractYears * 12) ||\n        (move.status === "expired" && (!isTransferCalendarDate(move.expiredDate) || move.expiredDate < move.contractEndDate || move.expiredDate > currentDate)) ||\n        (move.status === "active" && currentDate >= move.contractEndDate)) return false;
     moves.set(move.id, move);
     highestMove = Math.max(highestMove, sequenceOf(move.id, "transfer-move"));
   }
@@ -629,5 +629,37 @@ export function isValidTransferState(state, currentDate, clients = [], represent
         (["transfer-completed", "loan-returned"].includes(item.type) && !move)) return false;
     highestHistory = Math.max(highestHistory, sequenceOf(item.id, "transfer-history"));
   }
-  return state.nextHistorySequence > highestHistory;
+  if (state.nextHistorySequence <= highestHistory) return false;
+
+  const purchaseMoves = new Map(state.moves.filter((move) => move.type === "permanent").map((move) => [move.id, move]));
+  for (const loan of state.moves.filter((move) => move.type === "loan" && move.status === "purchased")) {
+    const purchase = purchaseMoves.get(loan.purchaseMoveId);
+    if (!purchase || purchase.playerId !== loan.playerId || purchase.fromClubId !== loan.fromClubId ||
+        purchase.toClubId !== loan.toClubId || purchase.effectiveDate !== loan.purchasedDate ||
+        purchase.feeEur !== loan.optionToBuyEur) return false;
+  }
+
+  let highestFinance = 0;
+  for (const entry of state.financeLedger) {
+    const offer = offers.get(entry.offerId);
+    const move = moves.get(entry.moveId);
+    if (!sequenceOf(entry.id, "club-finance") || !offer || offer.status !== "completed" ||
+        !move || move.offerId !== offer.id || entry.playerId !== move.playerId ||
+        !validId(entry.clubId) || !["transfer-fee", "loan-fee", "signing-bonus"].includes(entry.type) ||
+        entry.currency !== "EUR" || !Number.isSafeInteger(entry.amountEur) ||
+        !isTransferCalendarDate(entry.date) || entry.date !== move.effectiveDate) return false;
+    highestFinance = Math.max(highestFinance, sequenceOf(entry.id, "club-finance"));
+  }
+  if (state.nextFinanceSequence <= highestFinance) return false;
+
+  const freeAgentPlayers = new Set();
+  for (const item of state.freeAgents) {
+    if (!isRecord(item) || !validId(item.playerId) || !isTransferCalendarDate(item.sinceDate) ||
+        item.sinceDate > currentDate || !validId(item.formerClubId) ||
+        (item.contractMoveId !== null && item.contractMoveId !== undefined &&
+          (!moves.has(item.contractMoveId) || moves.get(item.contractMoveId).playerId !== item.playerId)) ||
+        freeAgentPlayers.has(item.playerId)) return false;
+    freeAgentPlayers.add(item.playerId);
+  }
+  return true;
 }
