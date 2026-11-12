@@ -89,21 +89,19 @@ export function validateCompetitionDefinition(competition, database) {
     errors.push("المسابقة القارية يجب أن تستخدم نظام المجموعات في هذا الإصدار: " + competition.id);
   }
 
-  if (rules.format === COMPETITION_FORMATS.ROUND_ROBIN) {
-    if (![1, 2].includes(rules.legs)) {
-      errors.push("عدد مراحل الدوري يجب أن يكون ذهابًا فقط أو ذهابًا وإيابًا: " + competition.id);
-    }
-    const points = rules.points;
-    if (![points.win, points.draw, points.loss].every((value) =>
-      Number.isSafeInteger(value) && value >= 0
-    ) || !(points.win > points.draw && points.draw >= points.loss)) {
-      errors.push("نظام نقاط الدوري غير صالح: " + competition.id);
-    }
-    if (!Array.isArray(rules.tieBreakers) || rules.tieBreakers.length === 0 ||
-        new Set(rules.tieBreakers).size !== rules.tieBreakers.length ||
-        !rules.tieBreakers.every((rule) => ALLOWED_TIE_BREAKERS.has(rule))) {
-      errors.push("فواصل ترتيب الدوري غير صالحة أو مكررة: " + competition.id);
-    }
+  const points = rules.points;
+  if (![points.win, points.draw, points.loss].every((value) =>
+    Number.isSafeInteger(value) && value >= 0
+  ) || !(points.win > points.draw && points.draw >= points.loss)) {
+    errors.push("نظام نقاط المسابقة غير صالح: " + competition.id);
+  }
+  if (!Array.isArray(rules.tieBreakers) || rules.tieBreakers.length === 0 ||
+      new Set(rules.tieBreakers).size !== rules.tieBreakers.length ||
+      !rules.tieBreakers.every((rule) => ALLOWED_TIE_BREAKERS.has(rule))) {
+    errors.push("فواصل ترتيب المسابقة غير صالحة أو مكررة: " + competition.id);
+  }
+  if (rules.format === COMPETITION_FORMATS.ROUND_ROBIN && ![1, 2].includes(rules.legs)) {
+    errors.push("عدد مراحل الدوري يجب أن يكون ذهابًا فقط أو ذهابًا وإيابًا: " + competition.id);
   }
 
   if (rules.format === COMPETITION_FORMATS.GROUP_STAGE) {
