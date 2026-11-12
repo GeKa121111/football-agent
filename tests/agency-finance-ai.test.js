@@ -118,6 +118,40 @@ test("staff modifiers affect negotiation and protect player mandates from rival 
   assert.equal(isValidSave(rivalSave), true);
 });
 
+test("legal staff reduces the probability that a rival agency poaches a target", () => {
+  const target = {
+    id:"legal-protection-target",playerId:"legal-protection-target",
+    playerName:"Legal Protection Target",position:"وسط",
+    rating:57,potential:57,commissionRate:10,
+    offeredDate:"2026-07-01",dueDate:"2026-07-04",
+    status:"pending",decisionDate:null
+  };
+  const prepare = (save) => ({
+    ...save,
+    agency:{...save.agency,management:{
+      ...save.agency.management,
+      competitors:save.agency.management.competitors.map((rival,index) =>
+        index===0 ? {...rival,pendingOffers:[target]} : rival
+      )
+    }},
+    world:{...save.world,currentDate:"2026-07-04"}
+  });
+  const unprotected = advanceAgencyManagementDay(prepare(createInitialSave()),"2026-07-04",PLAYERS);
+  assert.equal(
+    unprotected.save.agency.management.competitors[0].pendingOffers[0].status,
+    "accepted"
+  );
+
+  const hired = hireAgencyEmployee(createInitialSave(),"legal");
+  const protectedSave = prepare(hired.save);
+  const protectedResult = advanceAgencyManagementDay(protectedSave,"2026-07-04",PLAYERS);
+  assert.equal(
+    protectedResult.save.agency.management.competitors[0].pendingOffers[0].status,
+    "rejected"
+  );
+  assert.equal(isValidSave(protectedResult.save),true);
+});
+
 test("legacy v8 agency state without sponsorship and competitor fields remains readable", () => {
   const save = createInitialSave();
   delete save.agency.management.sponsorships;
