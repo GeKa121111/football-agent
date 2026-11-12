@@ -740,6 +740,7 @@ test.describe("Desktop experience", () => {
 });
 
 test.describe("Mobile experience", () => {
+  test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright mobile-device emulation.");
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
   test("keeps the representation offer form usable on mobile", async ({ page }) => {
@@ -1240,6 +1241,7 @@ test.describe("Mobile experience", () => {
 
 
 test.describe("Career operations follow-up", () => {
+  test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright mobile-device emulation.");
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
   test("marks a task overdue, keeps it actionable and persists late completion", async ({ page }) => {
@@ -1343,6 +1345,7 @@ test.describe("Career operations follow-up", () => {
 
 
 test.describe("Task history archive", () => {
+  test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright mobile-device emulation.");
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
   test("searches and filters open, overdue and completed tasks on mobile", async ({ page }) => {
@@ -1417,6 +1420,7 @@ test.describe("Task history archive", () => {
 
 
 test.describe("Annual career calendar", () => {
+  test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright mobile-device emulation.");
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
   test("starts a new career with season-opening information", async ({ page }) => {
@@ -1452,6 +1456,7 @@ test.describe("Annual career calendar", () => {
 
 
 test.describe("Inbox archive", () => {
+  test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright mobile-device emulation.");
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
   test("searches all retained messages, filters read state and marks a message without closing the archive", async ({ page }) => {
@@ -1550,6 +1555,7 @@ test.describe("Inbox archive", () => {
 
 
 test.describe("Scouting discovery channels and observation history", () => {
+  test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright mobile-device emulation.");
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
   test("filters by a discovery channel and persists repeat observations across reloads", async ({ page }) => {
@@ -1625,6 +1631,7 @@ test.describe("Scouting recruitment contracts", () => {
 });
 
 test.describe("Scouting recruitment contracts on mobile", () => {
+  test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright mobile-device emulation.");
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
   test("keeps annual scout recruitment usable and persisted on a phone viewport", async ({ page }) => {
@@ -1655,6 +1662,7 @@ test.describe("Scouting recruitment contracts on mobile", () => {
 
 
 test.describe("Advanced transfer clauses on mobile", () => {
+  test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright mobile-device emulation.");
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
   test("shows and toggles advanced loan clauses on a phone viewport", async ({ page }) => {
