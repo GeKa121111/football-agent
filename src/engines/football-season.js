@@ -12,6 +12,7 @@ import {
 
 const MAX_RETAINED_MATCH_RESULTS = 1000;
 const MAX_RETAINED_FIXTURES = 2000;
+const MAX_RETAINED_COMPETITION_ARCHIVES = 100;
 const MIN_MATCH_REST_DAYS = 3;
 const ROLE_SLOTS = [
   "حراسة",
@@ -251,6 +252,63 @@ export function generateSeasonFixtures(season, startDate, database = WORLD_DATAB
   );
 }
 
+function buildCompetitionSeasonSummary(state, competition, season, database = WORLD_DATABASE) {
+  const fixtures = state.fixtures.filter((fixture) =>
+    fixture.competitionId === competition.id && fixture.season === season
+  );
+  if (fixtures.length === 0) return null;
+
+  const results = state.results.filter((result) =>
+    result.competitionId === competition.id && result.season === season
+  );
+  const scheduledFixtures = fixtures.filter((fixture) => fixture.status === "scheduled");
+  const playedFixtures = fixtures.length - scheduledFixtures.length;
+  const complete = scheduledFixtures.length === 0 && playedFixtures === results.length;
+  const rules = getCompetitionRules(competition);
+  const groups = rules.format === COMPETITION_FORMATS.GROUP_STAGE
+    ? buildCompetitionGroups(competition, database).map((group) => ({
+      groupId: group.id,
+      groupName: group.nameAr,
+      standings: getCompetitionStandings(state, competition.id, database, season, group.id)
+    }))
+    : [];
+  const standings = rules.format === COMPETITION_FORMATS.ROUND_ROBIN
+    ? getCompetitionStandings(state, competition.id, database, season)
+    : [];
+  const championClubId = complete && standings.length > 0
+    ? standings[0].clubId
+    : null;
+  const clubById = new Map(database.clubs.map((club) => [club.id, club]));
+
+  return {
+    id: "archive-" + season + "-" + competition.id,
+    season,
+    competitionId: competition.id,
+    competitionName: competition.nameAr,
+    format: rules.format,
+    matchesTotal: fixtures.length,
+    matchesPlayed: playedFixtures,
+    matchesScheduled: scheduledFixtures.length,
+    complete,
+    championClubId,
+    championName: championClubId ? clubById.get(championClubId)?.nameAr ?? championClubId : null,
+    standings,
+    groups
+  };
+}
+
+function createCompetitionSeasonArchives(state, season, closedOn, database = WORLD_DATABASE) {
+  const knownIds = new Set((state.archives ?? []).map((archive) => archive.id));
+  const additions = [];
+  for (const competition of database.competitions) {
+    const summary = buildCompetitionSeasonSummary(state, competition, season, database);
+    if (!summary || knownIds.has(summary.id)) continue;
+    additions.push({ ...summary, archivedOn: closedOn });
+  }
+  return [...(state.archives ?? []), ...additions]
+    .slice(-MAX_RETAINED_COMPETITION_ARCHIVES);
+}
+
 export function createInitialFootballState(season = 1, currentDate = "2026-07-01", database = WORLD_DATABASE) {
   if (!Number.isSafeInteger(season) || season < 1 || !dateValue(currentDate)) {
     throw new TypeError("بيانات بداية موسم كرة القدم غير صالحة.");
@@ -260,6 +318,7 @@ export function createInitialFootballState(season = 1, currentDate = "2026-07-01
     season,
     fixtures: generateSeasonFixtures(season, currentDate, database),
     results: [],
+    archives: [],
     playerDevelopment: createInitialPlayerDevelopmentState(getWorldSquadPlayers(database))
   };
 }
@@ -308,6 +367,7 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
     nextState = {
       ...state,
       season,
+      archives: createCompetitionSeasonArchives(state, state.season, currentDate, database),
       fixtures: [
         ...state.fixtures,
         ...generateSeasonFixtures(season, currentDate, database)
@@ -432,6 +492,21 @@ export function isValidFootballState(state, currentDate, season, database = WORL
       !dateValue(currentDate) ||
       !Array.isArray(state.fixtures) || state.fixtures.length > MAX_RETAINED_FIXTURES ||
       !Array.isArray(state.results) || state.results.length > MAX_RETAINED_MATCH_RESULTS ||
+      (state.archives !== undefined && (!Array.isArray(state.archives) ||
+        state.archives.length > MAX_RETAINED_COMPETITION_ARCHIVES ||
+        new Set(state.archives.map((archive) => archive?.id)).size !== state.archives.length ||
+        !state.archives.every((archive) => isRecord(archive) &&
+          typeof archive.id === "string" && archive.id.trim() &&
+          Number.isSafeInteger(archive.season) && archive.season >= 1 &&
+          typeof archive.competitionId === "string" && archive.competitionId.trim() &&
+          typeof archive.competitionName === "string" && archive.competitionName.trim() &&
+          typeof archive.complete === "boolean" &&
+          Number.isSafeInteger(archive.matchesTotal) && archive.matchesTotal >= 1 &&
+          Number.isSafeInteger(archive.matchesPlayed) && archive.matchesPlayed >= 0 &&
+          Number.isSafeInteger(archive.matchesScheduled) && archive.matchesScheduled >= 0 &&
+          archive.matchesPlayed + archive.matchesScheduled === archive.matchesTotal &&
+          Array.isArray(archive.standings) && Array.isArray(archive.groups) &&
+          dateValue(archive.archivedOn) !== null))) ||
       !isValidPlayerDevelopmentState(state.playerDevelopment, state.season)) return false;
 
   const fixtureIds = state.fixtures.map((fixture) => fixture?.id);
@@ -557,11 +632,35 @@ export function getCompetitionStandings(state, competitionId, database = WORLD_D
         const difference = rule === "points" ? b.points - a.points
           : rule === "goalDifference" ? b.goalDifference - a.goalDifference
             : rule === "goalsFor" ? b.goalsFor - a.goalsFor
-              : rule === "clubId" ? compareText(a.clubId, b.clubId)
-                : 0;
+              : rule === "wins" ? b.wins - a.wins
+                : rule === "goalsAgainst" ? a.goalsAgainst - b.goalsAgainst
+                  : rule === "clubId" ? compareText(a.clubId, b.clubId)
+                    : 0;
         if (difference !== 0) return difference;
       }
       return compareText(a.clubId, b.clubId);
     })
     .map((row, index) => ({ ...row, position: index + 1 }));
+}
+
+/** Returns retained season archives plus a live snapshot for the current data. */
+export function getCompetitionSeasonHistory(state, competitionId, database = WORLD_DATABASE) {
+  if (!isRecord(state) || !Array.isArray(state.fixtures) || !Array.isArray(state.results)) return [];
+  const competition = database.competitions.find((item) => item.id === competitionId);
+  if (!competition) return [];
+
+  const archived = (state.archives ?? [])
+    .filter((archive) => archive.competitionId === competitionId)
+    .map((archive) => ({ ...archive }));
+  const archivedSeasons = new Set(archived.map((archive) => archive.season));
+  const liveSeasons = [...new Set(state.fixtures
+    .filter((fixture) => fixture.competitionId === competitionId)
+    .map((fixture) => fixture.season))]
+    .filter((season) => !archivedSeasons.has(season))
+    .sort((a, b) => b - a);
+  const live = liveSeasons
+    .map((season) => buildCompetitionSeasonSummary(state, competition, season, database))
+    .filter(Boolean);
+
+  return [...archived, ...live].sort((a, b) => b.season - a.season);
 }
