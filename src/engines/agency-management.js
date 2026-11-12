@@ -1,3 +1,5 @@
+import { WORLD_DATABASE } from "../data/world-database.js";
+import { getTransferWindowForClub } from "./club-transfer-rules.js";
 const MAX_LEDGER_ENTRIES = 1000;
 const MAX_MONEY_EGP = 2000000000;
 const MAX_ACTIVE_STAFF = 6;
@@ -29,6 +31,7 @@ const COMPETITOR_BLUEPRINTS = Object.freeze([
 const MAX_SPONSORSHIPS = 20;
 const MAX_COMPETITIVE_HISTORY = 300;
 const MAX_RIVAL_CLIENTS = 100;
+const MAX_CLUB_INTERESTS = 200;
 
 export const AGENCY_CREDIT_PRODUCTS = Object.freeze([
   Object.freeze({ id:"working-capital", name:"تمويل رأس مال عامل", description:"تمويل قصير لتغطية التشغيل والسيولة.", principalEgp:50000, interestRatePct:12, termWeeks:12, minClients:0, minReputation:50 }),
@@ -86,7 +89,7 @@ function resolveManagement(save, currentDate) {
 
 export function createInitialAgencyManagementState() {
   return {
-    schemaVersion:1, nextStaffSequence:1, nextBranchSequence:1, nextLedgerSequence:1, nextSponsorshipSequence:1, nextCompetitiveSequence:1, nextCreditSequence:1,
+    schemaVersion:1, nextStaffSequence:1, nextBranchSequence:1, nextLedgerSequence:1, nextSponsorshipSequence:1, nextCompetitiveSequence:1, nextCreditSequence:1, nextClubInterestSequence:1,
     lastPayrollDate:null, arrearsEgp:0, staff:[],
     branches:[{
       id:"agency-branch-hq", locationId:"headquarters", name:"المقر الرئيسي", region:"المقر الرئيسي",
@@ -96,6 +99,7 @@ export function createInitialAgencyManagementState() {
     ledger:[],
     sponsorships:[],
     creditFacilities:[],
+    clubInterests:[],
     competitors:COMPETITOR_BLUEPRINTS.map((profile) => ({
       ...profile, clients:[], pendingOffers:[], lastActionDate:null
     })),
@@ -122,6 +126,33 @@ export function isValidAgencyManagementState(state, currentDate) {
   const competitiveHistory = state.competitiveHistory === undefined ? [] : state.competitiveHistory;
   const nextSponsorshipSequence = state.nextSponsorshipSequence ?? 1;
   const nextCompetitiveSequence = state.nextCompetitiveSequence ?? 1;
+  const clubInterests = state.clubInterests === undefined ? [] : state.clubInterests;
+  const nextClubInterestSequence = state.nextClubInterestSequence ?? 1;
+  if (!Number.isSafeInteger(nextClubInterestSequence) || nextClubInterestSequence < 1 ||
+      !Array.isArray(clubInterests) || clubInterests.length > MAX_CLUB_INTERESTS) return false;
+  const clubInterestIds = new Set();
+  let highestClubInterest = 0;
+  for (const interest of clubInterests) {
+    const club = WORLD_DATABASE.clubs.find((item) => item.id === interest?.clubId);
+    if (!isRecord(interest) || !sequenceOf(interest.id,"agency-club-interest") ||
+        clubInterestIds.has(interest.id) || !club ||
+        typeof interest.playerId !== "string" || !interest.playerId.trim() ||
+        typeof interest.playerName !== "string" || !interest.playerName.trim() ||
+        typeof interest.position !== "string" || !interest.position.trim() ||
+        !Number.isInteger(interest.rating) || interest.rating < 1 || interest.rating > 99 ||
+        !Number.isInteger(interest.potential) || interest.potential < interest.rating || interest.potential > 99 ||
+        typeof interest.currentClubId !== "string" || !interest.currentClubId.trim() ||
+        !validDate(interest.createdDate) || interest.createdDate > currentDate ||
+        !validDate(interest.updatedDate) || interest.updatedDate < interest.createdDate || interest.updatedDate > currentDate ||
+        !validDate(interest.expiresDate) || interest.expiresDate !== addDays(interest.createdDate,14) ||
+        !Number.isInteger(interest.fitScore) || interest.fitScore < 0 || interest.fitScore > 100 ||
+        !["monitoring","enquiry","expired","window-closed","withdrawn"].includes(interest.status) ||
+        (interest.transferWindowEndDate !== null && !validDate(interest.transferWindowEndDate)) ||
+        (interest.status === "expired" && currentDate <= interest.expiresDate)) return false;
+    clubInterestIds.add(interest.id);
+    highestClubInterest = Math.max(highestClubInterest,sequenceOf(interest.id,"agency-club-interest"));
+  }
+  if (nextClubInterestSequence <= highestClubInterest) return false;
   const creditFacilities = state.creditFacilities === undefined ? [] : state.creditFacilities;
   const nextCreditSequence = state.nextCreditSequence ?? 1;
   if (!Number.isSafeInteger(nextCreditSequence) || nextCreditSequence < 1 ||
@@ -409,6 +440,103 @@ export function takeAgencyCredit(save, productId, currentDate = save?.world?.cur
     changed:true,loan,
     save:{...save,agency:{...save.agency,balance:save.agency.balance+loan.principalEgp,management:next}}
   };
+}
+
+
+export function getAgencyClubInterestSummary(save) {
+  const records = save?.agency?.management?.clubInterests ?? [];
+  return {
+    total:records.length,
+    monitoring:records.filter((item) => item.status === "monitoring").length,
+    enquiries:records.filter((item) => item.status === "enquiry").length,
+    expired:records.filter((item) => ["expired","window-closed","withdrawn"].includes(item.status)).length
+  };
+}
+
+function calculateClubInterestFit(player, club) {
+  const baseline = Number.isInteger(club?.simulationProfile) ? club.simulationProfile : 60;
+  const rating = Number(player?.rating) || 50;
+  const potential = Number(player?.potential) || rating;
+  const ageBonus = Number(player?.age) <= 23 ? 5 : Number(player?.age) <= 27 ? 2 : 0;
+  const position = String(player?.position ?? "").toLowerCase();
+  const youthBonus = Number(player?.age) <= 21 && potential >= 75 ? 4 : 0;
+  const score = Math.round((rating * 0.55) + (potential * 0.25) + (baseline * 0.2) + ageBonus + youthBonus);
+  return Math.max(0,Math.min(100,score));
+}
+
+function advanceClubInterestAI(save,currentDate,players,state) {
+  if (!Array.isArray(players) || players.length === 0) return state;
+  const playerById = new Map(players.map((player) => [player.id,player]));
+  const clubs = WORLD_DATABASE.clubs;
+  const activeClientIds = new Set(save.agency.clients ?? []);
+  const contracts = save.agency.representation?.contracts ?? [];
+  for (const contract of contracts) {
+    if (contract.status === "active" && currentDate < contract.expiresOn) activeClientIds.add(contract.playerId);
+  }
+  const interests = (state.clubInterests ?? []).map((interest) => {
+    if (interest.status === "expired" || interest.status === "withdrawn" || interest.status === "window-closed") return interest;
+    if (currentDate > interest.expiresDate) return {...interest,status:"expired",updatedDate:currentDate};
+    if (!activeClientIds.has(interest.playerId)) return {...interest,status:"withdrawn",updatedDate:currentDate};
+    const window = getTransferWindowForClub(currentDate,interest.clubId,WORLD_DATABASE);
+    const status = window.active ? "enquiry" : "monitoring";
+    return {
+      ...interest,status,updatedDate:currentDate,
+      transferWindowEndDate:window.window?.endDate ?? null
+    };
+  });
+  let next = {
+    ...state,
+    clubInterests:interests.slice(0,MAX_CLUB_INTERESTS),
+    nextClubInterestSequence:state.nextClubInterestSequence ?? 1
+  };
+  if (new Date(currentDate + "T00:00:00.000Z").getUTCDay() !== 1 ||
+      next.clubInterests.length >= MAX_CLUB_INTERESTS) return next;
+
+  const reserved = new Set(next.clubInterests.filter((item) =>
+    ["monitoring","enquiry"].includes(item.status)
+  ).map((item) => item.playerId + "::" + item.clubId));
+  const candidates = [...activeClientIds]
+    .map((playerId) => playerById.get(playerId))
+    .filter((player) => player && Number.isInteger(player.rating) && Number.isInteger(player.potential));
+  if (candidates.length === 0) return next;
+
+  const generated = [];
+  for (const player of candidates) {
+    const playerClubId = player.clubId ?? player.currentClubId ?? null;
+    const fits = clubs.filter((club) => club.id !== playerClubId &&
+      !reserved.has(player.id + "::" + club.id))
+      .map((club) => {
+        const fitScore = calculateClubInterestFit(player,club);
+        const window = getTransferWindowForClub(currentDate,club.id,WORLD_DATABASE);
+        return {club,fitScore,window};
+      })
+      .filter((item) => item.fitScore >= 69)
+      .sort((a,b) => b.fitScore-a.fitScore || a.club.id.localeCompare(b.club.id));
+    if (fits.length === 0) continue;
+    const seed = [...(player.id + currentDate)].reduce((sum,char) => (sum + char.charCodeAt(0)) >>> 0,0);
+    const selected = fits[seed % Math.min(3,fits.length)];
+    const record = {
+      id:"agency-club-interest-" + next.nextClubInterestSequence++,
+      clubId:selected.club.id,clubName:selected.club.nameAr,
+      playerId:player.id,playerName:player.name,
+      position:player.position ?? "غير محدد",
+      rating:player.rating,potential:player.potential,
+      currentClubId:playerClubId ?? "free-agent",
+      createdDate:currentDate,updatedDate:currentDate,
+      expiresDate:addDays(currentDate,14),
+      fitScore:selected.fitScore,
+      status:selected.window.active ? "enquiry" : "monitoring",
+      transferWindowEndDate:selected.window.window?.endDate ?? null
+    };
+    generated.push(record);
+    reserved.add(player.id + "::" + selected.club.id);
+    if (generated.length >= 5) break;
+  }
+  next = {
+    ...next,
+    clubInterests:[...generated,...next.clubInterests].slice(0,MAX_CLUB_INTERESTS)
+  };
+  return next;
 }
 
 export function getAgencyCompetitorSummary(save) {
@@ -782,6 +910,7 @@ export function advanceAgencyManagementDay(save, currentDate = save?.world?.curr
   nextSave = {...nextSave,agency:{...nextSave.agency,management:next}};
   const beforeEvents = next.competitiveHistory?.length ?? 0;
   next = advanceCompetitorMarket(nextSave,currentDate,players,next);
+  next = advanceClubInterestAI(nextSave,currentDate,players,next);
   nextSave = {...nextSave,agency:{...nextSave.agency,management:next}};
   const competitorEvents = Math.max(0,(next.competitiveHistory?.length ?? 0)-beforeEvents);
   return {
