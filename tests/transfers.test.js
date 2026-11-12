@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   createInitialTransferState, createTransferOffer, evaluateTransferOffer,
   submitTransferCounterOffer, acceptTransferCounterOffer, rejectTransferOffer,
-  completeTransfer, advanceTransferState, getTransferWindow,
+  completeTransfer, exerciseLoanOption, advanceTransferState, getTransferWindow,
   getPlayerCurrentClubId, isValidTransferState
 } from "../src/engines/transfers.js";
 
@@ -325,4 +325,55 @@ test("rejects malformed, duplicated or financially inconsistent transfer state",
   const wrongBasis = structuredClone(completed.save.world.transfers);
   wrongBasis.ledger[0].basisEur += 1;
   assert.equal(isValidTransferState(wrongBasis, "2026-07-02", completed.save.agency.clients, completed.save.agency.representation), false);
+});
+
+\ntest("uses league-specific registration windows and roster limits", async () => {
+  const { getLeagueTransferRules, getTransferWindowForClub, getClubRegistrationStatus, getClubTransferFinancials } =
+    await import("../src/engines/club-transfer-rules.js");
+  const leagueDb = {
+    clubs: [{ id: "egypt", nameAr: "نادي مصري", leagueId: "league-eg-premier", countryId: "EG", simulationProfile: 70 }],
+    players: [{ id: "foreign", name: "Foreign", clubId: "other", countryId: "BR", age: 25, rating: 70 }],
+    squadPlayers: []
+  };
+  assert.equal(getTransferWindowForClub("2026-09-10", "egypt", leagueDb).active, true);
+  assert.equal(getTransferWindowForClub("2026-09-16", "egypt", leagueDb).active, false);
+  assert.equal(getLeagueTransferRules("league-eg-premier").maxForeignPlayers, 5);
+  const roster = Array.from({ length: 5 }, (_, index) => ({
+    id: "foreign-" + index, name: "Foreign " + index, clubId: "egypt", countryId: "BR", age: 25, rating: 60
+  }));
+  const db = { ...leagueDb, players: [...leagueDb.players, ...roster] };
+  const status = getClubRegistrationStatus("egypt", "foreign", createInitialTransferState(), "2026-07-01", db);
+  assert.equal(status.eligible, false);
+  assert.match(status.reason, /أجنبي/);
+  const finances = getClubTransferFinancials("egypt", createInitialTransferState(), "2026-07-01", db);
+  assert.equal(finances.valid, true);
+  assert.ok(finances.budgetEur > 0);
+  assert.ok(finances.availableWagesWeeklyEur >= 0);
+});
+
+test("turns an expired permanent contract into a free agent", () => {
+  const sent = send(makeSave("2026-07-01"), "permanent", { ...permanentTerms, contractYears: 1 });
+  const agreed = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
+  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-01");
+  const advanced = advanceTransferState(completed.save, "2027-07-01", database);
+  assert.deepEqual(advanced.expiredContracts, ["player-1"]);
+  assert.equal(advanced.save.world.transfers.moves[0].status, "expired");
+  assert.equal(getPlayerCurrentClubId("player-1", "club-home", advanced.save.world.transfers, "2027-07-01", database), null);
+  assert.equal(isValidTransferState(advanced.save.world.transfers, "2027-07-01",
+    advanced.save.agency.clients, advanced.save.agency.representation), true);
+});
+
+test("exercises a loan purchase option and keeps the purchased club registration", () => {
+  const sent = send(makeSave(), "loan", loanTerms);
+  const agreed = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
+  const loan = completeTransfer(agreed.save, sent.offer.id, "2026-07-01");
+  const purchased = exerciseLoanOption(loan.save, loan.move.id, "2026-07-02", database);
+  assert.equal(purchased.changed, true);
+  assert.equal(purchased.action, "option-exercised");
+  assert.equal(purchased.move.type, "permanent");
+  assert.equal(getPlayerCurrentClubId("player-1", "club-home", purchased.save.world.transfers, "2026-07-02", database), "club-target");
+  assert.equal(purchased.save.world.transfers.moves.find((item) => item.id === loan.move.id).status, "purchased");
+  assert.equal(isValidTransferState(purchased.save.world.transfers, "2026-07-02",
+    purchased.save.agency.clients, purchased.save.agency.representation), true);
+  assert.equal(exerciseLoanOption(purchased.save, loan.move.id, "2026-07-03", database).changed, false);
 });
