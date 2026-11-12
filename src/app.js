@@ -985,6 +985,58 @@ function renderFootball(context) {
       return row;
     });
     standingsTable.replaceChildren(header, ...rows);
+    if (competition?.knockoutAfterGroups === true) {
+      const continentalKnockoutFixtures = football.fixtures
+        .filter((fixture) => fixture.competitionId === competition.id &&
+          fixture.season === football.season && !fixture.groupId)
+        .sort((a, b) => a.round - b.round ||
+          a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+      const bracket = node("div", "football-knockout-bracket");
+      const knockoutRounds = [...new Set(continentalKnockoutFixtures
+        .map((fixture) => fixture.round))].sort((a, b) => a - b);
+      bracket.append(node("h3", "", "الأدوار الإقصائية"));
+      if (continentalKnockoutFixtures.length === 0) {
+        bracket.append(node("p", "representation-empty",
+          "نصف النهائي هيتحدد تلقائيًا بعد اكتمال كل مباريات المجموعتين."));
+      } else {
+        knockoutRounds.forEach((roundNumber) => {
+          const roundPanel = node("section", "football-knockout-round");
+          const title = roundNumber === knockoutRounds.at(-1)
+            ? "النهائي"
+            : roundNumber === knockoutRounds.at(-1) - 1
+              ? "نصف النهائي"
+              : "دور " + formatHomeNumber(roundNumber);
+          roundPanel.append(node("h3", "", title));
+          continentalKnockoutFixtures.filter((fixture) => fixture.round === roundNumber)
+            .forEach((fixture) => {
+              const match = node("article", "football-knockout-match");
+              const result = football.results.find((item) => item.id === fixture.id);
+              const home = clubById.get(fixture.homeClubId);
+              const away = clubById.get(fixture.awayClubId);
+              const score = result
+                ? result.home.goals + " - " + result.away.goals
+                : "VS";
+              const winnerId = result?.knockoutDecision?.winnerClubId;
+              const winner = winnerId ? clubById.get(winnerId)?.nameAr ?? winnerId : null;
+              const method = result?.knockoutDecision?.decidedBy === "penalties"
+                ? "تأهل بركلات الترجيح"
+                : result?.knockoutDecision?.decidedBy === "extra-time"
+                  ? "تأهل بعد الوقت الإضافي"
+                  : result?.knockoutDecision?.decidedBy === "regular-time"
+                    ? "تأهل في الوقت الأصلي"
+                    : "موعد المباراة " + formatHomeDate(fixture.date);
+              match.append(
+                node("span", "", (home?.shortName ?? fixture.homeClubId) + "  " + score + "  " +
+                  (away?.shortName ?? fixture.awayClubId)),
+                node("small", "", winner ? winner + " · " + method : method)
+              );
+              roundPanel.append(match);
+            });
+          bracket.append(roundPanel);
+        });
+      }
+      standingsTable.append(bracket);
+    }
     if (standings.every((club) => club.played === 0)) {
       standingsTable.append(node("p", "representation-empty", "الترتيب هيتحدث تلقائيًا بعد لعب أول مباراة في المسابقة."));
     }
