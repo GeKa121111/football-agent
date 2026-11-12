@@ -263,6 +263,74 @@ test("clubs independently monitor agency clients and raise enquiries during open
 });
 
 
+test("club interest scores reflect actual appearances and recent match ratings without auto-creating offers", () => {
+  const initial = createInitialSave();
+  const player = PLAYERS[0];
+  const preferences = getPlayerRepresentationProfile(player);
+  const sent = createRepresentationOffer(initial, player, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays,
+    representationType: preferences.prefersExclusive ? "exclusive" : "non-exclusive"
+  });
+  assert.equal(sent.changed, true, sent.error);
+  const response = evaluateRepresentationOffer(sent.save, sent.offer.id);
+  let save = response.save;
+  if (response.status === "countered") {
+    const accepted = acceptRepresentationCounterOffer(response.save, sent.offer.id);
+    assert.equal(accepted.changed, true, accepted.error);
+    save = accepted.save;
+  }
+
+  const development = save.world.football.playerDevelopment.players.find((item) =>
+    item.playerId === player.id
+  );
+  assert.ok(development);
+  const updatedDevelopment = {
+    ...development,
+    rating: Math.min(development.potential, development.rating + 8),
+    appearances: 8,
+    minutesPlayed: 720,
+    goals: 3,
+    assists: 2,
+    averageMatchRating: 8.2
+  };
+  save = {
+    ...save,
+    world: {
+      ...save.world,
+      football: {
+        ...save.world.football,
+        playerDevelopment: {
+          ...save.world.football.playerDevelopment,
+          players: save.world.football.playerDevelopment.players.map((item) =>
+            item.playerId === player.id ? updatedDevelopment : item
+          )
+        }
+      }
+    }
+  };
+  assert.equal(isValidSave(save), true);
+
+  const monday = advanceCareerSimulationDays(save, 5, PLAYERS);
+  const interest = monday.save.agency.management.clubInterests.find((item) =>
+    item.playerId === player.id
+  );
+  assert.ok(interest);
+  assert.equal(interest.performanceSnapshot.appearances >= 8, true);
+  assert.ok(interest.performanceSnapshot.minutesPlayed >= 720);
+  assert.ok(interest.performanceSnapshot.goals >= 3);
+  assert.ok(interest.performanceSnapshot.assists >= 2);
+  assert.ok(interest.performanceSnapshot.averageMatchRating >= 7);
+  assert.ok(interest.performanceSnapshot.performanceBonus > 0);
+
+  const createdTransferOffers = (monday.save.world.transfers.offers ?? []).filter((offer) =>
+    offer.playerId === player.id &&
+    ["pending", "countered", "agreed"].includes(offer.status)
+  );
+  assert.equal(createdTransferOffers.length, 0);
+  assert.equal(isValidSave(monday.save), true);
+});
+
 test("retains a new competitor offer after the rival history reaches its rolling cap", () => {
   const initial = createInitialSave();
   const rival = initial.agency.management.competitors[0];
