@@ -847,6 +847,9 @@ export function advanceAgencyManagementDay(save, currentDate = save?.world?.curr
     nextCreditSequence:state.nextCreditSequence ?? 1
   };
   let processed = false;
+  let dueEgp = 0;
+  let paidEgp = 0;
+  let arrearsEgp = state.arrearsEgp;
   const isMonday = new Date(currentDate + "T00:00:00.000Z").getUTCDay() === 1;
 
   for (const deal of [...(next.sponsorships ?? [])]) {
@@ -888,19 +891,22 @@ export function advanceAgencyManagementDay(save, currentDate = save?.world?.curr
     const totalDue = state.arrearsEgp + weeklyCost;
     if (totalDue > 0 && next.ledger.length >= MAX_LEDGER_ENTRIES)
       return {changed:false,save,processed:false,error:"سجل المصروفات ممتلئ؛ لم تتم تسوية الالتزامات."};
-    const paidEgp = Math.min(nextSave.agency.balance,totalDue);
-    const arrearsAfterEgp = totalDue-paidEgp;
+    const operationsPaidEgp = Math.min(nextSave.agency.balance,totalDue);
+    const arrearsAfterEgp = totalDue-operationsPaidEgp;
+    dueEgp = totalDue;
+    paidEgp = operationsPaidEgp;
+    arrearsEgp = arrearsAfterEgp;
     next = {...next,lastPayrollDate:currentDate,arrearsEgp:arrearsAfterEgp};
     if (totalDue > 0) {
       next = appendLedger(next,{
         date:currentDate,type:"weekly-operations",referenceId:null,
-        amountEgp:totalDue,paidEgp,arrearsAfterEgp,
+        amountEgp:totalDue,paidEgp:operationsPaidEgp,arrearsAfterEgp,
         note:"رواتب الفريق وإيجارات الفروع بعد احتساب كفاءة العمليات"
       });
     }
     nextSave = {
       ...nextSave,
-      agency:{...nextSave.agency,balance:nextSave.agency.balance-paidEgp,management:next}
+      agency:{...nextSave.agency,balance:nextSave.agency.balance-operationsPaidEgp,management:next}
     };
     processed = true;
   }
@@ -943,12 +949,23 @@ export function advanceAgencyManagementDay(save, currentDate = save?.world?.curr
   const beforeEvents = next.competitiveHistory?.length ?? 0;
   next = advanceCompetitorMarket(nextSave,currentDate,players,next);
   next = advanceClubInterestAI(nextSave,currentDate,players,next);
-  nextSave = {...nextSave,agency:{...nextSave.agency,management:next}};
   const competitorEvents = Math.max(0,(next.competitiveHistory?.length ?? 0)-beforeEvents);
+
+  // Return the original save when the same in-game date is processed twice and
+  // no agency, sponsor, loan, competitor or club-interest state actually changed.
+  if (nextSave.agency.balance === save.agency.balance &&
+      JSON.stringify(next) === JSON.stringify(state)) {
+    return {changed:false,processed:false,competitorEvents:0,dueEgp:0,paidEgp:0,arrearsEgp:state.arrearsEgp,save};
+  }
+
+  nextSave = {...nextSave,agency:{...nextSave.agency,management:next}};
   return {
-    changed:nextSave !== save,
+    changed:true,
     processed,
     competitorEvents,
+    dueEgp,
+    paidEgp,
+    arrearsEgp,
     save:nextSave
   };
 }
