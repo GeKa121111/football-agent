@@ -60,6 +60,27 @@ test("validates world competition definitions and rejects duplicate or unknown p
   assert.ok(unknown.errors.some((message) => message.includes("غير موجود")));
 });
 
+test("validates the new global cup as a one-leg knockout bracket", () => {
+  const cup = WORLD_DATABASE.competitions.find((item) => item.type === "cup");
+  const rules = getCompetitionRules(cup);
+  assert.equal(rules.format, COMPETITION_FORMATS.KNOCKOUT);
+  assert.equal(rules.legs, 1);
+  assert.equal(validateCompetitionDefinition(cup, WORLD_DATABASE).valid, true);
+
+  const unbalancedCup = {
+    ...cup,
+    clubIds: cup.clubIds.slice(0, 7)
+  };
+  const invalid = validateCompetitionDefinition(unbalancedCup, WORLD_DATABASE);
+  assert.equal(invalid.valid, false);
+  assert.ok(invalid.errors.some((message) => message.includes("قوة للعدد 2")));
+
+  assert.equal(validateCompetitionDefinition({
+    ...cup,
+    format: "group-stage"
+  }, WORLD_DATABASE).valid, false);
+});
+
 test("rejects unsupported formats, invalid league points and impossible group counts", () => {
   const league = WORLD_DATABASE.competitions.find((item) => item.type === "league");
   assert.equal(validateCompetitionDefinition({ ...league, format: "group-stage" }, WORLD_DATABASE).valid, false);
