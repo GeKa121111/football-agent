@@ -93,6 +93,10 @@ const WORLD_COUNTS = getWorldSummary();
 function getCurrentWorldPlayers(save) {
   const currentDate = save?.world?.currentDate;
   const transferState = save?.world?.transfers;
+  const developmentById = new Map(
+    (save?.world?.football?.playerDevelopment?.players ?? [])
+      .map((record) => [record.playerId, record])
+  );
   const clubsById = new Map(WORLD_DATABASE.clubs.map((club) => [club.id, club]));
   const leaguesById = new Map(WORLD_DATABASE.leagues.map((league) => [league.id, league]));
   const latestPermanentMoveByPlayer = new Map();
@@ -115,8 +119,12 @@ function getCurrentWorldPlayers(save) {
     const club = clubId ? clubsById.get(clubId) : null;
     const league = club ? leaguesById.get(club.leagueId) : null;
     const latestPermanentMove = latestPermanentMoveByPlayer.get(player.id);
+    const development = developmentById.get(player.id);
     return {
       ...player,
+      rating: development?.rating ?? player.rating,
+      potential: development?.potential ?? player.potential,
+      age: development?.age ?? player.age,
       clubId: club?.id ?? null,
       club: club?.nameAr ?? "لاعب حر",
       clubShortName: club?.shortName ?? "حر",
