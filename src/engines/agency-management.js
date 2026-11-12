@@ -593,10 +593,12 @@ export function signAgencySponsorship(save, packageId, currentDate = save?.world
 }
 
 function appendCompetitiveHistory(state, agency, player, date, type, note) {
+  const playerId = player.playerId ?? player.id;
+  const playerName = player.playerName ?? player.name;
   const event = {
     id:"agency-competition-" + state.nextCompetitiveSequence,
-    agencyId:agency.id,agencyName:agency.name,playerId:player.id,
-    playerName:player.name,date,type,note
+    agencyId:agency.id,agencyName:agency.name,playerId,
+    playerName,date,type,note
   };
   return {
     ...state,nextCompetitiveSequence:state.nextCompetitiveSequence+1,
