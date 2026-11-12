@@ -185,11 +185,20 @@ test("generates and completes a seeded knockout cup with automatic rounds and a 
   assert.deepEqual([...new Set(cupFixtures.map((fixture) => fixture.round))].sort(), [1, 2, 3]);
   assert.ok(cupResults.every((result) => result.knockoutDecision?.winnerClubId));
   assert.equal(isValidFootballState(football, "2026-10-01", 1, database), true);
+  const cupPlayerStats = football.playerDevelopment.players.flatMap((player) =>
+    player.competitionStats.filter((item) => item.competitionId === competition.id && item.season === 1)
+  );
+  assert.ok(cupPlayerStats.length > 0);
+  assert.ok(cupPlayerStats.some((item) => item.wins > 0));
+  assert.ok(cupPlayerStats.some((item) => item.losses > 0));
+  assert.ok(cupPlayerStats.every((item) => item.wins + item.draws + item.losses === item.appearances));
+  assert.equal(cupPlayerStats.reduce((total, item) => total + item.draws, 0), 0);
 
   const history = getCompetitionSeasonHistory(football, competition.id, database);
   assert.equal(history.length, 1);
   assert.equal(history[0].complete, true);
   assert.ok(competition.clubIds.includes(history[0].championClubId));
+  assert.ok(history[0].awards.bestPlayer?.playerId);
 
   const archived = advanceFootballSeasonDay(football, "2027-07-01", 2, database).football;
   const savedCupArchive = archived.archives.find((archive) => archive.competitionId === competition.id);
