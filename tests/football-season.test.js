@@ -292,6 +292,18 @@ test("match results persist full-squad player appearances without anonymous fill
   assert.ok(result.playerPerformances.every((player) => player.simulationOnly === false));
   assert.equal(played.football.playerDevelopment.players.length, 432);
   assert.ok(played.football.playerDevelopment.players.some((player) => player.appearances > 0));
+  const realAppearance = result.playerPerformances.find((player) => player.simulationOnly === false);
+  const development = played.football.playerDevelopment.players.find((player) => player.playerId === realAppearance.playerId);
+  const competitionRecord = development.competitionStats.find((item) =>
+    item.competitionId === result.competitionId && item.season === result.season
+  );
+  assert.ok(competitionRecord);
+  assert.equal(competitionRecord.appearances, 1);
+  assert.equal(competitionRecord.minutesPlayed, realAppearance.minutesPlayed);
+  assert.equal(competitionRecord.goals, realAppearance.goals);
+  assert.equal(competitionRecord.assists, realAppearance.assists);
+  assert.deepEqual(competitionRecord.recentRatings, [realAppearance.rating]);
+  assert.equal(isValidFootballState(played.football, firstDate, 1), true);
 });
 
 test("creates a new scheduled season without deleting historical results", () => {
