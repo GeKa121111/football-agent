@@ -12,7 +12,8 @@ import {
   getUpcomingFootballFixtures,
   getRecentFootballResults,
   getCompetitionStandings,
-  getCompetitionSeasonHistory
+  getCompetitionSeasonHistory,
+  getCompetitionSeasonAwards
 } from "../src/engines/football-season.js";
 
 function dateDistance(left, right) {
@@ -157,6 +158,51 @@ test("generates deterministic home-and-away fixtures for all seeded competitions
       assert.equal(fixture.groupId, null);
     }
   }
+});
+
+test("calculates player of the season, golden boot and top assists from match records", () => {
+  const competition = WORLD_DATABASE.competitions.find((item) => item.type === "league");
+  const state = {
+    season: 1,
+    results: [
+      {
+        id: "award-match-1",
+        competitionId: competition.id,
+        season: 1,
+        playerPerformances: [
+          { playerId: "award-player-a", playerName: "مهاجم أ", clubId: competition.clubIds[0], minutesPlayed: 90, rating: 8.3, goals: 2, assists: 0, simulationOnly: false },
+          { playerId: "award-player-b", playerName: "صانع ب", clubId: competition.clubIds[1], minutesPlayed: 90, rating: 8.7, goals: 0, assists: 2, simulationOnly: false },
+          { playerId: "award-player-c", playerName: "لاعب محاكاة", clubId: competition.clubIds[0], minutesPlayed: 90, rating: 10, goals: 5, assists: 5, simulationOnly: true }
+        ]
+      },
+      {
+        id: "award-match-2",
+        competitionId: competition.id,
+        season: 1,
+        playerPerformances: [
+          { playerId: "award-player-a", playerName: "مهاجم أ", clubId: competition.clubIds[0], minutesPlayed: 80, rating: 8.5, goals: 1, assists: 0, simulationOnly: false },
+          { playerId: "award-player-b", playerName: "صانع ب", clubId: competition.clubIds[1], minutesPlayed: 90, rating: 8.9, goals: 1, assists: 1, simulationOnly: false }
+        ]
+      },
+      {
+        id: "award-match-3",
+        competitionId: competition.id,
+        season: 1,
+        playerPerformances: [
+          { playerId: "award-player-a", playerName: "مهاجم أ", clubId: competition.clubIds[0], minutesPlayed: 75, rating: 8.2, goals: 0, assists: 0, simulationOnly: false },
+          { playerId: "award-player-b", playerName: "صانع ب", clubId: competition.clubIds[1], minutesPlayed: 90, rating: 9.1, goals: 0, assists: 1, simulationOnly: false }
+        ]
+      }
+    ]
+  };
+
+  const awards = getCompetitionSeasonAwards(state, competition.id, 1);
+  assert.equal(awards.goldenBoot.playerId, "award-player-a");
+  assert.equal(awards.goldenBoot.value, 3);
+  assert.equal(awards.topAssists.playerId, "award-player-b");
+  assert.equal(awards.topAssists.value, 4);
+  assert.equal(awards.playerOfSeason.playerId, "award-player-b");
+  assert.ok(awards.playerOfSeason.averageRating > awards.goldenBoot.averageRating);
 });
 
 test("generates and completes a seeded knockout cup with automatic rounds and a single champion", () => {
