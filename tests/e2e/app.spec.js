@@ -543,6 +543,25 @@ test.describe("Mobile experience", () => {
     await hasNoHorizontalOverflow(page);
   });
 
+  test("keeps the transfer proposal form usable on mobile after signing a mandate", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+    const modal = page.locator(".modal-overlay");
+    await modal.getByLabel("نسبة العمولة").selectOption("15");
+    await modal.getByLabel("مدة العقد").selectOption("1095");
+    await modal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+    await page.locator(".representation-evaluate-button").click();
+    await page.locator(".representation-accept-button").click();
+
+    await navigateTo(page, "الانتقالات");
+    await expect(page.locator(".transfer-proposal-form")).toBeVisible();
+    await expect(page.getByLabel("لاعب الانتقال")).toBeVisible();
+    await expect(page.getByLabel("النادي المستهدف")).toBeVisible();
+    await expect(page.getByLabel("الراتب الأسبوعي باليورو")).toBeVisible();
+    await hasNoHorizontalOverflow(page);
+  });
+
   test("searches the agency prospect pool without changing its source data", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الوكالة");
