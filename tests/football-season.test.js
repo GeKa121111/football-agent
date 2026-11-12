@@ -292,6 +292,62 @@ test("creates a new scheduled season without deleting historical results", () =>
   assert.equal(isValidFootballState(nextSeason.football, "2027-07-01", 2), true);
 });
 
+test("migrates older saves by assigning legacy continental matches to valid groups", () => {
+  const initial = createInitialFootballState(1, "2026-07-01");
+  const continental = WORLD_DATABASE.competitions.find((item) => item.type === "continental");
+  const firstFixture = initial.fixtures.find((fixture) => fixture.competitionId === continental.id);
+  const played = advanceFootballSeasonDay(initial, firstFixture.date, 1);
+  const legacy = {
+    ...played.football,
+    fixtures: played.football.fixtures.map((fixture) => {
+      if (fixture.competitionId !== continental.id) return fixture;
+      const { groupId, groupName, ...oldFixture } = fixture;
+      return oldFixture;
+    }),
+    results: played.football.results.map((result) => {
+      if (result.competitionId !== continental.id) return result;
+      const { groupId, groupName, ...oldResult } = result;
+      return oldResult;
+    })
+  };
+  delete legacy.archives;
+
+  const nextDate = new Date(Date.parse(firstFixture.date + "T00:00:00.000Z") + 86400000)
+    .toISOString().slice(0, 10);
+  const migrated = advanceFootballSeasonDay(legacy, nextDate, 1).football;
+  const migratedFixture = migrated.fixtures.find((fixture) => fixture.id === firstFixture.id);
+  const migratedResult = migrated.results.find((result) => result.id === firstFixture.id);
+
+  assert.ok(migratedFixture.groupId);
+  assert.equal(migratedResult.groupId, migratedFixture.groupId);
+  assert.equal(isValidFootballState(migrated, nextDate, 1), true);
+  const table = getCompetitionStandings(migrated, continental.id, WORLD_DATABASE, 1, migratedFixture.groupId);
+  assert.ok(table.some((row) => row.played > 0));
+});
+
+test("adds the new current-season cup once when loading a pre-cup save", () => {
+  const initial = createInitialFootballState(1, "2026-07-01");
+  const cup = WORLD_DATABASE.competitions.find((item) => item.type === "cup");
+  const legacy = {
+    ...initial,
+    fixtures: initial.fixtures.filter((fixture) => fixture.competitionId !== cup.id)
+  };
+  delete legacy.archives;
+
+  const migrated = advanceFootballSeasonDay(legacy, "2026-07-01", 1).football;
+  const cupFixtures = migrated.fixtures.filter((fixture) =>
+    fixture.competitionId === cup.id && fixture.season === 1
+  );
+  assert.equal(cupFixtures.length, 4);
+  assert.ok(cupFixtures.every((fixture) => fixture.date > "2026-07-01"));
+  assert.equal(isValidFootballState(migrated, "2026-07-01", 1), true);
+
+  const replay = advanceFootballSeasonDay(migrated, "2026-07-02", 1).football;
+  assert.equal(replay.fixtures.filter((fixture) =>
+    fixture.competitionId === cup.id && fixture.season === 1
+  ).length, 4);
+});
+
 test("archives competition tables once a new season starts and exposes retained season history", () => {
   const competition = WORLD_DATABASE.competitions.find((item) => item.id === "competition-eg-premier");
   const database = {
