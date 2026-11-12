@@ -274,7 +274,17 @@ function deterministicOffset(seed, radius) {
 function scorePlayer(player) {
   const upside = Math.max(0, player.potential - player.rating);
   const youthBonus = clamp(25 - player.age, 0, 10);
-  return upside * 1.8 + player.potential * 0.35 + youthBonus;
+  const performance = player.seasonPerformance;
+  const formBonus = performance && performance.appearances >= 3 &&
+    Number.isFinite(performance.averageMatchRating)
+    ? clamp((performance.averageMatchRating - 6.5) * 1.5, -3, 4)
+    : 0;
+  const contributionBonus = performance && performance.appearances > 0
+    ? clamp(((performance.goals + performance.assists) / performance.appearances) * 1.5, 0, 3)
+    : 0;
+  const honorsBonus = Math.min(3, (player.honors?.length ?? 0) * 0.75);
+  return upside * 1.8 + player.potential * 0.35 + youthBonus +
+    formBonus + contributionBonus + honorsBonus;
 }
 
 function createFinding(player, mission) {
@@ -304,6 +314,23 @@ function createFinding(player, mission) {
     recommendation = "متابعة";
     rationale = "هناك مؤشر فني واعد، ويستحق اللاعب مشاهدة إضافية قبل أي قرار.";
   }
+  const seasonPerformance = player.seasonPerformance && typeof player.seasonPerformance === "object"
+    ? {
+      appearances: player.seasonPerformance.appearances ?? 0,
+      minutesPlayed: player.seasonPerformance.minutesPlayed ?? 0,
+      goals: player.seasonPerformance.goals ?? 0,
+      assists: player.seasonPerformance.assists ?? 0,
+      averageMatchRating: player.seasonPerformance.averageMatchRating ?? null
+    }
+    : null;
+  const honors = Array.isArray(player.honors) ? player.honors.slice(-10).map((honor) => ({ ...honor })) : [];
+  if (seasonPerformance?.appearances >= 3 && Number.isFinite(seasonPerformance.averageMatchRating)) {
+    rationale += " تقييمه في الموسم الحالي " + seasonPerformance.averageMatchRating +
+      " من 10 خلال " + seasonPerformance.appearances + " مشاركة.";
+  }
+  if (honors.length > 0) {
+    rationale += " يمتلك " + honors.length + " جائزة فردية محفوظة في أرشيف البطولات.";
+  }
 
   return {
     playerId: player.id,
@@ -318,6 +345,8 @@ function createFinding(player, mission) {
     upside,
     recommendation,
     rationale,
+    performance: seasonPerformance,
+    honors,
     discoverySourceIds: getPlayerDiscoverySourceIds(player)
   };
 }
