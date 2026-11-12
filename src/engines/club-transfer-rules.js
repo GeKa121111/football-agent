@@ -103,7 +103,7 @@ export function getTransferWindowForClub(currentDate, clubId = null, database = 
   };
 }
 
-function currentClubFromState(playerId, fallbackClubId, transferState, currentDate, database) {
+export function getPlayerCurrentClubIdFromState(playerId, fallbackClubId, transferState, currentDate, database) {
   const freeAgent = (transferState?.freeAgents ?? []).find((item) =>
     item.playerId === playerId && item.sinceDate <= currentDate
   );
@@ -132,9 +132,9 @@ export function getClubRegistrationStatus(clubId, playerId, transferState, curre
   const rules = getLeagueTransferRules(club.leagueId);
   const allPlayers = getWorldSquadPlayers(database);
   const roster = allPlayers.filter((item) =>
-    currentClubFromState(item.id, item.clubId, transferState, currentDate, database) === clubId && item.id !== playerId
+    getPlayerCurrentClubIdFromState(item.id, item.clubId, transferState, currentDate, database) === clubId && item.id !== playerId
   );
-  const currentPlayerClub = currentClubFromState(playerId, player.clubId, transferState, currentDate, database);
+  const currentPlayerClub = getPlayerCurrentClubIdFromState(playerId, player.clubId, transferState, currentDate, database);
   if (currentPlayerClub === clubId) {
     return { eligible: false, reason: "اللاعب مسجل بالفعل في قائمة النادي المستهدف.", total: roster.length + 1,
       senior: roster.filter((item) => Number(item.age ?? 22) >= 21).length + (Number(player.age ?? 22) >= 21 ? 1 : 0),
@@ -171,7 +171,7 @@ export function getClubTransferFinancials(clubId, transferState, currentDate, da
   const budgetEur = baseBudgetEur + financeEntries.reduce((sum, entry) => sum + entry.amountEur, 0);
   const wageBudgetWeeklyEur = profile * 8000;
   const roster = getWorldSquadPlayers(database).filter((player) =>
-    currentClubFromState(player.id, player.clubId, transferState, currentDate, database) === clubId
+    getPlayerCurrentClubIdFromState(player.id, player.clubId, transferState, currentDate, database) === clubId
   );
   const committedWagesWeeklyEur = roster.reduce((sum, player) => {
     const latestMove = (transferState?.moves ?? [])
