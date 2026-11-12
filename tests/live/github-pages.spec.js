@@ -4,7 +4,9 @@ test("published GitHub Pages app boots, navigates and preserves a saved career",
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
-  const response = await page.goto("/", { waitUntil: "networkidle" });
+  // A relative path is important for project sites: "/" would reset to the
+  // account root and silently test https://owner.github.io/ instead.
+  const response = await page.goto("./", { waitUntil: "networkidle" });
   expect(response, "GitHub Pages must return a document response").not.toBeNull();
   expect(response.status(), "GitHub Pages must not return an HTTP error").toBeLessThan(400);
   await expect(page).toHaveTitle(/Football Agent/);
