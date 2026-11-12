@@ -153,6 +153,8 @@ export function evaluateTransferOffer(save, offerId, currentDate = save?.world?.
     return { changed: false, save, error: "تاريخ الرد لا يمكن أن يسبق إرسال العرض." };
   if (currentDate > offer.expiresDate) return expireTransferOffer(save, offer, currentDate);
   if (!getTransferWindow(currentDate).active) return { changed: false, save, error: "انتهت نافذة الانتقالات قبل إتمام التفاوض." };
+  if (!getActiveRepresentationContract(save, offer.playerId, currentDate))
+    return expireTransferOffer(save, offer, currentDate);
   const player = getPlayer(database, offer.playerId);
   const club = getClub(database, offer.toClubId);
   if (!player || !club) return { changed: false, save, error: "بيانات اللاعب أو النادي غير متاحة." };
@@ -202,6 +204,8 @@ export function submitTransferCounterOffer(save, offerId, terms, currentDate = s
   if (!isTransferCalendarDate(currentDate) || currentDate < offer.createdDate ||
       currentDate > offer.expiresDate || !getTransferWindow(currentDate).active)
     return { changed: false, save, error: "لا يمكن إرسال رد خارج مدة العرض أو نافذة الانتقالات." };
+  if (!getActiveRepresentationContract(save, offer.playerId, currentDate))
+    return expireTransferOffer(save, offer, currentDate);
   if (!validTerms(offer.type, terms)) return { changed: false, save, error: "شروط الرد المالي أو مدة العقد غير صالحة." };
   if (offer.round >= 4) return { changed: false, save, error: "تم استنفاد جولات التفاوض الأربع." };
   let next = replaceOffer(state, offer.id, { status: "pending", round: offer.round + 1,
@@ -218,6 +222,8 @@ export function acceptTransferCounterOffer(save, offerId, currentDate = save?.wo
   if (!isTransferCalendarDate(currentDate) || currentDate < offer.createdDate ||
       currentDate > offer.expiresDate || !getTransferWindow(currentDate).active)
     return { changed: false, save, error: "انتهت صلاحية العرض أو نافذة الانتقالات." };
+  if (!getActiveRepresentationContract(save, offer.playerId, currentDate))
+    return expireTransferOffer(save, offer, currentDate);
   let next = replaceOffer(state, offer.id, { status: "agreed", agreedDate: currentDate,
     agreedTerms: offer.counterOffer, counterOffer: null });
   next = appendHistory(next, "offer-agreed", offer, currentDate, "وافقت الوكالة على الشروط المضادة للنادي.");
