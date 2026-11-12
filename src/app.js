@@ -90,6 +90,45 @@ import {
 const WORLD_PLAYERS = getWorldPlayerProfiles();
 const WORLD_COUNTS = getWorldSummary();
 
+function getCurrentWorldPlayers(save) {
+  const currentDate = save?.world?.currentDate;
+  const transferState = save?.world?.transfers;
+  const clubsById = new Map(WORLD_DATABASE.clubs.map((club) => [club.id, club]));
+  const leaguesById = new Map(WORLD_DATABASE.leagues.map((league) => [league.id, league]));
+  const latestPermanentMoveByPlayer = new Map();
+
+  for (const move of transferState?.moves ?? []) {
+    if (move.type !== "permanent" || move.effectiveDate > currentDate) continue;
+    const previous = latestPermanentMoveByPlayer.get(move.playerId);
+    const moveSequence = Number(move.id.split("-").at(-1));
+    const previousSequence = previous ? Number(previous.id.split("-").at(-1)) : 0;
+    if (!previous || move.effectiveDate > previous.effectiveDate ||
+        (move.effectiveDate === previous.effectiveDate && moveSequence > previousSequence)) {
+      latestPermanentMoveByPlayer.set(move.playerId, move);
+    }
+  }
+
+  return WORLD_PLAYERS.map((player) => {
+    const clubId = getPlayerCurrentClubId(
+      player.id, player.clubId, transferState, currentDate
+    );
+    const club = clubId ? clubsById.get(clubId) : null;
+    const league = club ? leaguesById.get(club.leagueId) : null;
+    const latestPermanentMove = latestPermanentMoveByPlayer.get(player.id);
+    return {
+      ...player,
+      clubId: club?.id ?? null,
+      club: club?.nameAr ?? "لاعب حر",
+      clubShortName: club?.shortName ?? "حر",
+      clubColor: club?.primaryColor ?? null,
+      leagueId: league?.id ?? null,
+      league: league?.nameAr ?? "بدون دوري",
+      contractUntil: latestPermanentMove?.contractEndDate ?? player.contractUntil,
+      status: club ? player.status : "لاعب حر"
+    };
+  });
+}
+
 import { NAV_ITEMS } from "./ui/layout/navigation.js";
 import { createAppShell } from "./ui/layout/app-shell.js";
 
@@ -689,7 +728,8 @@ function renderPlayers(context) {
     const selectedRole = role.value;
     const selectedCountry = country.value;
     const selectedLeague = league.value;
-    const filtered = WORLD_PLAYERS.filter((player) => {
+    const availablePlayers = context.players ?? WORLD_PLAYERS;
+    const filtered = availablePlayers.filter((player) => {
       const matchesText = [player.name, player.club, player.position, player.country, player.league]
         .some((value) => String(value ?? "").toLocaleLowerCase("ar").includes(query));
       const matchesRole = selectedRole === "all" || player.role === selectedRole;
@@ -704,7 +744,7 @@ function renderPlayers(context) {
       if (sort.value === "value") return b.marketValueEur - a.marketValueEur || b.rating - a.rating;
       return b.potential - a.potential || b.rating - a.rating;
     });
-    count.textContent = formatHomeNumber(sorted.length) + " من " + formatHomeNumber(WORLD_PLAYERS.length) + " لاعب";
+    count.textContent = formatHomeNumber(sorted.length) + " من " + formatHomeNumber(availablePlayers.length) + " لاعب";
     if (sorted.length === 0) {
       grid.replaceChildren(emptyResults(
         "مفيش لاعبين مطابقين للبحث",
@@ -1213,7 +1253,8 @@ function renderScouting(context) {
     option.value = value;
     position.append(option);
   });
-  const count = node("span", "result-count", WORLD_PLAYERS.length + " نتائج");
+  const availablePlayers = context.players ?? WORLD_PLAYERS;
+  const count = node("span", "result-count", availablePlayers.length + " نتائج");
   count.setAttribute("aria-live", "polite");
   toolbar.append(search, position, count);
 
@@ -1221,7 +1262,7 @@ function renderScouting(context) {
   const refresh = () => {
     const query = search.value.trim().toLocaleLowerCase("ar");
     const role = position.value;
-    const filtered = WORLD_PLAYERS.filter((player) => {
+    const filtered = availablePlayers.filter((player) => {
       const matchesText = [player.name, player.club, player.position, player.country].some((value) =>
         value.toLocaleLowerCase("ar").includes(query)
       );
@@ -3234,7 +3275,8 @@ export function mountApp(root) {
     let confirm = null;
     const refreshPreview = () => {
       const config = SCOUTING_MISSION_TYPES[typeSelect.value];
-      const targets = getScoutingCandidates(WORLD_PLAYERS, {
+      const currentWorldPlayers = getCurrentWorldPlayers(state.save);
+      const targets = getScoutingCandidates(currentWorldPlayers, {
         countryId: countrySelect.value,
         role: roleSelect.value,
         sourceId: sourceSelect.value
@@ -3284,7 +3326,7 @@ export function mountApp(root) {
         role: roleSelect.value,
         sourceId: sourceSelect.value,
         scoutId: scoutSelect.value
-      }, WORLD_PLAYERS);
+      }, getCurrentWorldPlayers(state.save));
       if (!result.changed) {
         toast(result.error);
         return;
@@ -3386,7 +3428,8 @@ export function mountApp(root) {
           statMini("الثقة", finding.confidence + "%")
         );
         const history = getPlayerScoutingHistory(state.save.world.scouting, finding.playerId);
-        const player = WORLD_PLAYERS.find((candidate) => candidate.id === finding.playerId);
+        const player = getCurrentWorldPlayers(state.save)
+          .find((candidate) => candidate.id === finding.playerId);
         const representation = state.save.agency.representation;
         const isClient = state.save.agency.clients.includes(finding.playerId) ||
           representation.contracts.some((contract) => contract.playerId === finding.playerId && contract.status === "active");
@@ -3464,7 +3507,7 @@ export function mountApp(root) {
 
     const previousSave = state.save;
     try {
-      const simulationResult = advanceCareerSimulationDay(state.save, WORLD_PLAYERS);
+      const simulationResult = advanceCareerSimulationDay(state.save, getCurrentWorldPlayers(state.save));
       state.save = simulationResult.save;
       if (saveCareer()) {
         render();
@@ -3489,7 +3532,7 @@ export function mountApp(root) {
 
     const previousSave = state.save;
     try {
-      const simulationResult = advanceCareerSimulationDays(state.save, 7, WORLD_PLAYERS);
+      const simulationResult = advanceCareerSimulationDays(state.save, 7, getCurrentWorldPlayers(state.save));
       state.save = simulationResult.save;
       if (saveCareer()) {
         render();
@@ -4030,11 +4073,7 @@ export function mountApp(root) {
   }
 
   function render({ focusMain = false } = {}) {
-    const currentPlayers = WORLD_PLAYERS.map((player) => {
-      const clubId = getPlayerCurrentClubId(player.id, player.clubId, state.save.world.transfers, state.save.world.currentDate);
-      const club = WORLD_DATABASE.clubs.find((item) => item.id === clubId);
-      return club ? { ...player, clubId, club: club.nameAr, clubShortName: club.shortName, clubColor: club.primaryColor } : player;
-    });
+    const currentPlayers = getCurrentWorldPlayers(state.save);
     const context = {
       save: state.save,
       navigate,
