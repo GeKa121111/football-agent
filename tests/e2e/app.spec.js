@@ -495,12 +495,19 @@ test.describe("Desktop experience", () => {
     expect(profiles.every((profile) => profile.assetId.startsWith("portrait-") && profile.assetVersion === "1")).toBe(true);
     expect(profiles.every((profile) => profile.paths >= 10)).toBe(true);
 
-    const animationName = await portraits.first().locator(".portrait-athlete").evaluate(
+    const firstCard = page.locator(".player-card").first();
+    const firstAthlete = portraits.first().locator(".portrait-athlete");
+    const idleAnimation = await firstAthlete.evaluate(
       (element) => getComputedStyle(element).animationName
     );
-    expect(animationName).toBe("portrait-idle");
+    expect(idleAnimation).toBe("none");
 
-    const firstCard = page.locator(".player-card").first();
+    await firstCard.hover();
+    const activeAnimation = await firstAthlete.evaluate(
+      (element) => getComputedStyle(element).animationName
+    );
+    expect(activeAnimation).toBe("portrait-idle");
+
     const firstPlayerName = await firstCard.locator(".player-name").textContent();
     await firstCard.getByRole("button", { name: "ملف اللاعب" }).click();
     await expect(page.locator(".modal-player-art .portrait-svg")).toBeVisible();

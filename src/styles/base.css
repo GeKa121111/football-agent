@@ -686,10 +686,15 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 .portrait-athlete {
   transform-box: fill-box;
   transform-origin: 50% 100%;
-  animation: portrait-idle 4.8s ease-in-out infinite;
 }
-.player-card:hover .portrait-athlete { animation-duration: 2.8s; }
-.player-portrait.is-featured .portrait-athlete { animation-duration: 4.1s; }
+/* Keep the 48-player library idle; animate only the card in use or featured profile. */
+.player-card:hover .portrait-athlete,
+.player-card:focus-within .portrait-athlete {
+  animation: portrait-idle 2.8s ease-in-out infinite;
+}
+.player-portrait.is-featured .portrait-athlete {
+  animation: portrait-idle 4.1s ease-in-out infinite;
+}
 .player-portrait.is-featured {
   border-color: rgba(224,201,255,.24);
   box-shadow: inset 0 0 35px rgba(182,148,244,.12);
