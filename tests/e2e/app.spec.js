@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { isValidSave } from "../../src/core/storage.js";
 import { advanceCareerDays } from "../../src/engines/career-calendar.js";
 import { advanceRepresentationState } from "../../src/engines/representation.js";
+import { WORLD_DATABASE } from "../../src/data/world-database.js";
 
 async function navigateTo(page, view) {
   const mobileNav = page.locator(".mobile-nav");
@@ -601,6 +602,12 @@ test.describe("Desktop experience", () => {
     const playerMoveRows = page.locator(".transfer-move-row").filter({ hasText: loan.playerName });
     await expect(playerMoveRows).toHaveCount(2);
     await expect(playerMoveRows.filter({ hasText: "انتقال نهائي" })).toContainText(loan.playerName);
+
+    const destinationName = WORLD_DATABASE.clubs.find((club) => club.id === permanentMove.toClubId).nameAr;
+    await navigateTo(page, "المباريات");
+    const trainingPlayerOption = page.getByLabel("لاعب خطة التدريب")
+      .locator("option", { hasText: loan.playerName });
+    await expect(trainingPlayerOption).toContainText(destinationName);
     await hasNoHorizontalOverflow(page);
   });
 
