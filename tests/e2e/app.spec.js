@@ -553,6 +553,14 @@ test.describe("Desktop experience", () => {
     expect(saved.world.transfers.earnedCommissionEur).toBeGreaterThan(0);
     expect(saved.world.transfers.moves[0].toClubId).not.toBe(saved.world.transfers.moves[0].fromClubId);
     await expect(page.locator(".transfer-move-row")).toContainText(saved.world.transfers.offers[0].playerName);
+    const destinationName = WORLD_DATABASE.clubs.find((club) =>
+      club.id === saved.world.transfers.moves[0].toClubId
+    ).nameAr;
+    await navigateTo(page, "اللاعبون");
+    const playerCard = page.locator('.player-card[data-player-id="' + playerId + '"]');
+    await expect(playerCard).toContainText(destinationName);
+    await playerCard.getByRole("button", { name: "ملف اللاعب" }).click();
+    await expect(page.getByRole("dialog", { name: "ملف اللاعب" })).toContainText(destinationName);
     await hasNoHorizontalOverflow(page);
   });
 
