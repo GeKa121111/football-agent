@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createInitialSave, isValidSave } from "../src/core/storage.js";
+import { createInitialSave, isValidSave, readSave, writeSave } from "../src/core/storage.js";
 import { getWorldPlayerProfiles } from "../src/data/world-database.js";
 import { startScoutingMission } from "../src/engines/scouting.js";
 import {
@@ -11,7 +11,8 @@ import {
   getPlayerRepresentationProfile
 } from "../src/engines/representation.js";
 import { advanceCareerSimulationDay, advanceCareerSimulationDays } from "../src/engines/career-simulation.js";
-import { hireAgencyEmployee } from "../src/engines/agency-management.js";
+import { hireAgencyEmployee, signAgencySponsorship, takeAgencyCredit } from "../src/engines/agency-management.js";
+import { setPlayerTrainingPlan } from "../src/engines/player-development.js";
 
 const PLAYERS = getWorldPlayerProfiles();
 
@@ -154,4 +155,99 @@ test("runs agency payroll on the shared Monday career tick", () => {
   assert.equal(payroll.paidEgp, weeklySalary);
   assert.equal(advanced.save.agency.balance, hired.save.agency.balance - weeklySalary);
   assert.equal(isValidSave(advanced.save), true);
+});
+
+
+test("runs a multi-system career, saves and reloads it, then resumes without losing linked state", () => {
+  let save = signFirstClient(createInitialSave()).save;
+  const contract = save.agency.representation.contracts.find((item) =>
+    item.playerId === PLAYERS[0].id
+  );
+  assert.ok(contract);
+
+  const interaction = createRepresentationInteraction(save, contract.id, "message");
+  assert.equal(interaction.changed, true, interaction.error);
+  save = interaction.save;
+
+  const hired = hireAgencyEmployee(save, "analyst");
+  assert.equal(hired.changed, true, hired.error);
+  save = hired.save;
+
+  const sponsorship = signAgencySponsorship(save, "local-media");
+  assert.equal(sponsorship.changed, true, sponsorship.error);
+  save = sponsorship.save;
+
+  const credit = takeAgencyCredit(save, "working-capital");
+  assert.equal(credit.changed, true, credit.error);
+  save = credit.save;
+
+  const mission = startScoutingMission(save, {
+    type: "local",
+    countryId: "country-eg",
+    role: "all",
+    sourceId: "academy"
+  }, PLAYERS);
+  assert.equal(mission.changed, true, mission.error);
+  save = mission.save;
+
+  const plan = setPlayerTrainingPlan(
+    save.world.football.playerDevelopment,
+    PLAYERS[0].id,
+    "technical",
+    "normal"
+  );
+  assert.equal(plan.changed, true);
+  save = {
+    ...save,
+    world: {
+      ...save.world,
+      football: {
+        ...save.world.football,
+        playerDevelopment: plan.state
+      }
+    }
+  };
+
+  for (let week = 0; week < 4; week += 1) {
+    save = advanceCareerSimulationDays(save, 7, PLAYERS).save;
+    assert.equal(isValidSave(save), true, "complete save must remain valid after week " + (week + 1));
+  }
+
+  assert.equal(save.world.currentDate, "2026-07-29");
+  assert.ok(save.world.football.results.length > 0, "football fixtures must resolve during the shared simulation");
+  assert.ok(save.world.scouting.reports.some((report) => report.missionId === mission.mission.id));
+  assert.equal(
+    save.agency.representation.interactions.find((item) => item.id === interaction.interaction.id).status,
+    "resolved"
+  );
+  assert.ok(save.world.football.playerDevelopment.trainingHistory.length > 0);
+  assert.ok(save.agency.management.ledger.some((entry) => entry.type === "sponsorship-income" && entry.incomeKind === "weekly"));
+  assert.ok(save.agency.management.ledger.some((entry) => entry.type === "credit-repayment"));
+  assert.ok(save.agency.management.ledger.some((entry) => entry.type === "weekly-operations"));
+
+  const records = new Map();
+  const storage = {
+    getItem(key) { return records.has(key) ? records.get(key) : null; },
+    setItem(key, value) { records.set(key, String(value)); },
+    removeItem(key) { records.delete(key); }
+  };
+  writeSave(save, storage, "2026-07-29T12:00:00.000Z");
+
+  const loaded = readSave(storage);
+  assert.equal(loaded.status, "loaded");
+  assert.equal(loaded.migrated, false);
+  assert.deepEqual(loaded.save, {
+    ...save,
+    meta: {
+      ...save.meta,
+      version: save.meta.version,
+      updatedAt: "2026-07-29T12:00:00.000Z"
+    }
+  });
+
+  const resumed = advanceCareerSimulationDays(loaded.save, 7, PLAYERS).save;
+  assert.equal(resumed.world.currentDate, "2026-08-05");
+  assert.equal(isValidSave(resumed), true);
+  assert.equal(resumed.world.scouting.reports.length, loaded.save.world.scouting.reports.length);
+  assert.ok(resumed.world.football.results.length >= loaded.save.world.football.results.length);
 });
