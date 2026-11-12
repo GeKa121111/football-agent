@@ -77,6 +77,7 @@ import {
 } from "./engines/club-transfer-rules.js";
 import {
   AGENCY_BRANCH_LOCATIONS,
+  AGENCY_CREDIT_PRODUCTS,
   AGENCY_JOB_ROLES,
   closeAgencyBranch as closeAgencyBranchInEngine,
   dismissAgencyEmployee as dismissAgencyEmployeeInEngine,
@@ -84,8 +85,10 @@ import {
   getAgencyStaffModifiers,
   getAgencySponsorshipOffers,
   getAgencyCompetitorSummary,
+  getAgencyCreditOffers,
   getRivalClientIds,
   signAgencySponsorship as signAgencySponsorshipInEngine,
+  takeAgencyCredit as takeAgencyCreditInEngine,
   hireAgencyEmployee as hireAgencyEmployeeInEngine,
   openAgencyBranch as openAgencyBranchInEngine
 } from "./engines/agency-management.js";
@@ -2168,7 +2171,9 @@ function renderAgencyManagementPanel(context) {
     ["إجمالي الإيرادات", formatMoney(summary.totalRevenueEgp)],
     ["إجمالي المصروفات", formatMoney(summary.totalExpensesEgp)],
     ["صافي التدفق النقدي", formatMoney(summary.netCashFlowEgp)],
-    ["دخل الرعايات أسبوعيًا", formatMoney(summary.activeSponsorshipRevenueEgp)]
+    ["دخل الرعايات أسبوعيًا", formatMoney(summary.activeSponsorshipRevenueEgp)],
+    ["الدين القائم", formatMoney(summary.totalDebtEgp)],
+    ["قسط التمويل الأسبوعي", formatMoney(summary.weeklyCreditRepaymentEgp)]
   ].forEach(([label, value]) => {
     const card = node("article", "agency-operations-metric");
     card.append(node("small", "", label), node("strong", "", value));
@@ -2324,6 +2329,49 @@ function renderAgencyManagementPanel(context) {
     sponsorshipSection.append(activeList);
   }
 
+  const creditSection = node("section", "agency-operations-section agency-credit-section");
+  creditSection.append(
+    node("h3", "", "السيولة والتمويل"),
+    node("p", "representation-intro", "التسهيل يزيد السيولة لكنه دين مستحق، وليس دخلًا. كل منتج يوضح الفائدة والقسط قبل التوقيع، ولا يمكن طلب تسهيل ثانٍ قبل سداد الأول.")
+  );
+  const creditOffers = getAgencyCreditOffers(context.save);
+  const creditGrid = node("div", "agency-operations-catalog");
+  creditOffers.forEach((offer) => {
+    const card = node("article", "agency-operations-offer");
+    card.append(
+      node("strong", "", offer.name),
+      node("p", "", offer.description),
+      node("small", "", "قيمة التمويل " + formatMoney(offer.principalEgp)),
+      node("small", "", "الفائدة الثابتة " + offer.interestRatePct + "% · السداد " + offer.termWeeks + " أسبوعًا"),
+      node("small", "", "إجمالي السداد " + formatMoney(offer.totalRepaymentEgp)),
+      node("small", "", "القسط الأسبوعي " + formatMoney(offer.weeklyInstallmentEgp))
+    );
+    const button = actionButton(offer.eligible ? "طلب التسهيل" : offer.lockedReason,
+      "button-primary agency-credit-request-button",() => context.takeAgencyCredit(offer.id));
+    button.disabled = !offer.eligible;
+    card.append(button);
+    creditGrid.append(card);
+  });
+  creditSection.append(creditGrid);
+  const activeLoans = (management.creditFacilities ?? []).filter((loan) => loan.status === "active");
+  if (activeLoans.length > 0) {
+    const loansList = node("div", "agency-operations-list");
+    activeLoans.forEach((loan) => {
+      const row = node("article", "agency-operations-row");
+      const copy = node("div", "representation-copy");
+      copy.append(
+        node("strong", "", loan.name),
+        node("span", "", "المتبقي " + formatMoney(loan.remainingEgp) + " من " + formatMoney(loan.totalRepaymentEgp)),
+        node("small", "", "القسط " + formatMoney(loan.weeklyInstallmentEgp) +
+          " · موعد القسط " + formatHomeDate(loan.nextPaymentDate)),
+        node("small", "", "تأخير " + loan.lateWeeks + " أسبوع")
+      );
+      row.append(copy);
+      loansList.append(row);
+    });
+    creditSection.append(loansList);
+  }
+
   const competitorsSection = node("section", "agency-operations-section agency-competitors-section");
   competitorsSection.append(
     node("h3", "", "الوكالات المنافسة"),
@@ -2382,7 +2430,7 @@ function renderAgencyManagementPanel(context) {
     });
     ledgerPanel.append(list);
   }
-  panel.append(staffSection, skillPanel, branchesSection, sponsorshipSection, competitorsSection, ledgerPanel);
+  panel.append(staffSection, skillPanel, branchesSection, sponsorshipSection, creditSection, competitorsSection, ledgerPanel);
   return panel;
 }
 
@@ -4485,6 +4533,17 @@ export function mountApp(root) {
         state.save = result.save;
         if (saveCareer()) { render(); toast("تم افتتاح فرع " + result.branch.name + "."); }
         else state.save = previousSave;
+      },
+      takeAgencyCredit: (productId) => {
+        if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم يتم طلب التمويل."); return; }
+        const previousSave = state.save;
+        const result = takeAgencyCreditInEngine(state.save,productId);
+        if (!result.changed) { toast(result.error); return; }
+        state.save = result.save;
+        if (saveCareer()) {
+          render();
+          toast("تم صرف " + result.loan.name + "، وتم تسجيل الالتزام وجدول السداد.");
+        } else state.save = previousSave;
       },
       signAgencySponsorship: (packageId) => {
         if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم يتم توقيع اتفاق الرعاية."); return; }
