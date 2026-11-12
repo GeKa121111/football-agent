@@ -30,6 +30,13 @@ const MAX_SPONSORSHIPS = 20;
 const MAX_COMPETITIVE_HISTORY = 300;
 const MAX_RIVAL_CLIENTS = 100;
 
+export const AGENCY_CREDIT_PRODUCTS = Object.freeze([
+  Object.freeze({ id:"working-capital", name:"تمويل رأس مال عامل", description:"تمويل قصير لتغطية التشغيل والسيولة.", principalEgp:50000, interestRatePct:12, termWeeks:12, minClients:0, minReputation:50 }),
+  Object.freeze({ id:"expansion-credit", name:"تمويل التوسع", description:"تمويل أكبر للوكالات ذات قاعدة عملاء وسمعة أعلى.", principalEgp:120000, interestRatePct:15, termWeeks:16, minClients:3, minReputation:65 })
+]);
+const MAX_CREDIT_FACILITIES = 10;
+
+
 
 function isRecord(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
 function validDate(value) {
@@ -79,7 +86,7 @@ function resolveManagement(save, currentDate) {
 
 export function createInitialAgencyManagementState() {
   return {
-    schemaVersion:1, nextStaffSequence:1, nextBranchSequence:1, nextLedgerSequence:1, nextSponsorshipSequence:1, nextCompetitiveSequence:1,
+    schemaVersion:1, nextStaffSequence:1, nextBranchSequence:1, nextLedgerSequence:1, nextSponsorshipSequence:1, nextCompetitiveSequence:1, nextCreditSequence:1,
     lastPayrollDate:null, arrearsEgp:0, staff:[],
     branches:[{
       id:"agency-branch-hq", locationId:"headquarters", name:"المقر الرئيسي", region:"المقر الرئيسي",
@@ -88,6 +95,7 @@ export function createInitialAgencyManagementState() {
     }],
     ledger:[],
     sponsorships:[],
+    creditFacilities:[],
     competitors:COMPETITOR_BLUEPRINTS.map((profile) => ({
       ...profile, clients:[], pendingOffers:[], lastActionDate:null
     })),
@@ -311,6 +319,60 @@ export function getAgencySponsorshipOffers(save) {
       effectiveReputation < pack.minReputation ? "تحتاج إلى سمعة " + pack.minReputation + " أو أكثر" : null;
     return {...pack,active,available:!lockedReason,lockedReason,effectiveReputation};
   });
+}
+
+
+export function getAgencyCreditOffers(save) {
+  const management = save?.agency?.management ?? createInitialAgencyManagementState();
+  const reputation = save?.agency?.representation?.reputationScore ?? 50;
+  const activeLoans = (management.creditFacilities ?? []).filter((loan) => loan.status === "active");
+  const clientCount = save?.agency?.clients?.length ?? 0;
+  return AGENCY_CREDIT_PRODUCTS.map((product) => {
+    const eligible = clientCount >= product.minClients && reputation >= product.minReputation &&
+      activeLoans.length === 0 && (management.creditFacilities ?? []).length < MAX_CREDIT_FACILITIES &&
+      (save?.agency?.balance ?? 0) + product.principalEgp <= MAX_MONEY_EGP;
+    const lockedReason = activeLoans.length > 0 ? "سدد التسهيل الحالي قبل طلب تمويل جديد" :
+      clientCount < product.minClients ? "تحتاج إلى " + product.minClients + " عملاء على الأقل" :
+      reputation < product.minReputation ? "تحتاج إلى سمعة " + product.minReputation + " أو أكثر" :
+      (management.creditFacilities ?? []).length >= MAX_CREDIT_FACILITIES ? "وصلت إلى الحد الأقصى للتسهيلات" : null;
+    return {
+      ...product,eligible,lockedReason,
+      totalRepaymentEgp:product.principalEgp + Math.ceil(product.principalEgp * product.interestRatePct / 100),
+      weeklyInstallmentEgp:Math.ceil((product.principalEgp + Math.ceil(product.principalEgp * product.interestRatePct / 100)) / product.termWeeks)
+    };
+  });
+}
+
+export function takeAgencyCredit(save, productId, currentDate = save?.world?.currentDate) {
+  const state = resolveManagement(save,currentDate);
+  if (!state) return failure(save,"بيانات إدارة الوكالة أو التاريخ غير صالحة.");
+  const offer = getAgencyCreditOffers(save).find((item) => item.id === productId);
+  if (!offer) return failure(save,"منتج التمويل المطلوب غير متاح.");
+  if (!offer.eligible) return failure(save,offer.lockedReason ?? "شروط التمويل غير مستوفاة.");
+  if ((state.creditFacilities ?? []).length >= MAX_CREDIT_FACILITIES ||
+      state.ledger.length >= MAX_LEDGER_ENTRIES) return failure(save,"وصل سجل التمويل أو الدفتر المالي إلى الحد المتاح.");
+  const loan = {
+    id:"agency-credit-" + (state.nextCreditSequence ?? 1),
+    productId:offer.id,name:offer.name,issuedDate:currentDate,
+    principalEgp:offer.principalEgp,interestRatePct:offer.interestRatePct,
+    totalRepaymentEgp:offer.totalRepaymentEgp,remainingEgp:offer.totalRepaymentEgp,
+    paidEgp:0,termWeeks:offer.termWeeks,weeklyInstallmentEgp:offer.weeklyInstallmentEgp,
+    nextPaymentDate:nextMondayAfter(currentDate),lastPaymentDate:null,lateWeeks:0,status:"active"
+  };
+  let next = {
+    ...state,nextCreditSequence:(state.nextCreditSequence ?? 1)+1,
+    creditFacilities:[loan,...(state.creditFacilities ?? [])]
+  };
+  next = appendLedger(next,{
+    date:currentDate,type:"credit-drawdown",direction:"financing",
+    referenceId:loan.id,amountEgp:loan.principalEgp,paidEgp:loan.principalEgp,
+    arrearsAfterEgp:state.arrearsEgp,
+    note:"صرف تمويل " + loan.name + " مع التزام سداد إجمالي " + loan.totalRepaymentEgp
+  });
+  return {
+    changed:true,loan,
+    save:{...save,agency:{...save.agency,balance:save.agency.balance+loan.principalEgp,management:next}}
+  };
 }
 
 export function getAgencyCompetitorSummary(save) {
