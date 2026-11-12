@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createInitialSave, isValidSave, readSave, writeSave } from "../src/core/storage.js";
-import { getWorldPlayerProfiles, WORLD_DATABASE } from "../src/data/world-database.js";
+import { getWorldPlayerProfiles, getWorldSquadPlayers, WORLD_DATABASE } from "../src/data/world-database.js";
+import { buildSimulationTeam } from "../src/engines/football-season.js";
+import { getTalentProspect, getTalentProspectPerformanceSummary, upsertTalentProspect } from "../src/engines/talent-pipeline.js";
 import { startScoutingMission } from "../src/engines/scouting.js";
 import {
   createRepresentationOffer,
@@ -279,6 +281,52 @@ test("runs a multi-system career, saves and reloads it, then resumes without los
   assert.ok(resumed.world.football.results.length >= loaded.save.world.football.results.length);
 });
 
+
+test("records a prospect's real appearance and rating through the integrated career clock", () => {
+  const save = createInitialSave("2026-07-01T00:00:00.000Z");
+  const firstFixture = save.world.football.fixtures.find((fixture) => fixture.status === "scheduled");
+  assert.ok(firstFixture);
+  const matchdayTeam = buildSimulationTeam(
+    firstFixture.homeClubId,
+    WORLD_DATABASE,
+    save.world.football.playerDevelopment,
+    save.world.transfers,
+    "2026-07-04"
+  );
+  const starter = matchdayTeam.lineup.find((player) => !player.simulationOnly);
+  assert.ok(starter);
+  const worldPlayer = getWorldSquadPlayers().find((player) => player.id === starter.id);
+  const club = WORLD_DATABASE.clubs.find((item) => item.id === firstFixture.homeClubId);
+  assert.ok(worldPlayer);
+  const tracked = upsertTalentProspect(save, {
+    id: worldPlayer.id,
+    name: worldPlayer.name,
+    age: worldPlayer.age,
+    club: club.nameAr,
+    position: worldPlayer.position,
+    rating: worldPlayer.rating,
+    potential: worldPlayer.potential
+  }, { sourceId: "manual" });
+  assert.equal(tracked.changed, true, tracked.error);
+
+  const daysToFixture = Math.round((
+    Date.parse(firstFixture.date + "T00:00:00.000Z") -
+    Date.parse(save.world.currentDate + "T00:00:00.000Z")
+  ) / 86400000);
+  const advanced = advanceCareerSimulationDays(tracked.save, daysToFixture, PLAYERS);
+  assert.equal(advanced.save.world.currentDate, firstFixture.date);
+  assert.ok(advanced.recordedTalentPerformances >= 1);
+  const entry = getTalentProspect(advanced.save.agency.talentPipeline, worldPlayer.id);
+  const performance = entry.activity.find((event) =>
+    event.type === "match-performance" && event.matchId === firstFixture.id
+  );
+  assert.ok(performance);
+  assert.equal(performance.clubId, firstFixture.homeClubId);
+  assert.ok(performance.minutesPlayed > 0);
+  assert.ok(performance.rating >= 4 && performance.rating <= 10);
+  assert.ok(getTalentProspectPerformanceSummary(entry).appearances >= 1);
+  assert.equal(isValidSave(advanced.save), true);
+});
 
 test("runs one complete integrated career season and resumes it safely after a save reload", () => {
   let save = signFirstClient(createInitialSave("2026-07-01T00:00:00.000Z")).save;
