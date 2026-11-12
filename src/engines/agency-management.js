@@ -647,7 +647,7 @@ function advanceCompetitorMarket(save, currentDate, players, state) {
       if (offer.status !== "pending" || currentDate < offer.dueDate) continue;
       const userHasTakenInterest = userClientIds.has(offer.playerId) || userOpenOfferIds.has(offer.playerId);
       const score = competitor.reputation +
-        Math.round((offer.rating + offer.potential) / 2) + modifiers.legalProtectionBonus;
+        Math.round((offer.rating + offer.potential) / 2) - modifiers.legalProtectionBonus;
       const canAfford = competitor.budgetEgp >= competitor.acquisitionCostEgp &&
         competitor.clients.length < competitor.maxClients;
       const accepted = !userHasTakenInterest && score >= 135 && canAfford &&
@@ -692,8 +692,7 @@ function advanceCompetitorMarket(save, currentDate, players, state) {
     ).map((player) => ({
       player,
       score:player.rating * 0.6 + player.potential * 0.4 +
-        stablePositionBonus(player,competitor.focusKey) +
-        (modifiers.scoutingAccuracyBonus > 0 ? 2 : 0)
+        stablePositionBonus(player,competitor.focusKey)
     })).filter((item) => item.score >= 61)
       .sort((a,b) => b.score-a.score || a.player.id.localeCompare(b.player.id));
     competitor.lastActionDate = currentDate;
