@@ -34,18 +34,26 @@ function signFirstClient(save) {
   return { save: response.save, playerId: player.id };
 }
 
-test("one career day advances the calendar, football, transfers, scouting and client relations together", () => {
+test("one career day advances the shared clock without mutating the source save", () => {
   const initial = createInitialSave();
   const signed = signFirstClient(initial);
   const contract = signed.save.agency.representation.contracts.find((item) => item.playerId === signed.playerId);
   const interaction = createRepresentationInteraction(signed.save, contract.id, "message");
   assert.equal(interaction.changed, true, interaction.error);
+  const mission = startScoutingMission(interaction.save, {
+    type: "local", countryId: "country-eg", role: "all"
+  }, PLAYERS);
+  assert.equal(mission.changed, true, mission.error);
 
-  const advanced = advanceCareerSimulationDay(interaction.save, PLAYERS);
+  const advanced = advanceCareerSimulationDay(mission.save, PLAYERS);
+  const savedInteraction = advanced.save.agency.representation.interactions
+    .find((item) => item.id === interaction.interaction.id);
   assert.equal(advanced.save.world.currentDate, "2026-07-02");
   assert.equal(advanced.save.career.day, 2);
-  assert.equal(advanced.save.world.transfers, interaction.save.world.transfers);
-  assert.equal(interaction.save.career.day, 1);
+  assert.equal(advanced.save.world.transfers, mission.save.world.transfers);
+  assert.equal(savedInteraction.status, "pending_response");
+  assert.equal(advanced.save.world.scouting.activeMissions.length, 1);
+  assert.equal(mission.save.career.day, 1);
   assert.equal(advanced.completedReports.length, 0);
   assert.equal(isValidSave(advanced.save), true);
 });
