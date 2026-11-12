@@ -149,7 +149,7 @@ test("legal staff reduces the probability that a rival agency poaches a target",
     protectedResult.save.agency.management.competitors[0].pendingOffers[0].status,
     "rejected"
   );
-  assert.equal(isValidSave(protectedResult.save),true);
+  assert.equal(isValidAgencyManagementState(protectedResult.save.agency.management,"2026-07-04"),true);
 });
 
 test("legacy v8 agency state without sponsorship and competitor fields remains readable", () => {
