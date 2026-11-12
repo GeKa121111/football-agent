@@ -3963,6 +3963,22 @@ export function mountApp(root) {
           statMini("الإمكانيات المقدرة", finding.estimatedPotential),
           statMini("الثقة", finding.confidence + "%")
         );
+        if (finding.performance?.appearances > 0) {
+          stats.append(
+            statMini("مشاركات الموسم", finding.performance.appearances),
+            statMini("أهداف + أسيست", finding.performance.goals + " + " + finding.performance.assists),
+            statMini("متوسط الأداء", finding.performance.averageMatchRating === null
+              ? "—"
+              : finding.performance.averageMatchRating + "/10")
+          );
+        }
+        const honors = finding.honors ?? [];
+        const honorsNote = honors.length > 0
+          ? node("p", "scout-finding-honors", "جوائز فردية: " + honors.map((honor) =>
+            (honor.awardType === "topScorer" ? "هداف" : honor.awardType === "topAssists" ? "أكثر صناعة" : "أفضل لاعب") +
+            " — " + honor.competitionName + " (" + honor.season + ")"
+          ).join(" · "))
+          : null;
         const history = getPlayerScoutingHistory(state.save.world.scouting, finding.playerId);
         const player = getCurrentWorldPlayers(state.save)
           .find((candidate) => candidate.id === finding.playerId);
@@ -4003,6 +4019,7 @@ export function mountApp(root) {
           subline,
           sources,
           stats,
+          ...(honorsNote ? [honorsNote] : []),
           node("p", "scout-finding-rationale", finding.rationale),
           actionButton("سجل الرصد (" + history.totalObservations + ")", "button-outline scout-history-button", () => openScoutingHistory(finding.playerId)),
           findingActions
