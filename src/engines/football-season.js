@@ -388,6 +388,74 @@ function createMatchEvent(result, fixture) {
   };
 }
 
+function migrateLegacyCompetitionGroups(state, database = WORLD_DATABASE) {
+  const groupMap = new Map(database.competitions
+    .filter((competition) => getCompetitionRules(competition).format === COMPETITION_FORMATS.GROUP_STAGE)
+    .map((competition) => [
+      competition.id,
+      buildCompetitionGroups(competition, database)
+    ]));
+  const fixtures = state.fixtures.map((fixture) => {
+    if (fixture.groupId !== undefined && fixture.groupId !== null) return fixture;
+    const groups = groupMap.get(fixture.competitionId);
+    const group = groups?.find((candidate) =>
+      candidate.clubIds.includes(fixture.homeClubId) &&
+      candidate.clubIds.includes(fixture.awayClubId)
+    );
+    return group
+      ? { ...fixture, groupId: group.id, groupName: group.nameAr }
+      : fixture;
+  });
+  const groupByFixtureId = new Map(fixtures
+    .filter((fixture) => fixture.groupId)
+    .map((fixture) => [fixture.id, fixture]));
+  const results = state.results.map((result) => {
+    if (result.groupId !== undefined && result.groupId !== null) return result;
+    const fixture = groupByFixtureId.get(result.id);
+    return fixture
+      ? { ...result, groupId: fixture.groupId, groupName: fixture.groupName }
+      : result;
+  });
+
+  return fixtures === state.fixtures && results === state.results
+    ? state
+    : { ...state, fixtures, results };
+}
+
+function appendMissingCurrentSeasonCups(state, currentDate, season, database = WORLD_DATABASE) {
+  const activeCompetitionIds = new Set(state.fixtures
+    .filter((fixture) => fixture.season === season)
+    .map((fixture) => fixture.competitionId));
+  const missingCupIds = new Set(database.competitions
+    .filter((competition) => competition.type === "cup" && !activeCompetitionIds.has(competition.id))
+    .map((competition) => competition.id));
+  if (missingCupIds.size === 0) return state;
+
+  const generated = generateSeasonFixtures(season, currentDate, database)
+    .filter((fixture) => missingCupIds.has(fixture.competitionId));
+  const reserved = [...state.fixtures];
+  const additions = [];
+
+  for (const fixture of generated) {
+    let date = fixture.date;
+    while ([fixture.homeClubId, fixture.awayClubId].some((clubId) =>
+      reserved.some((existing) =>
+        [existing.homeClubId, existing.awayClubId].includes(clubId) &&
+        Math.abs(daysBetween(date, existing.date)) < MIN_MATCH_REST_DAYS
+      )
+    )) {
+      date = addDays(date, 1);
+    }
+    const placed = { ...fixture, date };
+    additions.push(placed);
+    reserved.push(placed);
+  }
+
+  return additions.length > 0
+    ? { ...state, fixtures: [...state.fixtures, ...additions] }
+    : state;
+}
+
 /**
  * Processes fixtures on the exact in-game date. A fixture is marked played
  * only after its result has been computed and is appended exactly once.
@@ -399,17 +467,20 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
     throw new TypeError("حالة موسم كرة القدم غير صالحة.");
   }
 
-  let nextState = state;
+  const migratedState = migrateLegacyCompetitionGroups(state, database);
+  let nextState = migratedState;
   if (season > state.season) {
     nextState = {
-      ...state,
+      ...migratedState,
       season,
-      archives: createCompetitionSeasonArchives(state, state.season, currentDate, database),
+      archives: createCompetitionSeasonArchives(migratedState, state.season, currentDate, database),
       fixtures: [
-        ...state.fixtures,
+        ...migratedState.fixtures,
         ...generateSeasonFixtures(season, currentDate, database)
       ]
     };
+  } else {
+    nextState = appendMissingCurrentSeasonCups(migratedState, currentDate, season, database);
   }
 
   const injuredAtDayStart = nextState.playerDevelopment.players
