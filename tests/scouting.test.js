@@ -191,6 +191,42 @@ test("completes due missions into explainable reports with competition form and 
   assert.equal(getScoutingDaysRemaining(started.mission, "2026-07-16"), 0);
 });
 
+test("validates scouting snapshots of competition form and individual honors", () => {
+  const playersWithPerformance = PLAYERS.map((player) => ({
+    ...player,
+    seasonPerformance: {
+      appearances: 6,
+      minutesPlayed: 500,
+      goals: 4,
+      assists: 2,
+      averageMatchRating: 7.7
+    },
+    honors: [{
+      competitionId: "competition-test",
+      competitionName: "بطولة اختبار",
+      season: 1,
+      awardType: "bestPlayer",
+      value: 7.7
+    }]
+  }));
+  const started = startScoutingMission(createInitialSave(), {
+    type: "regional",
+    countryId: "country-eg",
+    role: "all"
+  }, playersWithPerformance);
+  const due = advanceCareerDays(started.save, started.mission.durationDays);
+  const completed = advanceScoutingMissions(due, playersWithPerformance);
+  assert.equal(isValidSave(completed.save), true);
+
+  const corruptedPerformance = structuredClone(completed.save);
+  corruptedPerformance.world.scouting.reports[0].findings[0].performance.appearances = -1;
+  assert.equal(isValidSave(corruptedPerformance), false);
+
+  const corruptedHonor = structuredClone(completed.save);
+  corruptedHonor.world.scouting.reports[0].findings[0].honors[0].awardType = "invented-award";
+  assert.equal(isValidSave(corruptedHonor), false);
+});
+
 test("reports are deterministic for the same mission and world seed", () => {
   const started = startScoutingMission(createInitialSave(), {
     type: "elite",
