@@ -67,10 +67,12 @@ test("settles weekly payroll and branch rent once every Monday, retaining unpaid
   let save=createInitialSave();
   const hired=hireAgencyEmployee(save,"analyst");
   save=openAgencyBranch(hired.save,"alexandria").save;
-  assert.equal(advanceAgencyManagementDay(save,"2026-07-05").processed,false);
+  const sundaySave={...save,world:{...save.world,currentDate:"2026-07-05"}};
+  const mondaySave={...save,world:{...save.world,currentDate:"2026-07-06"}};
+  assert.equal(advanceAgencyManagementDay(sundaySave,"2026-07-05").processed,false);
   const weekly=AGENCY_JOB_ROLES.find((item)=>item.id==="analyst").weeklySalaryEgp+
     AGENCY_BRANCH_LOCATIONS.find((item)=>item.id==="alexandria").weeklyRentEgp;
-  const due=advanceAgencyManagementDay(save,"2026-07-06");
+  const due=advanceAgencyManagementDay(mondaySave,"2026-07-06");
   assert.equal(due.processed,true); assert.equal(due.dueEgp,weekly);
   assert.equal(due.paidEgp,weekly); assert.equal(due.arrearsEgp,0);
   assert.equal(due.save.agency.balance,save.agency.balance-weekly);
@@ -78,7 +80,7 @@ test("settles weekly payroll and branch rent once every Monday, retaining unpaid
   const repeat=advanceAgencyManagementDay(due.save,"2026-07-06");
   assert.equal(repeat.processed,false); assert.equal(repeat.save,due.save);
 
-  const insolvent={...save,agency:{...save.agency,balance:100}};
+  const insolvent={...mondaySave,agency:{...mondaySave.agency,balance:100}};
   const shortfall=advanceAgencyManagementDay(insolvent,"2026-07-06");
   assert.equal(shortfall.paidEgp,100); assert.equal(shortfall.arrearsEgp,weekly-100);
   assert.equal(shortfall.save.agency.balance,0); assert.equal(isValidSave(shortfall.save),true);
