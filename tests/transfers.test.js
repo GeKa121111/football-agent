@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import {
   createInitialTransferState, createTransferOffer, evaluateTransferOffer,
   submitTransferCounterOffer, acceptTransferCounterOffer, rejectTransferOffer,
-  completeTransfer, exerciseLoanOption, advanceTransferState, getTransferWindow,
-  getPlayerCurrentClubId, isValidTransferState
+  completeTransfer, exerciseLoanOption, recallLoan, settleTransferPerformanceBonuses,
+  advanceTransferState, getTransferWindow, getPlayerCurrentClubId, isValidTransferState
 } from "../src/engines/transfers.js";
 
 const database = {
@@ -377,4 +377,143 @@ test("exercises a loan purchase option and keeps the purchased club registration
   assert.equal(isValidTransferState(purchased.save.world.transfers, "2026-07-02",
     purchased.save.agency.clients, purchased.save.agency.representation), true);
   assert.equal(exerciseLoanOption(purchased.save, loan.move.id, "2026-07-03", database).changed, false);
+});
+
+
+function agreeOffer(save, offerId, date) {
+  const response = evaluateTransferOffer(save, offerId, date, database);
+  if (response.status === "countered") {
+    return acceptTransferCounterOffer(response.save, offerId, date);
+  }
+  return response;
+}
+
+test("settles mandatory loan purchase automatically outside the transfer window", () => {
+  const terms = {
+    ...loanTerms,
+    loanMonths: 9,
+    mandatoryBuy: true,
+    mandatoryBuyContractYears: 2,
+    wageSharePercent: 75,
+    registrationCompetition: "continental"
+  };
+  const sent = send(makeSave(), "loan", terms);
+  const agreed = agreeOffer(sent.save, sent.offer.id, "2026-07-01");
+  assert.equal(agreed.status, "agreed");
+  const loan = completeTransfer(agreed.save, sent.offer.id, "2026-07-01", database);
+  assert.equal(loan.changed, true);
+  assert.equal(loan.move.mandatoryBuy, true);
+  assert.equal(loan.move.wageSharePercent, 75);
+  assert.equal(recallLoan(loan.save, loan.move.id, "2026-08-01").changed, false);
+
+  const advanced = advanceTransferState(loan.save, "2027-04-01", database);
+  assert.deepEqual(advanced.mandatoryPurchases, [loan.move.id]);
+  assert.deepEqual(advanced.returnedLoans, []);
+  const transferState = advanced.save.world.transfers;
+  const returnedLoan = transferState.moves.find((item) => item.id === loan.move.id);
+  const permanentMove = transferState.moves.find((item) => item.type === "permanent");
+  assert.equal(returnedLoan.status, "purchased");
+  assert.equal(permanentMove.feeEur, loanTerms.optionToBuyEur);
+  assert.equal(permanentMove.contractYears, 2);
+  assert.equal(transferState.offers[0].purchaseClause, "mandatory");
+  assert.equal(getPlayerCurrentClubId("player-1", "club-home", transferState, "2027-04-01", database), "club-target");
+  assert.equal(isValidTransferState(transferState, "2027-04-01",
+    advanced.save.agency.clients, advanced.save.agency.representation, database), true);
+});
+
+test("pays appearance and goal bonuses once and charges the destination club", () => {
+  const terms = {
+    ...permanentTerms,
+    appearanceBonus: { appearances: 1, amountEur: 25_000 },
+    goalBonus: { goals: 1, amountEur: 40_000 }
+  };
+  const sent = send(makeSave(), "permanent", terms);
+  const agreed = agreeOffer(sent.save, sent.offer.id, "2026-07-01");
+  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-01", database);
+  assert.equal(completed.changed, true);
+  completed.save.world.football = {
+    results: [{
+      date: "2026-07-02",
+      playerPerformances: [{
+        playerId: "player-1", playerName: "لاعب تجريبي", clubId: "club-target",
+        minutesPlayed: 90, goals: 1
+      }]
+    }]
+  };
+  const settled = settleTransferPerformanceBonuses(completed.save, "2026-07-02");
+  assert.deepEqual(settled.paidBonuses.map((item) => item.type).sort(), ["appearance", "goal"]);
+  const transferState = settled.save.world.transfers;
+  assert.equal(transferState.financeLedger.filter((entry) => entry.type === "performance-bonus").length, 2);
+  assert.equal(transferState.financeLedger.filter((entry) => entry.type === "performance-bonus")
+    .reduce((sum, entry) => sum + entry.amountEur, 0), -65_000);
+  const repeated = settleTransferPerformanceBonuses(settled.save, "2026-07-03");
+  assert.equal(repeated.paidBonuses.length, 0);
+  assert.equal(repeated.save.world.transfers.financeLedger.filter((entry) => entry.type === "performance-bonus").length, 2);
+  assert.equal(isValidTransferState(transferState, "2026-07-02",
+    settled.save.agency.clients, settled.save.agency.representation, database), true);
+});
+
+test("recalls a loan only after its agreed notice period", () => {
+  const terms = { ...loanTerms, recallable: true, recallNoticeDays: 14, wageSharePercent: 50 };
+  const sent = send(makeSave(), "loan", terms);
+  const agreed = agreeOffer(sent.save, sent.offer.id, "2026-07-01");
+  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-01", database);
+  const recall = recallLoan(completed.save, completed.move.id, "2026-08-01");
+  assert.equal(recall.changed, true);
+  assert.equal(recall.recallReturnDate, "2026-08-15");
+  assert.equal(recallLoan(recall.save, completed.move.id, "2026-08-02").changed, false);
+  const beforeDue = advanceTransferState(recall.save, "2026-08-14", database);
+  assert.equal(beforeDue.save.world.transfers.moves[0].status, "active");
+  const returned = advanceTransferState(beforeDue.save, "2026-08-15", database);
+  assert.equal(returned.save.world.transfers.moves[0].status, "returned");
+  assert.deepEqual(returned.returnedLoans, [completed.move.id]);
+  assert.equal(getPlayerCurrentClubId("player-1", "club-home",
+    returned.save.world.transfers, "2026-08-15", database), "club-home");
+  assert.equal(isValidTransferState(returned.save.world.transfers, "2026-08-15",
+    returned.save.agency.clients, returned.save.agency.representation, database), true);
+});
+
+test("settles one audited seasonal finance record per club and keeps legacy v7 saves valid", () => {
+  const save = makeSave("2026-07-01");
+  const advanced = advanceTransferState(save, "2027-06-30", database);
+  const state = advanced.save.world.transfers;
+  assert.equal(state.financeSeasons.length, database.clubs.length);
+  assert.equal(state.financeSeasons.every((entry) => entry.seasonStart === "2026-07-01" &&
+    entry.settledDate === "2027-06-30" &&
+    entry.netEur === entry.revenueEur - entry.wageCostEur - entry.operatingCostEur), true);
+  assert.equal(isValidTransferState(state, "2027-06-30",
+    advanced.save.agency.clients, advanced.save.agency.representation, database), true);
+  const legacy = structuredClone(save.world.transfers);
+  delete legacy.financeSeasons;
+  delete legacy.nextSeasonSequence;
+  assert.equal(isValidTransferState(legacy, "2026-07-01", save.agency.clients,
+    save.agency.representation, database), true);
+});
+
+test("applies U21 squad exemptions and stricter continental list size", async () => {
+  const { getClubRegistrationStatus } = await import("../src/engines/club-transfer-rules.js");
+  const players = [
+    ...Array.from({ length: 25 }, (_, index) => ({
+      id: "senior-" + index, clubId: "club-target", countryId: "EG", age: 25, rating: 60
+    })),
+    { id: "youth-1", clubId: "club-target", countryId: "EG", age: 19, rating: 55 },
+    { id: "youth-2", clubId: "club-target", countryId: "EG", age: 20, rating: 55 },
+    { id: "candidate", clubId: "club-home", countryId: "EG", age: 20, rating: 65 }
+  ];
+  const db = {
+    clubs: [
+      { id: "club-home", nameAr: "المصدر", countryId: "EG", simulationProfile: 70 },
+      { id: "club-target", nameAr: "الوجهة", countryId: "EG", simulationProfile: 80 }
+    ],
+    players,
+    squadPlayers: []
+  };
+  const league = getClubRegistrationStatus("club-target", "candidate",
+    createInitialTransferState(), "2026-07-01", db, "permanent", "league");
+  const continental = getClubRegistrationStatus("club-target", "candidate",
+    createInitialTransferState(), "2026-07-01", db, "permanent", "continental");
+  assert.equal(league.eligible, true);
+  assert.equal(league.senior, 25);
+  assert.equal(continental.eligible, false);
+  assert.match(continental.reason, /الحد الأقصى/);
 });
