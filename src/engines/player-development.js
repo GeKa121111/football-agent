@@ -169,11 +169,12 @@ export function setPlayerTrainingPlan(state, playerId, focus, intensity = "norma
  * Advances recovery every day, trains once each Monday, and ages players only
  * when a new July-to-June season begins. The input state is never mutated.
  */
-export function advancePlayerDevelopmentDay(state, dateKey, season) {
+export function advancePlayerDevelopmentDay(state, dateKey, season, { deferInjuryRecovery = false } = {}) {
   const date = dateParts(dateKey);
   if (!isRecord(state) || !Array.isArray(state.players) ||
       !Array.isArray(state.trainingHistory) || !date ||
-      !Number.isSafeInteger(season) || season < state.season) {
+      !Number.isSafeInteger(season) || season < state.season ||
+      typeof deferInjuryRecovery !== "boolean") {
     throw new TypeError("بيانات تطور اللاعبين أو تاريخ التقدم غير صالحة.");
   }
 
@@ -183,7 +184,9 @@ export function advancePlayerDevelopmentDay(state, dateKey, season) {
   const players = state.players.map((original) => {
     let player = {
       ...original,
-      injuryDays: Math.max(0, original.injuryDays - (original.injuryDays > 0 ? 1 : 0)),
+      // Keep an injured player unavailable throughout this day's training and
+      // match selection. Full-season simulation recovers them after fixtures.
+      injuryDays: original.injuryDays,
       fatigue: roundTo(Math.max(0, original.fatigue - TRAINING_BALANCE.dailyFatigueRecovery), 1),
       fitness: roundTo(Math.min(100, original.fitness + TRAINING_BALANCE.dailyFitnessRecovery), 1)
     };
@@ -203,6 +206,9 @@ export function advancePlayerDevelopmentDay(state, dateKey, season) {
 
     if (!isTrainingDay || player.injuryDays > 0) return {
       ...player,
+      injuryDays: !deferInjuryRecovery && player.injuryDays > 0
+        ? player.injuryDays - 1
+        : player.injuryDays,
       rating: Math.min(player.potential, developmentRating(player))
     };
 
@@ -300,6 +306,27 @@ export function mergePlayerDevelopmentRoster(state, players = []) {
   return additions.length === 0
     ? state
     : { ...state, players: [...state.players, ...additions] };
+}
+
+/**
+ * Reduces injury counters for players who were already injured at the start
+ * of the completed day. Newly injured players are deliberately not included.
+ */
+export function recoverPlayerInjuries(state, injuredPlayerIds) {
+  if (!isRecord(state) || !Array.isArray(state.players) ||
+      !Array.isArray(injuredPlayerIds) ||
+      !injuredPlayerIds.every((id) => typeof id === "string" && id.trim())) {
+    throw new TypeError("بيانات تعافي اللاعبين المصابين غير صالحة.");
+  }
+  const injuredIds = new Set(injuredPlayerIds);
+  if (injuredIds.size === 0) return state;
+  let changed = false;
+  const players = state.players.map((player) => {
+    if (!injuredIds.has(player.playerId) || player.injuryDays <= 0) return player;
+    changed = true;
+    return { ...player, injuryDays: Math.max(0, player.injuryDays - 1) };
+  });
+  return changed ? { ...state, players } : state;
 }
 
 /** Applies match minutes, output and injuries to real world players in the saved development state. */
