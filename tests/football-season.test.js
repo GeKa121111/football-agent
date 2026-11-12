@@ -381,11 +381,11 @@ test("calculates competition standings from saved results with deterministic tie
   assert.equal(getCompetitionStandings(state, "missing-competition").length, 0);
 });
 
-test("applies competition-specific points and tie-break rules to standings", () => {
+test("applies competition-specific win, draw and loss points to standings", () => {
   const competition = WORLD_DATABASE.competitions.find((item) => item.type === "league");
   const customizedCompetition = {
     ...competition,
-    points: { win: 5, draw: 2, loss: 0 },
+    points: { win: 5, draw: 2, loss: 1 },
     tieBreakers: ["goalsFor", "points", "clubId"]
   };
   const database = {
@@ -397,18 +397,26 @@ test("applies competition-specific points and tie-break rules to standings", () 
   const [homeClubId, awayClubId] = competition.clubIds;
   const state = {
     season: 1,
-    results: [{
-      competitionId: competition.id,
-      season: 1,
-      home: { clubId: homeClubId, goals: 1 },
-      away: { clubId: awayClubId, goals: 1 }
-    }]
+    results: [
+      {
+        competitionId: competition.id,
+        season: 1,
+        home: { clubId: homeClubId, goals: 1 },
+        away: { clubId: awayClubId, goals: 1 }
+      },
+      {
+        competitionId: competition.id,
+        season: 1,
+        home: { clubId: homeClubId, goals: 3 },
+        away: { clubId: awayClubId, goals: 0 }
+      }
+    ]
   };
 
   const table = getCompetitionStandings(state, competition.id, database, 1);
   assert.equal(table.length, 2);
-  assert.equal(table[0].points, 2);
-  assert.equal(table[1].points, 2);
+  assert.equal(table.find((row) => row.clubId === homeClubId).points, 7);
+  assert.equal(table.find((row) => row.clubId === awayClubId).points, 3);
 });
 
 test("simulates three complete seasons without duplicate fixtures, lost results or invalid player state", () => {
