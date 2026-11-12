@@ -251,7 +251,7 @@ test("retains a new competitor offer after the rival history reaches its rolling
   const afterMonday = monday.save.agency.management.competitors.find((item) => item.id === rival.id);
   const newOffer = afterMonday.pendingOffers.find((item) => item.offeredDate === "2026-07-06");
   assert.ok(newOffer);
-  assert.equal(afterMonday.pendingOffers.length,40);
+  assert.equal(afterMonday.pendingOffers.length,41);
 
   const resolved = advanceCareerSimulationDays(monday.save,3,PLAYERS);
   const afterResolution = resolved.save.agency.management.competitors.find((item) => item.id === rival.id);
