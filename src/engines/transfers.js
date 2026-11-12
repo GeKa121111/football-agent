@@ -1,5 +1,9 @@
 import { WORLD_DATABASE } from "../data/world-database.js";
 import { getRepresentationContractExpiry, getRepresentationContractCommission } from "./representation.js";
+import {
+  FREE_AGENT_CLUB_ID, MAX_CLUB_FINANCE_ENTRIES, getTransferWindowForClub,
+  getPlayerCurrentClubIdFromState, getClubRegistrationStatus, getClubTransferFinancials
+} from "./club-transfer-rules.js";
 
 export const TRANSFER_OFFER_VALIDITY_DAYS = 14;
 export const MAX_TRANSFER_OFFERS = 1000;
@@ -10,7 +14,7 @@ export const TRANSFER_CONTRACT_YEARS = Object.freeze([1, 2, 3, 4, 5]);
 export const TRANSFER_LOAN_MONTHS = Object.freeze([3, 6, 9, 12, 18, 24]);
 const MAX_EUR = 2_000_000_000;
 const OFFER_STATUSES = new Set(["pending", "countered", "agreed", "completed", "rejected", "expired"]);
-const HISTORY_TYPES = new Set(["offer-sent", "club-countered", "agency-countered", "offer-agreed", "offer-rejected", "offer-expired", "transfer-completed", "loan-returned"]);
+const HISTORY_TYPES = new Set(["offer-sent", "club-countered", "agency-countered", "offer-agreed", "offer-rejected", "offer-expired", "transfer-completed", "loan-returned", "contract-expired"]);
 
 function isRecord(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
 function validId(value) { return typeof value === "string" && value.trim().length > 0; }
@@ -52,37 +56,22 @@ function getActiveRepresentationContract(save, playerId, date) {
   ) ?? null;
 }
 
-export function getTransferWindow(currentDate) {
-  if (!isTransferCalendarDate(currentDate)) return { active: false, window: null, nextWindow: null };
-  const year = Number(currentDate.slice(0, 4));
-  const windows = [
-    { id: year + "-winter", type: "winter", startDate: year + "-01-01", endDate: year + "-01-31" },
-    { id: year + "-summer", type: "summer", startDate: year + "-07-01", endDate: year + "-08-31" },
-    { id: (year + 1) + "-winter", type: "winter", startDate: (year + 1) + "-01-01", endDate: (year + 1) + "-01-31" },
-    { id: (year + 1) + "-summer", type: "summer", startDate: (year + 1) + "-07-01", endDate: (year + 1) + "-08-31" }
-  ];
-  const active = windows.find((item) => currentDate >= item.startDate && currentDate <= item.endDate) ?? null;
-  const nextWindow = windows.find((item) => item.startDate > currentDate) ?? null;
-  return {
-    active: Boolean(active),
-    window: active ? { ...active, daysRemaining: Math.round((Date.parse(active.endDate + "T00:00:00Z") - Date.parse(currentDate + "T00:00:00Z")) / 86400000) + 1 } : null,
-    nextWindow
-  };
+export function getTransferWindow(currentDate, clubId = null, database = WORLD_DATABASE) {
+  return getTransferWindowForClub(currentDate, clubId, database);
 }
 
 export function createInitialTransferState() {
-  return { nextOfferSequence: 1, nextMoveSequence: 1, nextHistorySequence: 1, nextLedgerSequence: 1,
-    earnedCommissionEur: 0, offers: [], moves: [], ledger: [], history: [] };
+  return {
+    nextOfferSequence: 1, nextMoveSequence: 1, nextHistorySequence: 1,
+    nextLedgerSequence: 1, nextFinanceSequence: 1, earnedCommissionEur: 0,
+    offers: [], moves: [], ledger: [], financeLedger: [], freeAgents: [], history: []
+  };
 }
 
-export function getPlayerCurrentClubId(playerId, fallbackClubId, transferState, currentDate = "9999-12-31") {
-  if (!validId(playerId) || !Array.isArray(transferState?.moves)) return fallbackClubId ?? null;
-  const moves = transferState.moves
-    .filter((move) => move.playerId === playerId && move.status === "active" && move.effectiveDate <= currentDate)
-    .sort((a, b) => dateCompare(a.effectiveDate, b.effectiveDate) || sequenceOf(a.id, "transfer-move") - sequenceOf(b.id, "transfer-move"));
-  let clubId = fallbackClubId ?? null;
-  for (const move of moves) clubId = move.toClubId;
-  return clubId;
+export function getPlayerCurrentClubId(playerId, fallbackClubId, transferState,
+  currentDate = "9999-12-31", database = WORLD_DATABASE) {
+  if (!validId(playerId)) return fallbackClubId ?? null;
+  return getPlayerCurrentClubIdFromState(playerId, fallbackClubId, transferState, currentDate, database);
 }
 
 function replaceOffer(state, offerId, patch) {
@@ -93,6 +82,29 @@ function appendHistory(state, type, offer, date, note, references = {}) {
     playerId: offer.playerId, playerName: offer.playerName, date, note, ...references };
   return { ...state, nextHistorySequence: state.nextHistorySequence + 1,
     history: [item, ...state.history].slice(0, MAX_TRANSFER_HISTORY) };
+}
+
+function appendClubFinance(state, offer, move, date) {
+  const terms = offer.agreedTerms ?? offer.terms;
+  const fee = offer.type === "permanent" ? terms.feeEur : terms.loanFeeEur;
+  const feeType = offer.type === "permanent" ? "transfer-fee" : "loan-fee";
+  const entries = [...(state.financeLedger ?? [])];
+  let sequence = state.nextFinanceSequence ?? 1;
+  const add = (clubId, type, amountEur) => {
+    if (!clubId || amountEur === 0) return;
+    entries.unshift({ id: "club-finance-" + sequence++, offerId: offer.id, moveId: move.id,
+      playerId: offer.playerId, clubId, type, date, currency: "EUR", amountEur });
+  };
+  add(offer.toClubId, feeType, -fee);
+  if (offer.fromClubId !== FREE_AGENT_CLUB_ID) add(offer.fromClubId, feeType, fee);
+  add(offer.toClubId, "signing-bonus", -terms.signingBonusEur);
+  return { ...state, nextFinanceSequence: sequence, financeLedger: entries };
+}
+
+function appendFreeAgent(state, playerId, sinceDate, formerClubId, contractMoveId = null) {
+  const records = Array.isArray(state.freeAgents) ? state.freeAgents : [];
+  if (records.some((item) => item.playerId === playerId)) return state;
+  return { ...state, freeAgents: [...records, { playerId, sinceDate, formerClubId, contractMoveId }] };
 }
 function validTerms(type, terms) {
   if (!isRecord(terms) || !validMoney(terms.weeklyWageEur) || !validMoney(terms.signingBonusEur)) return false;
