@@ -25,6 +25,15 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
+      - name: Generate and upload the release lockfile candidate
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Upload release lockfile candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-8-package-lock
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 1
       - name: Install Chromium, Firefox and WebKit
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Run unit tests
