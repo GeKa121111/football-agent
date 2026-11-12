@@ -1,5 +1,5 @@
 import { WORLD_DATABASE, getWorldSquadPlayers } from "../data/world-database.js";
-import { buildCompetitionGroups, getCompetitionRules, COMPETITION_FORMATS } from "../data/competition-rules.js";
+import { buildCompetitionGroups, getCompetitionRules, validateCompetitionDefinition, COMPETITION_FORMATS } from "../data/competition-rules.js";
 import { simulateMatch } from "./match-simulation.js";
 import { getPlayerCurrentClubId } from "./transfers.js";
 import {
@@ -156,6 +156,10 @@ export function generateSeasonFixtures(season, startDate, database = WORLD_DATAB
     .sort((a, b) => compareText(a.id, b.id));
 
   for (const competition of competitions) {
+    const validation = validateCompetitionDefinition(competition, database);
+    if (!validation.valid) {
+      throw new TypeError("تعريف المسابقة " + competition.id + " غير صالح: " + validation.errors.join(" "));
+    }
     const rules = getCompetitionRules(competition);
     const stages = rules.format === COMPETITION_FORMATS.GROUP_STAGE
       ? buildCompetitionGroups(competition, database)
