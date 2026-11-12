@@ -45,6 +45,9 @@ export function getCompetitionRules(competition) {
     groupCount: format === COMPETITION_FORMATS.GROUP_STAGE
       ? (competition.groupCount ?? 2)
       : null,
+    qualifiersPerGroup: format === COMPETITION_FORMATS.GROUP_STAGE && competition.knockoutAfterGroups === true
+      ? (competition.qualifiersPerGroup ?? 2)
+      : null,
     points: { ...DEFAULT_POINTS, ...(competition.points ?? {}) },
     tieBreakers: [...(competition.tieBreakers ?? [
       "points", "goalDifference", "goalsFor", "clubId"
@@ -127,6 +130,14 @@ export function validateCompetitionDefinition(competition, database) {
   }
 
   if (rules.format === COMPETITION_FORMATS.GROUP_STAGE) {
+    if (competition.knockoutAfterGroups !== undefined &&
+        typeof competition.knockoutAfterGroups !== "boolean") {
+      errors.push("إعداد التأهل الإقصائي يجب أن يكون قيمة منطقية: " + competition.id);
+    }
+    if (competition.knockoutAfterGroups === true &&
+        (rules.groupCount !== 2 || rules.qualifiersPerGroup !== 2)) {
+      errors.push("مسار التأهل القاري الحالي يتطلب مجموعتين وتأهل أول وثاني كل مجموعة: " + competition.id);
+    }
     if (![1, 2].includes(rules.legs)) {
       errors.push("عدد مباريات المجموعة يجب أن يكون ذهابًا فقط أو ذهابًا وإيابًا: " + competition.id);
     }
