@@ -507,7 +507,9 @@ export function isValidTransferState(state, currentDate, clients = [], represent
       !Array.isArray(state.offers) || state.offers.length > MAX_TRANSFER_OFFERS ||
       !Array.isArray(state.moves) || state.moves.length > MAX_TRANSFER_MOVES ||
       !Array.isArray(state.history) || state.history.length > MAX_TRANSFER_HISTORY ||
-      !Array.isArray(state.ledger) || state.ledger.length > MAX_TRANSFER_LEDGER ||\n      !Array.isArray(state.financeLedger) || state.financeLedger.length > MAX_CLUB_FINANCE_ENTRIES ||\n      !Array.isArray(state.freeAgents) || state.freeAgents.length > 5000) return false;
+      !Array.isArray(state.ledger) || state.ledger.length > MAX_TRANSFER_LEDGER ||
+      !Array.isArray(state.financeLedger) || state.financeLedger.length > MAX_CLUB_FINANCE_ENTRIES ||
+      !Array.isArray(state.freeAgents) || state.freeAgents.length > 5000) return false;
   const collections = [state.offers, state.moves, state.history, state.ledger, state.financeLedger];
   if (collections.some((items) => items.some((item) => !isRecord(item) || !validId(item.id)) ||
       new Set(items.map((item) => item.id)).size !== items.length)) return false;
