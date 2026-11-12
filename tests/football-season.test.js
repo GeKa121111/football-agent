@@ -133,6 +133,7 @@ test("generates deterministic home-and-away fixtures for all seeded competitions
   assert.deepEqual(first, second);
   assert.equal(new Set(first.map((fixture) => fixture.id)).size, first.length);
   const expected = WORLD_DATABASE.competitions.reduce((sum, competition) => {
+    if (competition.type === "cup") return sum + competition.clubIds.length / 2;
     if (competition.type === "league") {
       const count = competition.clubIds.length;
       return sum + count * (count - 1);
@@ -156,6 +157,39 @@ test("generates deterministic home-and-away fixtures for all seeded competitions
       assert.equal(fixture.groupId, null);
     }
   }
+});
+
+test("generates and completes a seeded knockout cup with automatic rounds and a single champion", () => {
+  const competition = WORLD_DATABASE.competitions.find((item) => item.type === "cup");
+  const database = { ...WORLD_DATABASE, competitions: [competition] };
+  let football = createInitialFootballState(1, "2026-07-01", database);
+  const initialCupFixtures = football.fixtures.filter((fixture) => fixture.competitionId === competition.id);
+  assert.equal(initialCupFixtures.length, 4);
+  assert.equal(new Set(initialCupFixtures.flatMap((fixture) => [fixture.homeClubId, fixture.awayClubId])).size, 8);
+  assert.ok(initialCupFixtures.every((fixture) => fixture.round === 1 && fixture.leg === 1));
+
+  const start = new Date("2026-07-01T00:00:00.000Z");
+  const end = new Date("2026-10-01T00:00:00.000Z");
+  for (const cursor = new Date(start); cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+    const currentDate = cursor.toISOString().slice(0, 10);
+    football = advanceFootballSeasonDay(football, currentDate, 1, database).football;
+    const cupFixtures = football.fixtures.filter((fixture) => fixture.competitionId === competition.id);
+    if (cupFixtures.length === 7 && cupFixtures.every((fixture) => fixture.status === "played")) break;
+  }
+
+  const cupFixtures = football.fixtures.filter((fixture) => fixture.competitionId === competition.id);
+  const cupResults = football.results.filter((result) => result.competitionId === competition.id);
+  assert.equal(cupFixtures.length, 7);
+  assert.equal(cupResults.length, 7);
+  assert.ok(cupFixtures.every((fixture) => fixture.status === "played"));
+  assert.deepEqual([...new Set(cupFixtures.map((fixture) => fixture.round))].sort(), [1, 2, 3]);
+  assert.ok(cupResults.every((result) => result.knockoutDecision?.winnerClubId));
+  assert.equal(isValidFootballState(football, "2026-10-01", 1, database), true);
+
+  const history = getCompetitionSeasonHistory(football, competition.id, database);
+  assert.equal(history.length, 1);
+  assert.equal(history[0].complete, true);
+  assert.ok(competition.clubIds.includes(history[0].championClubId));
 });
 
 test("keeps continental matches inside deterministic groups and exposes group-specific tables", () => {
