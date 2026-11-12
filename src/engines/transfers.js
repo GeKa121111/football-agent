@@ -611,11 +611,14 @@ export function settleTransferPerformanceBonuses(
     const supersededDate = laterPermanentMove
       ? addDays(laterPermanentMove.effectiveDate, -1)
       : null;
-    const trackingEndDate = move.status === "returned"
+    const contractEndDate = move.status === "returned"
       ? addDays(move.returnedDate, -1)
       : move.status === "expired"
         ? addDays(move.expiredDate, -1)
-        : supersededDate ?? currentDate;
+        : null;
+    const trackingEndDate = [contractEndDate, supersededDate, currentDate]
+      .filter(Boolean)
+      .sort()[0];
     const processThroughDate = trackingEndDate < currentDate ? trackingEndDate : currentDate;
     const lastProcessedDate = isTransferCalendarDate(move.performanceProcessedThroughDate)
       ? move.performanceProcessedThroughDate
