@@ -584,7 +584,10 @@ export function isValidTransferState(state, currentDate, clients = [], represent
         move.feeEur !== offer.agreedTerms.feeEur ||
         move.weeklyWageEur !== offer.agreedTerms.weeklyWageEur ||
         !Number.isInteger(move.contractYears) || move.contractYears !== offer.agreedTerms.contractYears ||
-        move.contractYears < 1 || move.contractYears > 5 ||\n        move.contractEndDate !== addMonths(move.effectiveDate, move.contractYears * 12) ||\n        (move.status === "expired" && (!isTransferCalendarDate(move.expiredDate) || move.expiredDate < move.contractEndDate || move.expiredDate > currentDate)) ||\n        (move.status === "active" && currentDate >= move.contractEndDate)) return false;
+        move.contractYears < 1 || move.contractYears > 5 ||
+        move.contractEndDate !== addMonths(move.effectiveDate, move.contractYears * 12) ||
+        (move.status === "expired" && (!isTransferCalendarDate(move.expiredDate) || move.expiredDate < move.contractEndDate || move.expiredDate > currentDate)) ||
+        (move.status === "active" && currentDate >= move.contractEndDate)) return false;
     moves.set(move.id, move);
     highestMove = Math.max(highestMove, sequenceOf(move.id, "transfer-move"));
   }
