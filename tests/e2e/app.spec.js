@@ -203,7 +203,7 @@ test.describe("Desktop experience", () => {
 
     await navigateTo(page, "اللاعبون");
     const yassinCard = page.locator('.player-card[data-player-id="demo-yassin-adel"]');
-    await expect(yassinCard.locator(".player-rating strong")).toHaveText(String(updatedYassin.rating));
+    await expect(yassinCard.locator(".player-rating strong")).toHaveText(String(Math.round(updatedYassin.rating)));
 
     const standingsTable = page.locator(".football-standings-table");
     await navigateTo(page, "المباريات");
