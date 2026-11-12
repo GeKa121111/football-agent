@@ -122,27 +122,37 @@ function normalizeTerms(type, terms) {
 export function createTransferOffer(save, playerId, destinationClubId, type, terms,
   currentDate = save?.world?.currentDate, database = WORLD_DATABASE) {
   const state = save?.world?.transfers;
-  if (!isRecord(state) || !Array.isArray(state.offers) || !Array.isArray(state.moves) || !Array.isArray(state.history))
+  if (!isRecord(state) || !Array.isArray(state.offers) || !Array.isArray(state.moves) ||
+      !Array.isArray(state.history) || !Array.isArray(state.financeLedger) || !Array.isArray(state.freeAgents))
     return { changed: false, save, error: "محرك الانتقالات غير موجود في ملف الحفظ." };
   if (!isTransferCalendarDate(currentDate)) return { changed: false, save, error: "تاريخ المسيرة غير صالح." };
-  const window = getTransferWindow(currentDate);
-  if (!window.active) return { changed: false, save, error: "نافذة الانتقالات مغلقة. أقرب نافذة: " + (window.nextWindow?.startDate ?? "غير محددة") + "." };
   if (!validId(playerId) || !validId(destinationClubId) || !["permanent", "loan"].includes(type) || !validTerms(type, terms))
     return { changed: false, save, error: "بيانات عرض الانتقال غير مكتملة أو غير صالحة." };
   const player = getPlayer(database, playerId);
   const club = getClub(database, destinationClubId);
   if (!player || !club) return { changed: false, save, error: "اللاعب أو النادي المستهدف غير موجود في قاعدة العالم." };
-  const fromClubId = getPlayerCurrentClubId(playerId, player.clubId, state, currentDate);
-  if (fromClubId === destinationClubId) return { changed: false, save, error: "اللاعب موجود بالفعل في النادي المستهدف." };
+  const window = getTransferWindow(currentDate, destinationClubId, database);
+  if (!window.active) return { changed: false, save, error: "نافذة انتقالات " + club.nameAr + " مغلقة. أقرب نافذة: " + (window.nextWindow?.startDate ?? "غير محددة") + "." };
+  const resolvedFromClubId = getPlayerCurrentClubId(playerId, player.clubId, state, currentDate, database);
+  const fromClubId = resolvedFromClubId ?? FREE_AGENT_CLUB_ID;
+  if (resolvedFromClubId === destinationClubId) return { changed: false, save, error: "اللاعب موجود بالفعل في النادي المستهدف." };
+  if (fromClubId === FREE_AGENT_CLUB_ID && type === "loan")
+    return { changed: false, save, error: "لا يمكن إعارة لاعب حر؛ يجب التفاوض على انتقال نهائي." };
+  if (fromClubId === FREE_AGENT_CLUB_ID && terms.feeEur !== 0)
+    return { changed: false, save, error: "لا توجد رسوم انتقال مستحقة للاعب الحر." };
   if (!save.agency.clients.includes(playerId) || !getActiveRepresentationContract(save, playerId, currentDate))
     return { changed: false, save, error: "لا يمكن التفاوض على انتقال لاعب قبل توقيع عقد تمثيل نشط معه." };
+  const registration = getClubRegistrationStatus(destinationClubId, playerId, state, currentDate, database, type);
+  if (!registration.eligible) return { changed: false, save, error: registration.reason };
   if (state.offers.some((offer) => offer.playerId === playerId && ["pending", "countered", "agreed"].includes(offer.status)))
     return { changed: false, save, error: "يوجد بالفعل ملف انتقال مفتوح لهذا اللاعب." };
   if (state.moves.some((move) => move.playerId === playerId && move.type === "loan" && move.status === "active"))
     return { changed: false, save, error: "اللاعب معار حاليًا ولا يمكن بدء انتقال آخر." };
   if (state.offers.length >= MAX_TRANSFER_OFFERS || state.history.length >= MAX_TRANSFER_HISTORY ||
-      !Number.isSafeInteger(state.nextOfferSequence) || state.nextOfferSequence < 1)
-    return { changed: false, save, error: "وصل سجل الانتقالات إلى الحد المتاح." };
+      state.financeLedger.length + 3 > MAX_CLUB_FINANCE_ENTRIES ||
+      !Number.isSafeInteger(state.nextOfferSequence) || state.nextOfferSequence < 1 ||
+      !Number.isSafeInteger(state.nextFinanceSequence) || state.nextFinanceSequence < 1)
+    return { changed: false, save, error: "وصل سجل الانتقالات أو ميزانيات الأندية إلى الحد المتاح." };
   const offer = {
     id: "transfer-offer-" + state.nextOfferSequence, playerId, playerName: player.name, type,
     fromClubId, toClubId: destinationClubId, toClubName: club.nameAr,
