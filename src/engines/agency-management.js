@@ -96,7 +96,6 @@ export function createInitialAgencyManagementState() {
     ledger:[],
     sponsorships:[],
     creditFacilities:[],
-    creditFacilities:[],
     competitors:COMPETITOR_BLUEPRINTS.map((profile) => ({
       ...profile, clients:[], pendingOffers:[], lastActionDate:null
     })),
@@ -683,7 +682,9 @@ export function advanceAgencyManagementDay(save, currentDate = save?.world?.curr
     competitors:state.competitors ?? createInitialAgencyManagementState().competitors,
     competitiveHistory:state.competitiveHistory ?? [],
     nextSponsorshipSequence:state.nextSponsorshipSequence ?? 1,
-    nextCompetitiveSequence:state.nextCompetitiveSequence ?? 1
+    nextCompetitiveSequence:state.nextCompetitiveSequence ?? 1,
+    creditFacilities:state.creditFacilities ?? [],
+    nextCreditSequence:state.nextCreditSequence ?? 1
   };
   let processed = false;
   const isMonday = new Date(currentDate + "T00:00:00.000Z").getUTCDay() === 1;
@@ -718,6 +719,40 @@ export function advanceAgencyManagementDay(save, currentDate = save?.world?.curr
       agency:{...nextSave.agency,balance:nextSave.agency.balance-paidEgp,management:next}
     };
     processed = true;
+  }
+
+  if (isMonday) {
+    for (const loan of [...next.creditFacilities]) {
+      if (loan.status !== "active" || currentDate < loan.nextPaymentDate) continue;
+      if (next.ledger.length >= MAX_LEDGER_ENTRIES) continue;
+      const dueEgp = Math.min(loan.weeklyInstallmentEgp,loan.remainingEgp);
+      const paidEgp = Math.min(nextSave.agency.balance,dueEgp);
+      const remainingEgp = loan.remainingEgp-paidEgp;
+      const missed = paidEgp < dueEgp;
+      next = appendLedger(next,{
+        date:currentDate,type:"credit-repayment",direction:"expense",
+        referenceId:loan.id,amountEgp:dueEgp,paidEgp,
+        arrearsAfterEgp:remainingEgp,
+        note:missed ? "سداد جزئي لتسهيل " + loan.name : "سداد قسط تمويل " + loan.name
+      });
+      next = {
+        ...next,
+        creditFacilities:next.creditFacilities.map((item) => item.id === loan.id
+          ? {
+              ...item,remainingEgp,paidEgp:item.paidEgp+paidEgp,
+              lateWeeks:item.lateWeeks+(missed?1:0),
+              lastPaymentDate:paidEgp>0?currentDate:item.lastPaymentDate,
+              nextPaymentDate:addDays(currentDate,7),
+              status:remainingEgp===0?"repaid":"active"
+            }
+          : item)
+      };
+      nextSave = {
+        ...nextSave,
+        agency:{...nextSave.agency,balance:nextSave.agency.balance-paidEgp,management:next}
+      };
+      processed = true;
+    }
   }
 
   if (isMonday) {
