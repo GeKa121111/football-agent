@@ -1766,7 +1766,7 @@ test("negotiates a signing bonus and displays it without charging the agency", a
 
   await page.locator(".representation-client-dossier-button").first().click();
   const dossier = page.locator(".representation-client-dossier");
-  await expect(dossier).toContainText("250,000");
+  await expect(dossier).toContainText(new Intl.NumberFormat("ar-EG").format(250000));
   await expect(dossier).toContainText("ليست مبلغًا مدفوعًا");
   await hasNoHorizontalOverflow(page);
 });
