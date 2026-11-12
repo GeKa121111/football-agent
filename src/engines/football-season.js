@@ -267,6 +267,72 @@ export function generateSeasonFixtures(season, startDate, database = WORLD_DATAB
   );
 }
 
+function buildCompetitionSeasonAwards(results, database = WORLD_DATABASE) {
+  const playerStats = new Map();
+  const clubById = new Map(database.clubs.map((club) => [club.id, club]));
+
+  for (const result of results) {
+    for (const performance of result.playerPerformances ?? []) {
+      if (performance.simulationOnly === true || performance.minutesPlayed <= 0 ||
+          typeof performance.playerId !== "string" || !performance.playerId.trim() ||
+          typeof performance.clubId !== "string" || !Number.isFinite(performance.rating)) continue;
+      const current = playerStats.get(performance.playerId) ?? {
+        playerId: performance.playerId,
+        playerName: performance.playerName,
+        clubId: performance.clubId,
+        appearances: 0,
+        minutesPlayed: 0,
+        goals: 0,
+        assists: 0,
+        ratingTotal: 0
+      };
+      current.appearances += 1;
+      current.minutesPlayed += performance.minutesPlayed;
+      current.goals += performance.goals ?? 0;
+      current.assists += performance.assists ?? 0;
+      current.ratingTotal += performance.rating;
+      playerStats.set(performance.playerId, current);
+    }
+  }
+
+  const candidates = [...playerStats.values()].map((player) => ({
+    ...player,
+    averageRating: Math.round(player.ratingTotal / player.appearances * 100) / 100,
+    clubName: clubById.get(player.clubId)?.nameAr ?? player.clubId
+  }));
+  const toAward = (player, value) => player ? ({
+    playerId: player.playerId,
+    playerName: player.playerName,
+    clubId: player.clubId,
+    clubName: player.clubName,
+    value,
+    appearances: player.appearances,
+    averageRating: player.averageRating
+  }) : null;
+
+  const goldenBoot = [...candidates]
+    .filter((player) => player.goals > 0)
+    .sort((a, b) => b.goals - a.goals || b.assists - a.assists ||
+      b.averageRating - a.averageRating || b.appearances - a.appearances ||
+      compareText(a.playerId, b.playerId))[0] ?? null;
+  const topAssists = [...candidates]
+    .filter((player) => player.assists > 0)
+    .sort((a, b) => b.assists - a.assists || b.goals - a.goals ||
+      b.averageRating - a.averageRating || b.appearances - a.appearances ||
+      compareText(a.playerId, b.playerId))[0] ?? null;
+  const playerOfSeason = [...candidates]
+    .filter((player) => player.appearances >= 3)
+    .sort((a, b) => b.averageRating - a.averageRating || b.goals - a.goals ||
+      b.assists - a.assists || b.appearances - a.appearances ||
+      compareText(a.playerId, b.playerId))[0] ?? null;
+
+  return {
+    playerOfSeason: toAward(playerOfSeason, playerOfSeason?.averageRating ?? null),
+    goldenBoot: toAward(goldenBoot, goldenBoot?.goals ?? null),
+    topAssists: toAward(topAssists, topAssists?.assists ?? null)
+  };
+}
+
 function buildCompetitionSeasonSummary(state, competition, season, database = WORLD_DATABASE) {
   const fixtures = state.fixtures.filter((fixture) =>
     fixture.competitionId === competition.id && fixture.season === season
@@ -316,7 +382,8 @@ function buildCompetitionSeasonSummary(state, competition, season, database = WO
     championClubId,
     championName: championClubId ? clubById.get(championClubId)?.nameAr ?? championClubId : null,
     standings,
-    groups
+    groups,
+    awards: complete ? buildCompetitionSeasonAwards(results, database) : null
   };
 }
 
@@ -667,6 +734,19 @@ export function isValidFootballState(state, currentDate, season, database = WORL
           Number.isSafeInteger(archive.matchesScheduled) && archive.matchesScheduled >= 0 &&
           archive.matchesPlayed + archive.matchesScheduled === archive.matchesTotal &&
           Array.isArray(archive.standings) && Array.isArray(archive.groups) &&
+          (archive.awards === undefined || archive.awards === null ||
+            (isRecord(archive.awards) &&
+              ["playerOfSeason", "goldenBoot", "topAssists"].every((awardKey) => {
+                const award = archive.awards[awardKey];
+                return award === null || (isRecord(award) &&
+                  typeof award.playerId === "string" && award.playerId.trim() &&
+                  typeof award.playerName === "string" && award.playerName.trim() &&
+                  typeof award.clubId === "string" && award.clubId.trim() &&
+                  typeof award.clubName === "string" && award.clubName.trim() &&
+                  Number.isFinite(award.value) && award.value > 0 &&
+                  Number.isSafeInteger(award.appearances) && award.appearances >= 1 &&
+                  Number.isFinite(award.averageRating) && award.averageRating >= 4 && award.averageRating <= 10);
+              }))) &&
           dateValue(archive.archivedOn) !== null))) ||
       !isValidPlayerDevelopmentState(state.playerDevelopment, state.season)) return false;
 
@@ -809,6 +889,15 @@ export function getCompetitionStandings(state, competitionId, database = WORLD_D
 }
 
 /** Returns retained season archives plus a live snapshot for the current data. */
+/** Calculates end-of-season individual awards using real-player match performances. */
+export function getCompetitionSeasonAwards(state, competitionId, season = state?.season, database = WORLD_DATABASE) {
+  if (!Array.isArray(state?.results)) return { playerOfSeason: null, goldenBoot: null, topAssists: null };
+  const results = state.results.filter((result) =>
+    result.competitionId === competitionId && result.season === season
+  );
+  return buildCompetitionSeasonAwards(results, database);
+}
+
 export function getCompetitionSeasonHistory(state, competitionId, database = WORLD_DATABASE) {
   if (!isRecord(state) || !Array.isArray(state.fixtures) || !Array.isArray(state.results)) return [];
   const competition = database.competitions.find((item) => item.id === competitionId);
