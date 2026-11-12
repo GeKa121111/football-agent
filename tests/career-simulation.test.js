@@ -11,6 +11,7 @@ import {
   getPlayerRepresentationProfile
 } from "../src/engines/representation.js";
 import { advanceCareerSimulationDay, advanceCareerSimulationDays } from "../src/engines/career-simulation.js";
+import { hireAgencyEmployee } from "../src/engines/agency-management.js";
 
 const PLAYERS = getWorldPlayerProfiles();
 
@@ -138,8 +139,9 @@ test("rejects invalid multi-day advances and missing scouting data without modif
 
 test("runs agency payroll on the shared Monday career tick", () => {
   const initial = createInitialSave();
-  const hired = startAgencyEmployee(initial);
-  const weeklySalary = hired.save.agency.management.staff[0].weeklySalaryEgp;
+  const hired = hireAgencyEmployee(initial, "analyst");
+  assert.equal(hired.changed, true, hired.error);
+  const weeklySalary = hired.employee.weeklySalaryEgp;
   const advanced = advanceCareerSimulationDays(hired.save, 7, PLAYERS);
 
   assert.equal(advanced.save.world.currentDate, "2026-07-08");
@@ -153,50 +155,3 @@ test("runs agency payroll on the shared Monday career tick", () => {
   assert.equal(advanced.save.agency.balance, hired.save.agency.balance - weeklySalary);
   assert.equal(isValidSave(advanced.save), true);
 });
-
-function startAgencyEmployee(save) {
-  const role = "analyst";
-  const state = save.agency.management;
-  const job = { id: role };
-  // Keep this integration test focused on the shared time loop; the dedicated
-  // agency-management suite validates the exact catalog price and role rules.
-  const salary = 1450;
-  const hiringCost = 7500;
-  const employee = {
-    id: "agency-staff-" + state.nextStaffSequence,
-    roleId: job.id,
-    name: "محلل أداء",
-    hiredDate: save.world.currentDate,
-    hiringCostEgp: hiringCost,
-    weeklySalaryEgp: salary,
-    status: "active",
-    terminatedDate: null
-  };
-  const entry = {
-    id: "agency-ledger-" + state.nextLedgerSequence,
-    date: save.world.currentDate,
-    type: "hiring",
-    referenceId: employee.id,
-    amountEgp: hiringCost,
-    paidEgp: hiringCost,
-    arrearsAfterEgp: state.arrearsEgp,
-    note: "تكلفة تعيين محلل أداء"
-  };
-  const management = {
-    ...state,
-    nextStaffSequence: state.nextStaffSequence + 1,
-    nextLedgerSequence: state.nextLedgerSequence + 1,
-    staff: [employee],
-    ledger: [entry]
-  };
-  const updated = {
-    ...save,
-    agency: {
-      ...save.agency,
-      balance: save.agency.balance - hiringCost,
-      management
-    }
-  };
-  assert.equal(isValidSave(updated), true);
-  return { save: updated };
-}
