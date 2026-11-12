@@ -81,6 +81,11 @@ import {
   closeAgencyBranch as closeAgencyBranchInEngine,
   dismissAgencyEmployee as dismissAgencyEmployeeInEngine,
   getAgencyManagementSummary,
+  getAgencyStaffModifiers,
+  getAgencySponsorshipOffers,
+  getAgencyCompetitorSummary,
+  getRivalClientIds,
+  signAgencySponsorship as signAgencySponsorshipInEngine,
   hireAgencyEmployee as hireAgencyEmployeeInEngine,
   openAgencyBranch as openAgencyBranchInEngine
 } from "./engines/agency-management.js";
@@ -1801,6 +1806,7 @@ function renderMarket(context) {
 
 function getTalentPipelineRecords(context) {
   const records = new Map();
+  const rivalClientIds = getRivalClientIds(context.save);
   const representation = context.save.agency.representation;
   const pipeline = context.save.agency.talentPipeline;
   const add = (playerId, sourceId) => {
@@ -1859,7 +1865,7 @@ function getTalentPipelineRecords(context) {
     }
   });
 
-  return [...records.values()].map((record) => {
+  return [...records.values()].filter((record) => !rivalClientIds.has(record.player.id)).map((record) => {
     const playerId = record.player.id;
     const offer = representation.offers.find((item) =>
       item.playerId === playerId && ["pending", "countered"].includes(item.status)
@@ -2143,6 +2149,7 @@ function renderAgencyManagementPanel(context) {
   const agency = context.save.agency;
   const management = agency.management;
   const summary = getAgencyManagementSummary(context.save);
+  const staffModifiers = getAgencyStaffModifiers(context.save);
   const panel = node("section", "surface-card agency-management-panel");
   const heading = node("div", "representation-heading");
   heading.append(node("div", "talent-pipeline-heading-copy"), node("span", "representation-count", "إدارة وتشغيل"));
@@ -2251,6 +2258,103 @@ function renderAgencyManagementPanel(context) {
   });
   branchesSection.append(expansionGrid);
 
+  const skillPanel = node("section", "agency-operations-section");
+  skillPanel.append(
+    node("h3", "", "تأثير الفريق على أداء الوكالة"),
+    node("p", "representation-intro", "مهارات الموظفين بتدخل في قرارات التفاوض واستقطاب المواهب وحماية العملاء وجذب الرعاة.")
+  );
+  const skillGrid = node("div", "agency-operations-metrics");
+  [
+    ["قوة التفاوض", "+" + staffModifiers.negotiationBonus],
+    ["دقة الاستكشاف", "+" + Math.round(staffModifiers.scoutingAccuracyBonus * 100) + "%"],
+    ["حماية العملاء", "+" + staffModifiers.legalProtectionBonus],
+    ["قوة العلامة", "+" + staffModifiers.brandReachBonus]
+  ].forEach(([label,value]) => {
+    const card = node("article", "agency-operations-metric");
+    card.append(node("small", "", label),node("strong", "", value));
+    skillGrid.append(card);
+  });
+  skillPanel.append(skillGrid,
+    node("small", "agency-management-note", "مدير العمليات يخفض تكلفة التشغيل الأسبوعية بنسبة " + staffModifiers.operationsEfficiencyPct + "%.")
+  );
+
+  const sponsorshipSection = node("section", "agency-operations-section agency-sponsorship-section");
+  sponsorshipSection.append(
+    node("h3", "", "عقود الرعاية والشراكات"),
+    node("p", "representation-intro", "وقّع اتفاقات تجارية للوكالة. مكافأة التوقيع تُضاف فورًا، والدفعات المتكررة تدخل كل يوم اثنين.")
+  );
+  const sponsorshipOffers = getAgencySponsorshipOffers(context.save);
+  const sponsorshipGrid = node("div", "agency-operations-catalog");
+  sponsorshipOffers.forEach((offer) => {
+    const card = node("article", "agency-operations-offer");
+    card.append(
+      node("strong", "", offer.name),
+      node("p", "", offer.description),
+      node("small", "", "مكافأة التوقيع " + formatMoney(offer.signingBonusEgp)),
+      node("small", "", "دخل أسبوعي " + formatMoney(offer.weeklyRevenueEgp)),
+      node("small", "", "مدة الاتفاق " + Math.round(offer.termDays / 365) + " سنة")
+    );
+    const button = actionButton(offer.active ? "اتفاق نشط" : offer.available ? "توقيع اتفاق الرعاية" : offer.lockedReason,
+      "button-primary agency-sponsorship-sign-button",() => context.signAgencySponsorship(offer.id));
+    button.disabled = !offer.available;
+    card.append(button);
+    sponsorshipGrid.append(card);
+  });
+  sponsorshipSection.append(sponsorshipGrid);
+  const activeSponsorships = (management.sponsorships ?? []).filter((deal) => deal.status === "active");
+  if (activeSponsorships.length > 0) {
+    const activeList = node("div", "agency-operations-list");
+    activeSponsorships.forEach((deal) => {
+      const row = node("article", "agency-operations-row");
+      row.append(
+        node("div", "representation-copy"),
+        node("span", "representation-count", "دخل أسبوعي " + formatMoney(deal.weeklyRevenueEgp))
+      );
+      row.children[0].append(
+        node("strong", "", deal.name),
+        node("small", "", "ينتهي " + formatHomeDate(deal.expiresDate) +
+          (deal.lastPaidDate ? " · آخر دفعة " + formatHomeDate(deal.lastPaidDate) : " · بانتظار أول دفعة"))
+      );
+      activeList.append(row);
+    });
+    sponsorshipSection.append(activeList);
+  }
+
+  const competitorsSection = node("section", "agency-operations-section agency-competitors-section");
+  competitorsSection.append(
+    node("h3", "", "الوكالات المنافسة"),
+    node("p", "representation-intro", "الوكالات الأخرى تتحرك كل أسبوع، تستهدف المواهب وترسل عروضًا مستقلة عن فتح الشاشة.")
+  );
+  const competitorGrid = node("div", "agency-operations-catalog");
+  getAgencyCompetitorSummary(context.save).forEach((competitor) => {
+    const card = node("article", "agency-operations-offer agency-competitor-card");
+    card.append(
+      node("strong", "", competitor.name),
+      node("p", "", competitor.region + " · " + competitor.focus),
+      node("small", "", "السمعة " + competitor.reputation + "/100"),
+      node("small", "", competitor.clients + " عميل · " + competitor.pendingOffers + " عرض قيد الرد"),
+      node("small", "", "ميزانية النشاط " + formatMoney(competitor.budgetEgp))
+    );
+    competitorGrid.append(card);
+  });
+  competitorsSection.append(competitorGrid);
+  const competitiveHistory = (management.competitiveHistory ?? []).slice(0,6);
+  if (competitiveHistory.length > 0) {
+    const historyList = node("div", "agency-operations-list");
+    competitiveHistory.forEach((entry) => {
+      const row = node("article", "agency-operations-ledger-row");
+      const eventLabel = entry.type === "offer-sent" ? "عرض منافس جديد" :
+        entry.type === "offer-accepted" ? "ضم لاعب بواسطة منافس" : "فشل عرض منافس";
+      row.append(
+        node("strong", "", eventLabel),
+        node("span", "", formatHomeDate(entry.date)),
+        node("small", "", entry.agencyName + " · " + entry.playerName + " · " + entry.note)
+      );
+      historyList.append(row);
+    });
+    competitorsSection.append(historyList);
+  }
+
   const ledgerPanel = node("section", "agency-operations-section");
   ledgerPanel.append(node("h3", "", "سجل مصروفات الإدارة"));
   const entries = management.ledger.slice(0, 8);
@@ -2260,7 +2364,8 @@ function renderAgencyManagementPanel(context) {
     const list = node("div", "agency-operations-list");
     entries.forEach((entry) => {
       const row = node("article", "agency-operations-ledger-row");
-      const label = entry.type === "hiring" ? "تكلفة تعيين" :
+      const label = entry.direction === "income" ? (entry.incomeKind === "signing" ? "مكافأة رعاية" : "دخل رعاية أسبوعي") :
+        entry.type === "hiring" ? "تكلفة تعيين" :
         entry.type === "branch-opening" ? "افتتاح فرع" : "رواتب وإيجارات أسبوعية";
       row.append(
         node("strong", "", label),
@@ -2273,7 +2378,7 @@ function renderAgencyManagementPanel(context) {
     });
     ledgerPanel.append(list);
   }
-  panel.append(staffSection, branchesSection, ledgerPanel);
+  panel.append(staffSection, skillPanel, branchesSection, sponsorshipSection, competitorsSection, ledgerPanel);
   return panel;
 }
 
@@ -2291,8 +2396,9 @@ function renderAgency(context) {
   const openOffers = representation.offers.filter((offer) => ["pending", "countered"].includes(offer.status));
   const interactions = Array.isArray(representation.interactions) ? representation.interactions : [];
   const openInteractions = interactions.filter((item) => ["pending_response", "scheduled"].includes(item.status));
+  const rivalClientIds = getRivalClientIds(context.save);
   const prospects = context.players
-    .filter((player) => !agency.clients.includes(player.id) &&
+    .filter((player) => !rivalClientIds.has(player.id) && !agency.clients.includes(player.id) &&
       !openOffers.some((offer) => offer.playerId === player.id))
     .sort((a, b) => b.potential - a.potential || b.rating - a.rating);
 
@@ -4374,6 +4480,15 @@ export function mountApp(root) {
         if (!result.changed) { toast(result.error); return; }
         state.save = result.save;
         if (saveCareer()) { render(); toast("تم افتتاح فرع " + result.branch.name + "."); }
+        else state.save = previousSave;
+      },
+      signAgencySponsorship: (packageId) => {
+        if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم يتم توقيع اتفاق الرعاية."); return; }
+        const previousSave = state.save;
+        const result = signAgencySponsorshipInEngine(state.save,packageId);
+        if (!result.changed) { toast(result.error); return; }
+        state.save = result.save;
+        if (saveCareer()) { render(); toast("تم توقيع اتفاق " + result.deal.name + " وإضافة مكافأة التوقيع."); }
         else state.save = previousSave;
       },
       closeAgencyBranch: (branchId) => {
