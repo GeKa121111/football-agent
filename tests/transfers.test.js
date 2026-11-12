@@ -440,13 +440,13 @@ test("pays appearance and goal bonuses once and charges the destination club", (
       }]
     }]
   };
-  const settled = settleTransferPerformanceBonuses(completed.save, "2026-07-02");
+  const settled = settleTransferPerformanceBonuses(completed.save, "2026-07-02", database);
   assert.deepEqual(settled.paidBonuses.map((item) => item.type).sort(), ["appearance", "goal"]);
   const transferState = settled.save.world.transfers;
   assert.equal(transferState.financeLedger.filter((entry) => entry.type === "performance-bonus").length, 2);
   assert.equal(transferState.financeLedger.filter((entry) => entry.type === "performance-bonus")
     .reduce((sum, entry) => sum + entry.amountEur, 0), -65_000);
-  const repeated = settleTransferPerformanceBonuses(settled.save, "2026-07-03");
+  const repeated = settleTransferPerformanceBonuses(settled.save, "2026-07-03", database);
   assert.equal(repeated.paidBonuses.length, 0);
   assert.equal(repeated.save.world.transfers.financeLedger.filter((entry) => entry.type === "performance-bonus").length, 2);
   assert.equal(isValidTransferState(transferState, "2026-07-02",
@@ -515,5 +515,5 @@ test("applies U21 squad exemptions and stricter continental list size", async ()
   assert.equal(league.eligible, true);
   assert.equal(league.senior, 25);
   assert.equal(continental.eligible, false);
-  assert.match(continental.reason, /الحد الأقصى/);
+  assert.match(continental.reason, /25 لاعبًا/);
 });
