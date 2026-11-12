@@ -551,3 +551,37 @@ test("splits weekly loan wages between the borrowing club and the parent club", 
   assert.equal(returnedParent.committedWagesWeeklyEur, 24_500);
   assert.equal(returnedBorrower.committedWagesWeeklyEur, 0);
 });
+
+
+test("counts returned loans toward the seasonal registration limit", async () => {
+  const { getClubRegistrationStatus } = await import("../src/engines/club-transfer-rules.js");
+  const db = {
+    clubs: [
+      { id: "club-home", nameAr: "المصدر", countryId: "EG", leagueId: "league-eg-premier", simulationProfile: 70 },
+      { id: "club-target", nameAr: "الوجهة", countryId: "EG", leagueId: "league-eg-premier", simulationProfile: 80 }
+    ],
+    players: [
+      { id: "candidate", clubId: "club-home", countryId: "EG", age: 22, rating: 65 }
+    ],
+    squadPlayers: []
+  };
+  const transferState = createInitialTransferState();
+  transferState.moves = Array.from({ length: 10 }, (_, index) => ({
+    id: "transfer-move-" + (index + 1),
+    playerId: "former-loanee-" + (index + 1),
+    type: "loan",
+    status: "returned",
+    fromClubId: "club-home",
+    toClubId: "club-target",
+    effectiveDate: "2026-08-01",
+    returnDate: "2026-09-01",
+    returnedDate: "2026-09-01"
+  }));
+
+  const result = getClubRegistrationStatus(
+    "club-target", "candidate", transferState, "2026-10-01", db, "permanent", "league"
+  );
+  assert.equal(result.eligible, false);
+  assert.equal(result.midSeasonRegistrations, undefined);
+  assert.match(result.reason, /التسجيلات المسموح بها خلال الموسم/);
+});
