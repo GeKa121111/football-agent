@@ -82,6 +82,15 @@ test.describe("Desktop experience", () => {
     await expect(page.locator(".main-stage")).toBeFocused();
   });
 
+  test("shows a live transfer window instead of demo market cards", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الانتقالات");
+    await expect(page.locator(".transfer-window-card")).toContainText("الصيفية");
+    await expect(page.locator(".market-preview-notice")).toHaveCount(0);
+    await expect(page.locator(".transfer-empty-clients")).toBeVisible();
+    await hasNoHorizontalOverflow(page);
+  });
+
   test("navigates through all six primary screens", async ({ page }) => {
     await page.goto("/");
     const screens = [
@@ -110,7 +119,7 @@ test.describe("Desktop experience", () => {
     await expect(page.locator(".football-screen")).toHaveCount(0);
     await page.getByRole("button", { name: "حفظ المسيرة" }).click();
     const firstSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(firstSave.meta.version).toBe(6);
+    expect(firstSave.meta.version).toBe(7);
     expect(firstSave.world.football.fixtures.length).toBeGreaterThan(0);
 
     await navigateTo(page, "المباريات");
@@ -160,7 +169,7 @@ test.describe("Desktop experience", () => {
     await modal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
 
     let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(saved.meta.version).toBe(6);
+    expect(saved.meta.version).toBe(7);
     expect(saved.agency.representation.offers).toHaveLength(1);
     expect(saved.agency.representation.offers[0].status).toBe("pending");
     expect(saved.agency.clients).toHaveLength(0);
@@ -460,21 +469,63 @@ test.describe("Desktop experience", () => {
     await expect(trigger).toBeFocused();
   });
 
-  test("opens a transfer preview and closes it by clicking outside", async ({ page }) => {
+  test("shows the live transfer workspace and empty deal history", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الانتقالات");
-    await page.locator(".market-card").first().getByRole("button", { name: "التفاصيل" }).click();
-    await expect(page.getByRole("dialog", { name: "فرصة انتقال تجريبية" })).toBeVisible();
-    await page.locator(".modal-overlay").click({ position: { x: 5, y: 5 } });
-    await expect(page.locator(".modal-overlay")).toHaveCount(0);
+    await expect(page.locator(".transfer-window-card")).toBeVisible();
+    await expect(page.locator(".transfer-proposal-panel")).toBeVisible();
+    await expect(page.locator(".transfer-list-panel")).toBeVisible();
+    await expect(page.locator(".transfer-moves-panel")).toBeVisible();
+    await expect(page.locator(".transfer-deal-card")).toHaveCount(0);
+    await hasNoHorizontalOverflow(page);
   });
 
-  test("labels all market cards as illustrative preview data", async ({ page }) => {
+  test("completes a permanent transfer from an active agency mandate", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+    const modal = page.locator(".modal-overlay");
+    await modal.getByLabel("نسبة العمولة").selectOption("15");
+    await modal.getByLabel("مدة العقد").selectOption("1095");
+    await modal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+    await page.locator(".representation-evaluate-button").click();
+    await page.locator(".representation-accept-button").click();
+
+    let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.agency.clients).toHaveLength(1);
+    const playerId = saved.agency.clients[0];
+
+    await navigateTo(page, "الانتقالات");
+    await expect(page.locator(".transfer-proposal-form")).toBeVisible();
+    await expect(page.getByLabel("لاعب الانتقال")).toHaveValue(playerId);
+    await page.getByLabel("الراتب الأسبوعي باليورو").fill("10000");
+    await page.getByLabel("مكافأة التوقيع باليورو").fill("50000");
+    await page.getByRole("button", { name: "إرسال العرض للنادي" }).click();
+
+    const deal = page.locator(".transfer-deal-card").first();
+    await expect(deal).toContainText("بانتظار رد النادي");
+    await deal.getByRole("button", { name: "محاكاة رد النادي" }).click();
+    await expect(page.locator(".transfer-status-agreed")).toBeVisible();
+
+    await page.locator(".transfer-status-agreed").getByRole("button", { name: "تنفيذ الصفقة" }).click();
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.meta.version).toBe(7);
+    expect(saved.world.transfers.offers[0].status).toBe("completed");
+    expect(saved.world.transfers.moves).toHaveLength(1);
+    expect(saved.world.transfers.moves[0].playerId).toBe(playerId);
+    expect(saved.world.transfers.ledger).toHaveLength(1);
+    expect(saved.world.transfers.earnedCommissionEur).toBeGreaterThan(0);
+    expect(saved.world.transfers.moves[0].toClubId).not.toBe(saved.world.transfers.moves[0].fromClubId);
+    await expect(page.locator(".transfer-move-row")).toContainText(saved.world.transfers.offers[0].playerName);
+    await hasNoHorizontalOverflow(page);
+  });
+
+  test("requires an active representation contract before offering a transfer", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الانتقالات");
-    await expect(page.locator(".market-preview-notice")).toContainText("ليست عروض انتقال حقيقية");
-    await expect(page.locator(".market-preview-state")).toHaveText("DEMO DATA");
-    await expect(page.locator(".market-card")).toHaveCount(3);
+    await expect(page.locator(".transfer-empty-clients")).toContainText("عقد تمثيل نشط");
+    await expect(page.locator(".transfer-proposal-form")).toHaveCount(0);
+    await expect(page.locator(".market-card, .market-preview-notice")).toHaveCount(0);
     await hasNoHorizontalOverflow(page);
   });
 });
@@ -489,6 +540,25 @@ test.describe("Mobile experience", () => {
     await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
     await expect(page.getByLabel("نسبة العمولة")).toBeVisible();
     await expect(page.getByLabel("مدة العقد")).toBeVisible();
+    await hasNoHorizontalOverflow(page);
+  });
+
+  test("keeps the transfer proposal form usable on mobile after signing a mandate", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+    const modal = page.locator(".modal-overlay");
+    await modal.getByLabel("نسبة العمولة").selectOption("15");
+    await modal.getByLabel("مدة العقد").selectOption("1095");
+    await modal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+    await page.locator(".representation-evaluate-button").click();
+    await page.locator(".representation-accept-button").click();
+
+    await navigateTo(page, "الانتقالات");
+    await expect(page.locator(".transfer-proposal-form")).toBeVisible();
+    await expect(page.getByLabel("لاعب الانتقال")).toBeVisible();
+    await expect(page.getByLabel("النادي المستهدف")).toBeVisible();
+    await expect(page.getByLabel("الراتب الأسبوعي باليورو")).toBeVisible();
     await hasNoHorizontalOverflow(page);
   });
 
@@ -636,7 +706,7 @@ test.describe("Mobile experience", () => {
     await page.getByRole("button", { name: "تأكيد إطلاق البعثة" }).click();
 
     const started = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(started.meta.version).toBe(6);
+    expect(started.meta.version).toBe(7);
     expect(started.agency.balance).toBe(95000);
     expect(started.world.scouting.activeMissions).toHaveLength(1);
     expect(started.world.scouting.activeMissions[0].sourceId).toBe("academy");
@@ -889,7 +959,7 @@ test.describe("Mobile experience", () => {
 
     await page.locator(".day-advance-button").click();
     let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(saved.meta.version).toBe(6);
+    expect(saved.meta.version).toBe(7);
     expect(saved.career.day).toBe(6);
     expect(saved.career.week).toBe(1);
     expect(saved.career.season).toBe(1);

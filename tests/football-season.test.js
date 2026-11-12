@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { WORLD_DATABASE, getWorldSummary, validateWorldDatabase } from "../src/data/world-database.js";
+import { WORLD_DATABASE, getWorldSummary, getWorldSquadPlayers, validateWorldDatabase } from "../src/data/world-database.js";
 import {
   buildSimulationTeam,
   generateSeasonFixtures,
@@ -26,6 +26,50 @@ test("builds complete 18-player fictional squads and starting XIs without emerge
   assert.equal(new Set(team.lineup.map((player) => player.id)).size, 11);
   assert.ok(team.lineup.every((player) => player.simulationOnly === false));
   assert.equal(new Set(team.squad.map((player) => player.id)).size, 18);
+});
+
+test("moves permanent and loaned players between matchday squads using saved transfer records", () => {
+  const [sourceClub, destinationClub] = WORLD_DATABASE.clubs;
+  const player = getWorldSquadPlayers().find((candidate) =>
+    candidate.clubId === sourceClub.id && candidate.role === "هجوم"
+  );
+  assert.ok(player, "source club must provide a test player");
+
+  const permanentTransfers = {
+    moves: [{
+      id: "transfer-move-test-permanent",
+      playerId: player.id,
+      type: "permanent",
+      status: "active",
+      effectiveDate: "2026-07-01",
+      toClubId: destinationClub.id
+    }]
+  };
+  const sourceAfterPermanent = buildSimulationTeam(sourceClub.id, WORLD_DATABASE, null, permanentTransfers, "2026-07-02");
+  const destinationAfterPermanent = buildSimulationTeam(destinationClub.id, WORLD_DATABASE, null, permanentTransfers, "2026-07-02");
+  assert.equal(sourceAfterPermanent.squad.some((member) => member.id === player.id), false);
+  assert.equal(destinationAfterPermanent.squad.some((member) => member.id === player.id), true);
+
+  const activeLoan = {
+    moves: [{
+      id: "transfer-move-test-loan",
+      playerId: player.id,
+      type: "loan",
+      status: "active",
+      effectiveDate: "2026-07-01",
+      toClubId: destinationClub.id
+    }]
+  };
+  const sourceDuringLoan = buildSimulationTeam(sourceClub.id, WORLD_DATABASE, null, activeLoan, "2026-07-02");
+  const destinationDuringLoan = buildSimulationTeam(destinationClub.id, WORLD_DATABASE, null, activeLoan, "2026-07-02");
+  assert.equal(sourceDuringLoan.squad.some((member) => member.id === player.id), false);
+  assert.equal(destinationDuringLoan.squad.some((member) => member.id === player.id), true);
+
+  const returnedLoan = { moves: [{ ...activeLoan.moves[0], status: "returned" }] };
+  const sourceAfterLoan = buildSimulationTeam(sourceClub.id, WORLD_DATABASE, null, returnedLoan, "2027-01-01");
+  const destinationAfterLoan = buildSimulationTeam(destinationClub.id, WORLD_DATABASE, null, returnedLoan, "2027-01-01");
+  assert.equal(sourceAfterLoan.squad.some((member) => member.id === player.id), true);
+  assert.equal(destinationAfterLoan.squad.some((member) => member.id === player.id), false);
 });
 
 test("preserves 18-player squad composition, identity and portrait coverage for all clubs", () => {

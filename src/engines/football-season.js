@@ -1,5 +1,6 @@
 import { WORLD_DATABASE, getWorldSquadPlayers } from "../data/world-database.js";
 import { simulateMatch } from "./match-simulation.js";
+import { getPlayerCurrentClubId } from "./transfers.js";
 import {
   createInitialPlayerDevelopmentState,
   advancePlayerDevelopmentDay,
@@ -79,7 +80,7 @@ function createRoundRobinRounds(clubIds) {
  * explicitly marked anonymous simulation-only players, never inserted into
  * the searchable world-player database.
  */
-export function buildSimulationTeam(clubId, database = WORLD_DATABASE, playerDevelopment = null) {
+export function buildSimulationTeam(clubId, database = WORLD_DATABASE, playerDevelopment = null, transferState = null, currentDate = "2026-07-01") {
   const club = database.clubs.find((item) => item.id === clubId);
   if (!club) throw new TypeError("النادي غير موجود في قاعدة العالم: " + clubId);
 
@@ -87,7 +88,7 @@ export function buildSimulationTeam(clubId, database = WORLD_DATABASE, playerDev
     .filter((player) => player.injuryDays > 0)
     .map((player) => player.playerId));
   const realPlayers = getWorldSquadPlayers(database)
-    .filter((player) => player.clubId === clubId && !injuredPlayerIds.has(player.id))
+    .filter((player) => getPlayerCurrentClubId(player.id, player.clubId, transferState, currentDate, database) === clubId && !injuredPlayerIds.has(player.id))
     .sort((a, b) => b.rating - a.rating || compareText(a.id, b.id));
   const unused = new Set(realPlayers.map((player) => player.id));
   const lineup = ROLE_SLOTS.map((role, slotIndex) => {
@@ -268,7 +269,7 @@ function createMatchEvent(result, fixture) {
  * Processes fixtures on the exact in-game date. A fixture is marked played
  * only after its result has been computed and is appended exactly once.
  */
-export function advanceFootballSeasonDay(state, currentDate, season, database = WORLD_DATABASE) {
+export function advanceFootballSeasonDay(state, currentDate, season, database = WORLD_DATABASE, transferState = null) {
   if (!isRecord(state) || !Array.isArray(state.fixtures) ||
       !Array.isArray(state.results) || !dateValue(currentDate) ||
       !Number.isSafeInteger(season) || season < state.season) {
@@ -300,8 +301,8 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
   const matchMessages = [];
 
   for (const fixture of todayFixtures) {
-    const home = buildSimulationTeam(fixture.homeClubId, database, playerDevelopment);
-    const away = buildSimulationTeam(fixture.awayClubId, database, playerDevelopment);
+    const home = buildSimulationTeam(fixture.homeClubId, database, playerDevelopment, transferState, currentDate);
+    const away = buildSimulationTeam(fixture.awayClubId, database, playerDevelopment, transferState, currentDate);
     const simulated = simulateMatch({
       id: fixture.id,
       date: fixture.date,
