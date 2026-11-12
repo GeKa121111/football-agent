@@ -134,3 +134,69 @@ test("rejects invalid multi-day advances and missing scouting data without modif
   assert.throws(() => advanceCareerSimulationDay(save, null), /قاعدة لاعبي الكشافة/);
   assert.equal(save.world.currentDate, "2026-07-01");
 });
+
+
+test("runs agency payroll on the shared Monday career tick", () => {
+  const initial = createInitialSave();
+  const hired = startAgencyEmployee(initial);
+  const weeklySalary = hired.save.agency.management.staff[0].weeklySalaryEgp;
+  const advanced = advanceCareerSimulationDays(hired.save, 7, PLAYERS);
+
+  assert.equal(advanced.save.world.currentDate, "2026-07-08");
+  assert.equal(advanced.save.agency.management.lastPayrollDate, "2026-07-06");
+  const payroll = advanced.save.agency.management.ledger.find((entry) =>
+    entry.type === "weekly-operations" && entry.date === "2026-07-06"
+  );
+  assert.ok(payroll);
+  assert.equal(payroll.amountEgp, weeklySalary);
+  assert.equal(payroll.paidEgp, weeklySalary);
+  assert.equal(advanced.save.agency.balance, hired.save.agency.balance - weeklySalary);
+  assert.equal(isValidSave(advanced.save), true);
+});
+
+function startAgencyEmployee(save) {
+  const role = "analyst";
+  const state = save.agency.management;
+  const job = { id: role };
+  // Keep this integration test focused on the shared time loop; the dedicated
+  // agency-management suite validates the exact catalog price and role rules.
+  const salary = 1450;
+  const hiringCost = 7500;
+  const employee = {
+    id: "agency-staff-" + state.nextStaffSequence,
+    roleId: job.id,
+    name: "محلل أداء",
+    hiredDate: save.world.currentDate,
+    hiringCostEgp: hiringCost,
+    weeklySalaryEgp: salary,
+    status: "active",
+    terminatedDate: null
+  };
+  const entry = {
+    id: "agency-ledger-" + state.nextLedgerSequence,
+    date: save.world.currentDate,
+    type: "hiring",
+    referenceId: employee.id,
+    amountEgp: hiringCost,
+    paidEgp: hiringCost,
+    arrearsAfterEgp: state.arrearsEgp,
+    note: "تكلفة تعيين محلل أداء"
+  };
+  const management = {
+    ...state,
+    nextStaffSequence: state.nextStaffSequence + 1,
+    nextLedgerSequence: state.nextLedgerSequence + 1,
+    staff: [employee],
+    ledger: [entry]
+  };
+  const updated = {
+    ...save,
+    agency: {
+      ...save.agency,
+      balance: save.agency.balance - hiringCost,
+      management
+    }
+  };
+  assert.equal(isValidSave(updated), true);
+  return { save: updated };
+}
