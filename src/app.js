@@ -931,7 +931,17 @@ function renderFootball(context) {
   playerSelect.setAttribute("aria-label", "لاعب خطة التدريب");
   developmentPlayers.forEach((player) => {
     const worldProfile = WORLD_PLAYERS.find((item) => item.id === player.playerId);
-    const option = node("option", "", player.playerName + " · " + (worldProfile?.club ?? player.clubId));
+    const fallbackClubId = worldProfile?.clubId ?? player.clubId;
+    const currentClubId = getPlayerCurrentClubId(
+      player.playerId,
+      fallbackClubId,
+      context.save.world.transfers,
+      context.save.world.currentDate
+    );
+    const currentClubName = currentClubId
+      ? clubById.get(currentClubId)?.nameAr ?? worldProfile?.club ?? currentClubId
+      : "لاعب حر";
+    const option = node("option", "", player.playerName + " · " + currentClubName);
     option.value = player.playerId;
     playerSelect.append(option);
   });
