@@ -143,6 +143,63 @@ test("player accepts an offer that fits the player's commission and term limits"
   assert.equal(isValidSave(response.save), true);
 });
 
+test("rejects retroactive representation replies and interactions dated before a mandate", () => {
+  const save = createInitialSave();
+  const sent = sendOffer(save);
+  const beforeOfferDate = "2026-06-30";
+
+  const retroactiveEvaluation = evaluateRepresentationOffer(
+    sent.save, sent.offer.id, beforeOfferDate
+  );
+  assert.equal(retroactiveEvaluation.changed, false);
+  assert.equal(retroactiveEvaluation.save, sent.save);
+
+  const counter = evaluateRepresentationOffer(sent.save, sent.offer.id);
+  assert.equal(counter.status, "countered");
+  const agencyReply = submitRepresentationCounterOffer(
+    counter.save,
+    sent.offer.id,
+    { commissionRate: 8, termDays: 365 },
+    beforeOfferDate
+  );
+  assert.equal(agencyReply.changed, false);
+  assert.equal(agencyReply.save, counter.save);
+
+  const retroactiveAcceptance = acceptRepresentationCounterOffer(
+    counter.save, sent.offer.id, beforeOfferDate
+  );
+  assert.equal(retroactiveAcceptance.changed, false);
+  assert.equal(retroactiveAcceptance.save, counter.save);
+
+  const retroactiveRejection = rejectRepresentationOffer(
+    counter.save, sent.offer.id, beforeOfferDate
+  );
+  assert.equal(retroactiveRejection.changed, false);
+  assert.equal(retroactiveRejection.save, counter.save);
+
+  const profile = player({
+    id: "retroactive-interaction-player",
+    age: 22,
+    rating: 68,
+    potential: 80
+  });
+  const preferences = getPlayerRepresentationProfile(profile);
+  const compatibleOffer = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays
+  });
+  const signed = evaluateRepresentationOffer(compatibleOffer.save, compatibleOffer.offer.id);
+  assert.equal(signed.status, "signed");
+
+  const retroactiveMessage = createRepresentationInteraction(
+    signed.save, signed.contract.id, "message", null, beforeOfferDate
+  );
+  assert.equal(retroactiveMessage.changed, false);
+  assert.equal(retroactiveMessage.save, signed.save);
+  assert.equal(isValidSave(signed.save), true);
+});
+
+
 test("agency can decline a counteroffer without creating a client", () => {
   const sent = sendOffer(createInitialSave());
   const counter = evaluateRepresentationOffer(sent.save, sent.offer.id);
