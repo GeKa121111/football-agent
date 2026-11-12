@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { WORLD_DATABASE, getWorldSummary, getWorldSquadPlayers, validateWorldDatabase } from "../src/data/world-database.js";
+import { buildCompetitionGroups } from "../src/data/competition-rules.js";
 import { createInitialPlayerDevelopmentState } from "../src/engines/player-development.js";
 import {
   buildSimulationTeam,
@@ -131,14 +132,67 @@ test("generates deterministic home-and-away fixtures for all seeded competitions
   assert.deepEqual(first, second);
   assert.equal(new Set(first.map((fixture) => fixture.id)).size, first.length);
   const expected = WORLD_DATABASE.competitions.reduce((sum, competition) => {
-    const count = competition.clubIds.length;
-    return sum + count * (count - 1);
+    if (competition.type === "league") {
+      const count = competition.clubIds.length;
+      return sum + count * (count - 1);
+    }
+    return sum + buildCompetitionGroups(competition, WORLD_DATABASE).reduce((groupTotal, group) => {
+      const count = group.clubIds.length;
+      return groupTotal + count * (count - 1);
+    }, 0);
   }, 0);
   assert.equal(first.length, expected);
   for (const fixture of first) {
     assert.equal(fixture.status, "scheduled");
     assert.equal(fixture.resultId, null);
+    const competition = WORLD_DATABASE.competitions.find((item) => item.id === fixture.competitionId);
+    if (competition.type === "continental") {
+      const group = buildCompetitionGroups(competition, WORLD_DATABASE).find((item) => item.id === fixture.groupId);
+      assert.ok(group, "continental fixture must reference a known group");
+      assert.ok(group.clubIds.includes(fixture.homeClubId));
+      assert.ok(group.clubIds.includes(fixture.awayClubId));
+    } else {
+      assert.equal(fixture.groupId, null);
+    }
   }
+});
+
+test("keeps continental matches inside deterministic groups and exposes group-specific tables", () => {
+  const competition = WORLD_DATABASE.competitions.find((item) => item.type === "continental");
+  const groups = buildCompetitionGroups(competition, WORLD_DATABASE);
+  const fixtures = generateSeasonFixtures(1, "2026-07-01")
+    .filter((fixture) => fixture.competitionId === competition.id);
+
+  for (const group of groups) {
+    const groupFixtures = fixtures.filter((fixture) => fixture.groupId === group.id);
+    const expectedMatches = group.clubIds.length * (group.clubIds.length - 1);
+    assert.equal(groupFixtures.length, expectedMatches);
+    const pairCounts = new Map();
+    for (const fixture of groupFixtures) {
+      const pair = [fixture.homeClubId, fixture.awayClubId].sort().join("|");
+      pairCounts.set(pair, (pairCounts.get(pair) ?? 0) + 1);
+    }
+    assert.equal(pairCounts.size, group.clubIds.length * (group.clubIds.length - 1) / 2);
+    assert.ok([...pairCounts.values()].every((count) => count === 2));
+  }
+
+  const group = groups[0];
+  const [homeClubId, awayClubId] = group.clubIds;
+  const state = {
+    season: 1,
+    results: [{
+      competitionId: competition.id,
+      groupId: group.id,
+      season: 1,
+      home: { clubId: homeClubId, goals: 2 },
+      away: { clubId: awayClubId, goals: 1 }
+    }]
+  };
+  const table = getCompetitionStandings(state, competition.id, WORLD_DATABASE, 1, group.id);
+  assert.equal(table.length, group.clubIds.length);
+  assert.ok(table.every((row) => group.clubIds.includes(row.clubId)));
+  assert.equal(table[0].clubId, homeClubId);
+  assert.equal(getCompetitionStandings(state, competition.id, WORLD_DATABASE, 1, "missing-group").length, 0);
 });
 
 test("keeps club match dates separated by a minimum rest window", () => {
