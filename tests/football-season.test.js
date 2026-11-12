@@ -190,6 +190,20 @@ test("generates and completes a seeded knockout cup with automatic rounds and a 
   assert.equal(history.length, 1);
   assert.equal(history[0].complete, true);
   assert.ok(competition.clubIds.includes(history[0].championClubId));
+
+  const archived = advanceFootballSeasonDay(football, "2027-07-01", 2, database).football;
+  const savedCupArchive = archived.archives.find((archive) => archive.competitionId === competition.id);
+  assert.equal(savedCupArchive.complete, true);
+  assert.equal(savedCupArchive.championClubId, history[0].championClubId);
+  assert.equal(isValidFootballState(archived, "2027-07-01", 2, database), true);
+
+  const corrupted = {
+    ...archived,
+    results: archived.results.map((result) => result.competitionId === competition.id
+      ? { ...result, knockoutDecision: { ...result.knockoutDecision, winnerClubId: "club-not-in-match" } }
+      : result)
+  };
+  assert.equal(isValidFootballState(corrupted, "2027-07-01", 2, database), false);
 });
 
 test("keeps continental matches inside deterministic groups and exposes group-specific tables", () => {
