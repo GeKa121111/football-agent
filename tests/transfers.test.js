@@ -669,3 +669,68 @@ test("uses only the borrowing club's wage share for the loan wage ceiling", () =
   assert.equal(agreed.status, "agreed");
   assert.equal(completeTransfer(agreed.save, sent.offer.id, "2026-07-01", database).changed, true);
 });
+
+
+test("checks only the additional wage commitment when a loan becomes permanent", () => {
+  const terms = { ...loanTerms, weeklyWageEur: 60_000, wageSharePercent: 75 };
+  const sent = send(makeSave(), "loan", terms);
+  const agreed = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
+  assert.equal(agreed.status, "agreed");
+  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-01", database);
+  assert.equal(completed.changed, true);
+
+  const purchased = exerciseLoanOption(completed.save, completed.move.id, "2026-07-02", database);
+  assert.equal(purchased.changed, true);
+  assert.equal(purchased.move.weeklyWageEur, 60_000);
+  assert.equal(purchased.move.performanceTrackingStartDate, "2026-07-01");
+});
+
+test("continues counting unearned appearance milestones after a loan purchase", () => {
+  const terms = {
+    ...loanTerms,
+    appearanceBonus: { appearances: 2, amountEur: 25_000 }
+  };
+  const sent = send(makeSave(), "loan", terms);
+  const agreed = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
+  assert.equal(agreed.status, "agreed");
+  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-01", database);
+  assert.equal(completed.changed, true);
+
+  const firstMatch = {
+    date: "2026-07-02",
+    playerPerformances: [{
+      playerId: "player-1", playerName: "لاعب تجريبي", clubId: "club-target",
+      minutesPlayed: 90, goals: 0
+    }]
+  };
+  const firstSettlement = settleTransferPerformanceBonuses({
+    ...completed.save,
+    world: { ...completed.save.world, football: { results: [firstMatch] } }
+  }, "2026-07-02", database);
+  assert.equal(firstSettlement.paidBonuses.length, 0);
+
+  const purchased = exerciseLoanOption(
+    firstSettlement.save, completed.move.id, "2026-07-03", database
+  );
+  assert.equal(purchased.changed, true);
+  assert.equal(purchased.move.performanceTrackingStartDate, "2026-07-01");
+
+  const secondMatch = {
+    date: "2026-07-04",
+    playerPerformances: [{
+      playerId: "player-1", playerName: "لاعب تجريبي", clubId: "club-target",
+      minutesPlayed: 90, goals: 0
+    }]
+  };
+  const secondSettlement = settleTransferPerformanceBonuses({
+    ...purchased.save,
+    world: {
+      ...purchased.save.world,
+      football: { results: [firstMatch, secondMatch] }
+    }
+  }, "2026-07-04", database);
+  assert.equal(secondSettlement.paidBonuses.length, 1);
+  assert.equal(secondSettlement.paidBonuses[0].type, "appearance");
+  assert.equal(secondSettlement.save.world.transfers.financeLedger
+    .filter((entry) => entry.type === "performance-bonus").length, 1);
+});
