@@ -419,16 +419,19 @@ export function exerciseLoanOption(save, moveId, currentDate = save?.world?.curr
     save: { ...save, world: { ...save.world, transfers: next } } };
 }
 
-export function advanceTransferState(save, currentDate = save?.world?.currentDate) {
+export function advanceTransferState(save, currentDate = save?.world?.currentDate, database = WORLD_DATABASE) {
   const state = save?.world?.transfers;
-  if (!isRecord(state) || !isTransferCalendarDate(currentDate)) return { save, expiredOffers: [], returnedLoans: [] };
+  if (!isRecord(state) || !isTransferCalendarDate(currentDate))
+    return { save, expiredOffers: [], returnedLoans: [], expiredContracts: [] };
   let nextSave = save;
   const expiredOffers = [];
   const returnedLoans = [];
   for (const offer of state.offers) {
-    const agreedWindow = offer.status === "agreed" ? getTransferWindow(offer.agreedDate).window : null;
-    const agreementMissedWindow = offer.status === "agreed" && (!agreedWindow || currentDate > agreedWindow.endDate);
-    const offerWindow = getTransferWindow(offer.createdDate).window;
+    const agreedWindow = offer.status === "agreed"
+      ? getTransferWindow(offer.agreedDate, offer.toClubId, database).window : null;
+    const agreementMissedWindow = offer.status === "agreed" &&
+      (!agreedWindow || currentDate > agreedWindow.endDate);
+    const offerWindow = getTransferWindow(offer.createdDate, offer.toClubId, database).window;
     const offerWindowClosed = !offerWindow || currentDate > offerWindow.endDate;
     const mandateEnded = ["pending", "countered", "agreed"].includes(offer.status) &&
       !getActiveRepresentationContract(nextSave, offer.playerId, currentDate);
@@ -440,19 +443,61 @@ export function advanceTransferState(save, currentDate = save?.world?.currentDat
       expiredOffers.push(offer.id);
     }
   }
+
   let next = nextSave.world.transfers;
-  for (const move of next.moves) {
+  for (const move of [...next.moves]) {
     if (move.type === "loan" && move.status === "active" && currentDate >= move.returnDate) {
-      next = { ...next, moves: next.moves.map((item) => item.id === move.id ? { ...item, status: "returned", returnedDate: currentDate } : item) };
-      next = { ...next, history: [{ id: "transfer-history-" + next.nextHistorySequence,
-        type: "loan-returned", offerId: move.offerId, moveId: move.id, playerId: move.playerId,
-        playerName: move.playerName, date: currentDate, note: "انتهت مدة الإعارة وعاد اللاعب إلى ناديه الأصلي." },
-        ...next.history].slice(0, MAX_TRANSFER_HISTORY), nextHistorySequence: next.nextHistorySequence + 1 };
+      next = { ...next, moves: next.moves.map((item) =>
+        item.id === move.id ? { ...item, status: "returned", returnedDate: currentDate } : item) };
+      next = { ...next, history: [{
+        id: "transfer-history-" + next.nextHistorySequence,
+        type: "loan-returned", offerId: move.offerId, moveId: move.id,
+        playerId: move.playerId, playerName: move.playerName, date: currentDate,
+        note: "انتهت مدة الإعارة وعاد اللاعب إلى ناديه الأصلي."
+      }, ...next.history].slice(0, MAX_TRANSFER_HISTORY), nextHistorySequence: next.nextHistorySequence + 1 };
       returnedLoans.push(move.id);
     }
   }
-  if (next !== nextSave.world.transfers) nextSave = { ...nextSave, world: { ...nextSave.world, transfers: next } };
-  return { save: nextSave, expiredOffers, returnedLoans };
+
+  const expiredContracts = [];
+  for (const move of [...next.moves]) {
+    if (move.type !== "permanent" || move.status !== "active" ||
+        !isTransferCalendarDate(move.contractEndDate) || currentDate < move.contractEndDate) continue;
+    next = { ...next, moves: next.moves.map((item) =>
+      item.id === move.id ? { ...item, status: "expired", expiredDate: currentDate } : item) };
+    const before = next.freeAgents.length;
+    next = appendFreeAgent(next, move.playerId, move.contractEndDate, move.toClubId, move.id);
+    if (next.freeAgents.length > before) {
+      expiredContracts.push(move.playerId);
+      const originalOffer = next.offers.find((item) => item.id === move.offerId);
+      if (originalOffer && next.history.length < MAX_TRANSFER_HISTORY)
+        next = appendHistory(next, "contract-expired", originalOffer, currentDate,
+          "انتهى العقد الاحترافي وأصبح اللاعب حرًا.", { moveId: move.id });
+    }
+  }
+
+  // Seed player contracts also expire. A loan delays free agency until the player returns.
+  for (const player of [...(database.players ?? []), ...(database.squadPlayers ?? [])]) {
+    if (!isTransferCalendarDate(player.contractUntil) || currentDate < player.contractUntil ||
+        next.freeAgents.some((item) => item.playerId === player.id)) continue;
+    const hasPermanentMove = next.moves.some((move) =>
+      move.playerId === player.id && move.type === "permanent" && move.effectiveDate <= currentDate
+    );
+    const hasActiveLoan = next.moves.some((move) =>
+      move.playerId === player.id && move.type === "loan" &&
+      move.status === "active" && currentDate < move.returnDate
+    );
+    if (!hasPermanentMove && !hasActiveLoan) {
+      const previousClubId = player.clubId ?? FREE_AGENT_CLUB_ID;
+      const before = next.freeAgents.length;
+      next = appendFreeAgent(next, player.id, player.contractUntil, previousClubId, null);
+      if (next.freeAgents.length > before) expiredContracts.push(player.id);
+    }
+  }
+
+  if (next !== nextSave.world.transfers)
+    nextSave = { ...nextSave, world: { ...nextSave.world, transfers: next } };
+  return { save: nextSave, expiredOffers, returnedLoans, expiredContracts };
 }
 
 export function isValidTransferState(state, currentDate, clients = [], representation = null) {
