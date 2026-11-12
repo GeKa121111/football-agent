@@ -525,6 +525,47 @@ test.describe("Desktop experience", () => {
     await expect(trigger).toBeFocused();
   });
 
+  test("uses destination-league transfer windows instead of the shared calendar", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+    const modal = page.locator(".modal-overlay");
+    await modal.getByLabel("نسبة العمولة").selectOption("15");
+    await modal.getByLabel("مدة العقد").selectOption("1095");
+    await modal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+    await page.locator(".representation-evaluate-button").click();
+    await page.locator(".representation-accept-button").click();
+
+    const save = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const prepared = advanceSaveToDate(save, "2026-09-01");
+    expect(isValidSave(prepared)).toBe(true);
+    const playerId = prepared.agency.clients[0];
+    const player = [...WORLD_DATABASE.players, ...WORLD_DATABASE.squadPlayers]
+      .find((item) => item.id === playerId);
+    const openDestination = WORLD_DATABASE.clubs.find((club) =>
+      club.leagueId === "league-eg-premier" && club.id !== player?.clubId
+    );
+    const closedDestination = WORLD_DATABASE.clubs.find((club) =>
+      club.leagueId === "league-eng-premier" && club.id !== player?.clubId
+    );
+    expect(openDestination).toBeTruthy();
+    expect(closedDestination).toBeTruthy();
+
+    await page.evaluate((nextSave) => {
+      localStorage.setItem("football-agent.save", JSON.stringify(nextSave));
+    }, prepared);
+    await page.reload();
+    await navigateTo(page, "الانتقالات");
+
+    await expect(page.locator(".transfer-window-card")).toHaveClass(/is-open/);
+    const destinationSelect = page.getByLabel("النادي المستهدف");
+    await expect(destinationSelect).toBeVisible();
+    await expect(destinationSelect.locator('option[value="' + openDestination.id + '"]')).toHaveCount(1);
+    await expect(destinationSelect.locator('option[value="' + closedDestination.id + '"]')).toHaveCount(0);
+    await destinationSelect.selectOption(openDestination.id);
+    await hasNoHorizontalOverflow(page);
+  });
+
   test("shows the live transfer workspace and empty deal history", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الانتقالات");
