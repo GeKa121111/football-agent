@@ -771,6 +771,10 @@ export function isValidFootballState(state, currentDate, season, database = WORL
   const clubIds = new Set(database.clubs.map((club) => club.id));
   const competitionById = new Map(database.competitions.map((competition) => [competition.id, competition]));
   const competitionIds = new Set(competitionById.keys());
+  const participantIdsByCompetition = new Map([...competitionById].map(([competitionId, competition]) => [
+    competitionId,
+    new Set(competition.clubIds)
+  ]));
   const groupIdsByCompetition = new Map([...competitionById].map(([competitionId, competition]) => [
     competitionId,
     new Map(buildCompetitionGroups(competition, database).map((group) => [group.id, new Set(group.clubIds)]))
@@ -780,6 +784,8 @@ export function isValidFootballState(state, currentDate, season, database = WORL
     isRecord(fixture) &&
     Number.isSafeInteger(fixture.season) && fixture.season >= 1 && fixture.season <= season &&
     competitionIds.has(fixture.competitionId) &&
+    participantIdsByCompetition.get(fixture.competitionId)?.has(fixture.homeClubId) &&
+    participantIdsByCompetition.get(fixture.competitionId)?.has(fixture.awayClubId) &&
     (fixture.groupId === undefined || fixture.groupId === null ||
       groupIdsByCompetition.get(fixture.competitionId)?.get(fixture.groupId)?.has(fixture.homeClubId) &&
       groupIdsByCompetition.get(fixture.competitionId)?.get(fixture.groupId)?.has(fixture.awayClubId)) &&
