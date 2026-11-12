@@ -93,6 +93,41 @@ test("weekly progression processes due agency responses and scouting reports on 
   assert.equal(isValidSave(advanced.save), true);
 });
 
+test("refreshes scouting player data on each day and uses the latest development snapshot", () => {
+  const initial = createInitialSave();
+  const mission = startScoutingMission(initial, {
+    type: "local",
+    countryId: "country-eg",
+    role: "هجوم",
+    sourceId: "academy"
+  }, PLAYERS);
+  assert.equal(mission.changed, true, mission.error);
+
+  const providerDates = [];
+  const advanced = advanceCareerSimulationDays(mission.save, 7, (currentSave) => {
+    providerDates.push(currentSave.world.currentDate);
+    return PLAYERS.map((player) => player.id === "demo-yassin-adel" &&
+      currentSave.world.currentDate === mission.mission.dueDate
+      ? { ...player, rating: 99, potential: 99 }
+      : player);
+  });
+
+  assert.deepEqual(providerDates, [
+    "2026-07-02", "2026-07-03", "2026-07-04", "2026-07-05",
+    "2026-07-06", "2026-07-07", "2026-07-08"
+  ]);
+  const report = advanced.save.world.scouting.reports.find((item) =>
+    item.missionId === mission.mission.id
+  );
+  assert.ok(report);
+  assert.equal(report.findings.length, 1);
+  assert.equal(report.findings[0].playerId, "demo-yassin-adel");
+  assert.ok(report.findings[0].estimatedRating >= 96);
+  assert.equal(Number.isInteger(report.findings[0].estimatedRating), true);
+  assert.equal(Number.isInteger(report.findings[0].estimatedPotential), true);
+  assert.equal(isValidSave(advanced.save), true);
+});
+
 test("rejects invalid multi-day advances and missing scouting data without modifying the input", () => {
   const save = createInitialSave();
   assert.throws(() => advanceCareerSimulationDays(save, 0, PLAYERS), /من يوم واحد إلى 31 يومًا/);
