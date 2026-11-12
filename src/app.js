@@ -71,7 +71,10 @@ import {
   getTransferWindow,
   getPlayerCurrentClubId
 } from "./engines/transfers.js";
-import { getClubTransferFinancials } from "./engines/club-transfer-rules.js";
+import {
+  getClubRegistrationStatus,
+  getClubTransferFinancials
+} from "./engines/club-transfer-rules.js";
 import {
   completeCareerTask as completeTaskInEngine,
   markCareerMessageRead,
@@ -1509,7 +1512,17 @@ function renderMarket(context) {
         ? getPlayerCurrentClubId(selectedPlayer.id, selectedPlayer.clubId, transferState, currentDate)
         : null;
       const openClubs = WORLD_DATABASE.clubs.filter((club) =>
-        club.id !== fromClubId && getTransferWindow(currentDate, club.id).active
+        club.id !== fromClubId &&
+        getTransferWindow(currentDate, club.id).active &&
+        getClubRegistrationStatus(
+          club.id,
+          selectedPlayer.id,
+          transferState,
+          currentDate,
+          WORLD_DATABASE,
+          typeSelect.value,
+          competitionSelect.value
+        ).eligible
       );
       clubSelect.replaceChildren();
       openClubs.forEach((club) => {
@@ -1554,10 +1567,14 @@ function renderMarket(context) {
       amountInput.value = String(isLoan ? Math.round(marketValue * 0.02) : isFreeAgent ? 0 : marketValue);
     };
     playerSelect.addEventListener("change", () => {
-      refreshDestinationClubs();
       refreshTerms();
+      refreshDestinationClubs();
     });
-    typeSelect.addEventListener("change", refreshTerms);
+    typeSelect.addEventListener("change", () => {
+      refreshTerms();
+      refreshDestinationClubs();
+    });
+    competitionSelect.addEventListener("change", refreshDestinationClubs);
     refreshDestinationClubs();
     refreshTerms();
 
