@@ -348,7 +348,9 @@ export function advanceKnockoutRound(competition, season, fixtures, results, dat
   }
 
   const groupFixtures = competitionFixtures.filter((fixture) => fixture.groupId);
-  const knockoutFixtures = competitionFixtures.filter((fixture) => !fixture.groupId);
+  const knockoutFixtures = competitionFixtures.filter((fixture) =>
+    !fixture.groupId && fixture.legacyCompetitionMatch !== true
+  );
 
   if (hasGroupQualification && knockoutFixtures.length === 0) {
     if (groupFixtures.length === 0 || groupFixtures.some((fixture) => fixture.status !== "played")) {
