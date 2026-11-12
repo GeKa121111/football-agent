@@ -434,7 +434,7 @@ test.describe("Desktop experience", () => {
     await expect(dossier.locator(".representation-dossier-hero h3")).toHaveText(contract.playerName);
     await expect(dossier.getByRole("heading", { name: "العلاقة والثقة" })).toBeVisible();
     await expect(dossier.getByRole("heading", { name: "العقد الحالي" })).toBeVisible();
-    await expect(dossier.locator(".representation-dossier-stat")).toHaveCount(6);
+    await expect(dossier.locator(".representation-dossier-stat")).toHaveCount(7);
     await expect(dossier.getByText(/تمثيل حصري|تمثيل غير حصري/).first()).toBeVisible();
     await expect(dossier.getByRole("heading", { name: "الرسائل والاجتماعات" })).toBeVisible();
     await expect(dossier.getByText("بانتظار الرد").first()).toBeVisible();
@@ -1741,4 +1741,42 @@ test.describe("Agency operations management", () => {
     await expect(panel).toContainText("سجل مصروفات الإدارة");
     await hasNoHorizontalOverflow(page);
   });
+});
+
+test("negotiates a signing bonus and displays it without charging the agency", async ({ page }) => {
+  await page.goto("/");
+  await navigateTo(page, "الوكالة");
+  await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+
+  const offerModal = page.locator(".modal-overlay");
+  await offerModal.getByLabel("نسبة العمولة").selectOption("15");
+  await offerModal.getByLabel("مدة العقد").selectOption("1095");
+  await offerModal.getByLabel("مكافأة التوقيع").selectOption("100000");
+  await offerModal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+
+  await page.locator(".representation-evaluate-button").click();
+  await page.locator(".representation-counter-button").click();
+
+  const savedAfterPlayerCounter = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+  const offer = savedAfterPlayerCounter.agency.representation.offers[0];
+  const counterModal = page.locator(".modal-overlay");
+  await counterModal.getByLabel("نسبة العمولة في العرض المضاد").selectOption(String(offer.playerPreferences.preferredCommissionRate));
+  await counterModal.getByLabel("مدة العرض المضاد").selectOption(String(offer.playerPreferences.preferredTermDays));
+  await counterModal.getByLabel("نوع التمثيل في العرض المضاد").selectOption(
+    offer.playerPreferences.prefersExclusive ? "exclusive" : "non-exclusive"
+  );
+  await counterModal.getByLabel("مكافأة التوقيع في العرض المضاد").selectOption("250000");
+  await counterModal.getByRole("button", { name: "إرسال العرض المضاد" }).click();
+
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+  const contract = saved.agency.representation.contracts[0];
+  expect(contract.signingBonus).toBe(250000);
+  expect(saved.agency.balance).toBe(100000);
+  expect(isValidSave(saved)).toBe(true);
+
+  await page.locator(".representation-client-dossier-button").first().click();
+  const dossier = page.locator(".representation-client-dossier");
+  await expect(dossier).toContainText(new Intl.NumberFormat("ar-EG").format(250000));
+  await expect(dossier).toContainText("ليست مبلغًا مدفوعًا");
+  await hasNoHorizontalOverflow(page);
 });
