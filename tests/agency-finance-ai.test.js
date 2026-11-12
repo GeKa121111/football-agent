@@ -131,7 +131,7 @@ test("legacy v8 agency state without sponsorship and competitor fields remains r
   delete save.agency.management.nextClubInterestSequence;
   assert.equal(isValidSave(save), true);
 
-  const advanced = advanceAgencyManagementDay(save, "2026-07-02", PLAYERS);
+  const advanced = advanceAgencyManagementDay(save, save.world.currentDate, PLAYERS);
   assert.equal(isValidSave(advanced.save), true);
   assert.ok(Array.isArray(advanced.save.agency.management.sponsorships));
   assert.equal(advanced.save.agency.management.competitors.length, 3);
