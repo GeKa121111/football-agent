@@ -337,6 +337,10 @@ test("migrates older saves by assigning legacy continental matches to valid grou
     })
   };
   delete legacy.archives;
+  legacy.playerDevelopment = {
+    ...legacy.playerDevelopment,
+    players: legacy.playerDevelopment.players.map(({ competitionStats, ...player }) => player)
+  };
 
   const nextDate = new Date(Date.parse(firstFixture.date + "T00:00:00.000Z") + 86400000)
     .toISOString().slice(0, 10);
