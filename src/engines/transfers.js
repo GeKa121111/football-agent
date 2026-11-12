@@ -130,13 +130,19 @@ function validTerms(type, terms) {
   if (type !== "loan" || !validMoney(terms.loanFeeEur) || !validMoney(terms.optionToBuyEur) ||
       !TRANSFER_LOAN_MONTHS.includes(terms.loanMonths)) return false;
   return (terms.mandatoryBuy === undefined || typeof terms.mandatoryBuy === "boolean") &&
-    (terms.mandatoryBuy !== true || terms.optionToBuyEur > 0) &&
+    (terms.mandatoryBuy !== true || (terms.optionToBuyEur > 0 && terms.recallable !== true)) &&
     (terms.mandatoryBuyContractYears === undefined || TRANSFER_CONTRACT_YEARS.includes(terms.mandatoryBuyContractYears)) &&
     (terms.recallable === undefined || typeof terms.recallable === "boolean") &&
     (terms.recallNoticeDays === undefined || VALID_RECALL_NOTICE_DAYS.has(terms.recallNoticeDays)) &&
     (terms.wageSharePercent === undefined ||
       (Number.isInteger(terms.wageSharePercent) && terms.wageSharePercent >= 0 && terms.wageSharePercent <= 100));
 }
+function weeklyWageCommitment(type, terms) {
+  return type === "loan"
+    ? Math.round(terms.weeklyWageEur * (terms.wageSharePercent ?? 100) / 100)
+    : terms.weeklyWageEur;
+}
+
 function normalizeTerms(type, terms) {
   const base = {
     weeklyWageEur: terms.weeklyWageEur,
@@ -226,6 +232,10 @@ export function evaluateTransferOffer(save, offerId, currentDate = save?.world?.
   const marketValue = Number.isSafeInteger(player.marketValueEur) ? player.marketValueEur : 0;
   const financials = getClubTransferFinancials(club.id, state, currentDate, database);
   const wageCeiling = financials.availableWagesWeeklyEur;
+  const wageSharePercent = offer.type === "loan" ? (offer.terms.wageSharePercent ?? 100) : 100;
+  const maximumAffordableWeeklyWage = wageSharePercent > 0
+    ? Math.floor(wageCeiling * 100 / wageSharePercent)
+    : offer.terms.weeklyWageEur;
   const maximumAffordableFee = Math.max(0, financials.budgetEur - offer.terms.signingBonusEur);
   const nextRound = offer.round + 1;
   let counter = null;
@@ -233,7 +243,7 @@ export function evaluateTransferOffer(save, offerId, currentDate = save?.world?.
     const minFee = offer.fromClubId === FREE_AGENT_CLUB_ID ? 0 : Math.round(marketValue * 0.9);
     const fee = offer.terms.feeEur;
     if (fee >= minFee && fee + offer.terms.signingBonusEur <= financials.budgetEur &&
-        offer.terms.weeklyWageEur <= wageCeiling) {
+        weeklyWageCommitment(offer.type, offer.terms) <= wageCeiling) {
       let next = replaceOffer(state, offer.id, { status: "agreed", round: Math.min(4, nextRound),
         agreedDate: currentDate, agreedTerms: offer.terms, counterOffer: null });
       next = appendHistory(next, "offer-agreed", offer, currentDate, "وافق النادي على شروط الانتقال.");
@@ -242,12 +252,12 @@ export function evaluateTransferOffer(save, offerId, currentDate = save?.world?.
     }
     counter = { ...offer.terms,
       feeEur: Math.min(maximumAffordableFee, Math.max(offer.terms.feeEur, minFee)),
-      weeklyWageEur: Math.min(offer.terms.weeklyWageEur, wageCeiling) };
+      weeklyWageEur: Math.min(offer.terms.weeklyWageEur, maximumAffordableWeeklyWage) };
   } else {
     const minLoanFee = Math.round(marketValue * 0.015);
     const fee = offer.terms.loanFeeEur;
     if (fee >= minLoanFee && fee + offer.terms.signingBonusEur <= financials.budgetEur &&
-        offer.terms.weeklyWageEur <= wageCeiling) {
+        weeklyWageCommitment(offer.type, offer.terms) <= wageCeiling) {
       let next = replaceOffer(state, offer.id, { status: "agreed", round: Math.min(4, nextRound),
         agreedDate: currentDate, agreedTerms: offer.terms, counterOffer: null });
       next = appendHistory(next, "offer-agreed", offer, currentDate, "وافق النادي على شروط الإعارة.");
@@ -256,7 +266,7 @@ export function evaluateTransferOffer(save, offerId, currentDate = save?.world?.
     }
     counter = { ...offer.terms,
       loanFeeEur: Math.min(maximumAffordableFee, Math.max(offer.terms.loanFeeEur, minLoanFee)),
-      weeklyWageEur: Math.min(offer.terms.weeklyWageEur, wageCeiling) };
+      weeklyWageEur: Math.min(offer.terms.weeklyWageEur, maximumAffordableWeeklyWage) };
   }
   if (offer.round >= 4) {
     let next = replaceOffer(state, offer.id, { status: "rejected", round: 4, counterOffer: null });
@@ -340,7 +350,7 @@ export function completeTransfer(save, offerId, currentDate = save?.world?.curre
   const fee = offer.type === "permanent" ? terms.feeEur : terms.loanFeeEur;
   if (fee + terms.signingBonusEur > financials.budgetEur)
     return { changed: false, save, error: "ميزانية النادي لا تكفي رسوم الصفقة ومكافأة التوقيع." };
-  if (terms.weeklyWageEur > financials.availableWagesWeeklyEur)
+  if (weeklyWageCommitment(offer.type, terms) > financials.availableWagesWeeklyEur)
     return { changed: false, save, error: "النادي لا يملك مساحة كافية في ميزانية الرواتب الأسبوعية." };
   const mandate = getActiveRepresentationContract(save, offer.playerId, currentDate);
   if (!mandate) return { changed: false, save, error: "انتهى عقد التمثيل قبل إتمام الصفقة." };
@@ -481,7 +491,8 @@ function completeLoanPurchase(save, loan, currentDate, database, mandatory = fal
     recallNoticeDays: null, recallReturnDate: null, wageSharePercent: 100,
     appearanceBonus: loan.appearanceBonus ?? null, goalBonus: loan.goalBonus ?? null,
     registrationCompetition: loan.registrationCompetition ?? "league",
-    paidPerformanceBonuses: []
+    // Preserve milestones already paid during the loan so purchase cannot pay them twice.
+    paidPerformanceBonuses: [...(loan.paidPerformanceBonuses ?? [])]
   };
   let next = {
     ...state, nextOfferSequence: state.nextOfferSequence + 1, nextMoveSequence: state.nextMoveSequence + 1,
