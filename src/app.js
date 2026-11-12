@@ -2477,7 +2477,13 @@ function renderAgencyManagementPanel(context) {
             : "متوسط التقييم " + interest.performanceSnapshot.averageMatchRating.toFixed(2) + "/10") +
           " · " + interest.performanceSnapshot.goals + " هدف · " +
           interest.performanceSnapshot.assists + " صناعة · دعم الملاءمة +" +
-          interest.performanceSnapshot.performanceBonus)] : []),
+          interest.performanceSnapshot.performanceBonus +
+          (interest.performanceSnapshot.awardLabels?.length
+            ? " · جوائز: " + interest.performanceSnapshot.awardLabels.map((award) =>
+              award === "player-of-season" ? "أفضل لاعب موسم"
+                : award === "golden-boot" ? "هداف البطولة" : "الأكثر صناعة"
+            ).join("، ")
+            : ""))] : []),
         node("small", "", interest.status === "enquiry"
           ? "النافذة مفتوحة حتى " + formatHomeDate(interest.transferWindowEndDate)
           : "متابعة مستقبلية · ينتهي الاهتمام " + formatHomeDate(interest.expiresDate))
