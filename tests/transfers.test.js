@@ -353,7 +353,7 @@ test("uses league-specific registration windows and roster limits", async () => 
 });
 
 test("turns an expired permanent contract into a free agent", () => {
-  const sent = send(makeSave("2026-07-01"), "permanent", { ...permanentTerms, contractYears: 1 });
+  const sent = send(makeSave("2026-07-01"), "permanent", { ...permanentTerms, feeEur: 2_000_000, contractYears: 1 });
   const agreed = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
   const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-01", database);
   const advanced = advanceTransferState(completed.save, "2027-07-01", database);
