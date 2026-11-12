@@ -165,7 +165,7 @@ function getCurrentWorldPlayers(save) {
           awardType,
           value: awards[awardType].value
         }));
-    });
+    }).slice(-10);
     return {
       ...player,
       rating: Math.round(development?.rating ?? player.rating),
