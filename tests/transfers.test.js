@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { getClubTransferFinancials } from "../src/engines/club-transfer-rules.js";
 import {
   createInitialTransferState, createTransferOffer, evaluateTransferOffer,
   submitTransferCounterOffer, acceptTransferCounterOffer, rejectTransferOffer,
@@ -516,4 +517,37 @@ test("applies U21 squad exemptions and stricter continental list size", async ()
   assert.equal(league.senior, 25);
   assert.equal(continental.eligible, false);
   assert.match(continental.reason, /25 لاعبًا/);
+});
+
+
+test("splits weekly loan wages between the borrowing club and the parent club", () => {
+  const transferState = {
+    moves: [{
+      id: "transfer-move-1",
+      playerId: "player-1",
+      type: "loan",
+      status: "active",
+      fromClubId: "club-home",
+      toClubId: "club-target",
+      effectiveDate: "2026-07-01",
+      returnDate: "2027-01-01",
+      weeklyWageEur: 10_000,
+      wageSharePercent: 75,
+      recallReturnDate: null
+    }]
+  };
+  const parent = getClubTransferFinancials("club-home", transferState, "2026-07-02", database);
+  const borrower = getClubTransferFinancials("club-target", transferState, "2026-07-02", database);
+  assert.equal(parent.committedWagesWeeklyEur, 2_500);
+  assert.equal(borrower.committedWagesWeeklyEur, 7_500);
+  assert.equal(parent.committedWagesWeeklyEur + borrower.committedWagesWeeklyEur, 10_000);
+
+  const returnedParent = getClubTransferFinancials("club-home", {
+    moves: [{ ...transferState.moves[0], recallReturnDate: "2026-07-03" }]
+  }, "2026-07-03", database);
+  const returnedBorrower = getClubTransferFinancials("club-target", {
+    moves: [{ ...transferState.moves[0], recallReturnDate: "2026-07-03" }]
+  }, "2026-07-03", database);
+  assert.equal(returnedParent.committedWagesWeeklyEur, 24_500);
+  assert.equal(returnedBorrower.committedWagesWeeklyEur, 0);
 });
