@@ -179,6 +179,8 @@ test("credit repayment remains bounded by available cash and records missed inst
   assert.equal(loan.lateWeeks, 1);
   assert.equal(monday.save.agency.balance, 0);
   assert.ok(loan.remainingEgp > 0);
+  assert.equal(getAgencyManagementSummary(monday.save).lateCreditFacilities, 1);
+  assert.equal(getAgencyManagementSummary(monday.save).liquidityStatus, "attention");
   assert.equal(isValidSave(monday.save), true);
 });
 
