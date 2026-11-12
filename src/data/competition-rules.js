@@ -3,6 +3,8 @@ const ALLOWED_TIE_BREAKERS = new Set([
   "points",
   "goalDifference",
   "goalsFor",
+  "wins",
+  "goalsAgainst",
   "clubId"
 ]);
 
