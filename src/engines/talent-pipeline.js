@@ -141,7 +141,7 @@ export function recordTalentProspectMatchPerformances(save, results, currentDate
           !Number.isSafeInteger(performance.minutesPlayed) || performance.minutesPlayed <= 0 ||
           !Number.isFinite(performance.rating) || performance.rating < 4 || performance.rating > 10) continue;
       const entry = updatedEntries.get(performance.playerId) ?? entriesByPlayerId.get(performance.playerId);
-      if (!entry) continue;
+      if (!entry || result.date < entry.addedOn) continue;
       const club = result.home.clubId === performance.clubId ? result.home
         : result.away.clubId === performance.clubId ? result.away
           : null;
