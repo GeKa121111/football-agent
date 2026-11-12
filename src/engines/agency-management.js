@@ -493,9 +493,15 @@ function advanceClubInterestAI(save,currentDate,players,state) {
       transferWindowEndDate:window.window?.endDate ?? null
     };
   });
+  const activeInterests = interests.filter((interest) =>
+    ["monitoring","enquiry"].includes(interest.status)
+  );
+  const retainedHistory = interests.filter((interest) =>
+    !["monitoring","enquiry"].includes(interest.status)
+  ).slice(0,100);
   let next = {
     ...state,
-    clubInterests:interests.slice(0,MAX_CLUB_INTERESTS),
+    clubInterests:[...activeInterests,...retainedHistory].slice(0,MAX_CLUB_INTERESTS),
     nextClubInterestSequence:state.nextClubInterestSequence ?? 1
   };
   if (new Date(currentDate + "T00:00:00.000Z").getUTCDay() !== 1 ||
@@ -665,7 +671,7 @@ function advanceCompetitorMarket(save, currentDate, players, state) {
         next = appendCompetitiveHistory(next,competitor,offer,currentDate,"offer-rejected",reason);
       }
     }
-    competitor.pendingOffers = competitor.pendingOffers.slice(-40);
+    competitor.pendingOffers = competitor.pendingOffers.slice(0,40);
   }
 
   if (new Date(currentDate + "T00:00:00.000Z").getUTCDay() !== 1) return next;
