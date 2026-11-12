@@ -327,7 +327,8 @@ test("rejects malformed, duplicated or financially inconsistent transfer state",
   assert.equal(isValidTransferState(wrongBasis, "2026-07-02", completed.save.agency.clients, completed.save.agency.representation), false);
 });
 
-\ntest("uses league-specific registration windows and roster limits", async () => {
+
+test("uses league-specific registration windows and roster limits", async () => {
   const { getLeagueTransferRules, getTransferWindowForClub, getClubRegistrationStatus, getClubTransferFinancials } =
     await import("../src/engines/club-transfer-rules.js");
   const leagueDb = {
