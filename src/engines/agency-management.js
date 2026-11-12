@@ -181,6 +181,188 @@ export function isValidAgencyManagementState(state, currentDate) {
   return state.nextLedgerSequence > highestLedger;
 }
 
+
+export function getAgencyStaffModifiers(save) {
+  const active = (save?.agency?.management?.staff ?? []).filter((item) => item.status === "active");
+  const count = (roleId) => active.filter((item) => item.roleId === roleId).length;
+  return {
+    negotiationBonus:Math.min(6,count("negotiator") * 3),
+    scoutingAccuracyBonus:Math.min(0.08,count("analyst") * 0.04),
+    legalProtectionBonus:Math.min(10,count("legal") * 6),
+    brandReachBonus:Math.min(12,count("media") * 6),
+    operationsEfficiencyPct:Math.min(6,count("operations") * 3)
+  };
+}
+
+export function getAgencySponsorshipOffers(save) {
+  const management = save?.agency?.management ?? createInitialAgencyManagementState();
+  const reputation = save?.agency?.representation?.reputationScore ?? 50;
+  const modifiers = getAgencyStaffModifiers(save);
+  const clientCount = save?.agency?.clients?.length ?? 0;
+  return AGENCY_SPONSOR_PACKAGES.map((pack) => {
+    const active = (management.sponsorships ?? []).some((deal) =>
+      deal.packageId === pack.id && deal.status === "active");
+    const effectiveReputation = reputation + modifiers.brandReachBonus;
+    const lockedReason = active ? "اتفاق نشط بالفعل" :
+      clientCount < pack.minClients ? "تحتاج إلى " + pack.minClients + " عملاء على الأقل" :
+      effectiveReputation < pack.minReputation ? "تحتاج إلى سمعة " + pack.minReputation + " أو أكثر" : null;
+    return {...pack,active,available:!lockedReason,lockedReason,effectiveReputation};
+  });
+}
+
+export function getAgencyCompetitorSummary(save) {
+  const state = save?.agency?.management ?? createInitialAgencyManagementState();
+  const competitors = state.competitors ?? createInitialAgencyManagementState().competitors;
+  return competitors.map((agency) => ({
+    id:agency.id,name:agency.name,region:agency.region,focus:agency.focus,
+    reputation:agency.reputation,clients:agency.clients.length,
+    pendingOffers:agency.pendingOffers.filter((offer) => offer.status === "pending").length,
+    budgetEgp:agency.budgetEgp
+  }));
+}
+
+export function getRivalClientIds(save) {
+  const competitors = save?.agency?.management?.competitors ?? [];
+  return new Set(competitors.flatMap((agency) => (agency.clients ?? []).map((client) => client.playerId)));
+}
+
+export function signAgencySponsorship(save, packageId, currentDate = save?.world?.currentDate) {
+  const state = resolveManagement(save,currentDate);
+  if (!state) return failure(save,"بيانات إدارة الوكالة أو التاريخ غير صالحة.");
+  const offer = getAgencySponsorshipOffers(save).find((item) => item.id === packageId);
+  if (!offer) return failure(save,"باقة الرعاية المطلوبة غير متاحة.");
+  if (!offer.available) return failure(save,offer.lockedReason);
+  if ((state.sponsorships ?? []).length >= MAX_SPONSORSHIPS || state.ledger.length >= MAX_LEDGER_ENTRIES)
+    return failure(save,"وصل سجل الرعاية أو الدفتر المالي إلى الحد المتاح.");
+  if (save.agency.balance + offer.signingBonusEgp > MAX_MONEY_EGP)
+    return failure(save,"قيمة مكافأة التوقيع تتجاوز الحد المالي المسموح.");
+
+  const deal = {
+    id:"agency-sponsorship-" + (state.nextSponsorshipSequence ?? 1),
+    packageId:offer.id,name:offer.name,signedDate:currentDate,
+    expiresDate:addDays(currentDate,offer.termDays),termDays:offer.termDays,
+    signingBonusEgp:offer.signingBonusEgp,weeklyRevenueEgp:offer.weeklyRevenueEgp,
+    nextPaymentDate:nextMondayAfter(currentDate),lastPaidDate:null,status:"active"
+  };
+  let next = {
+    ...state,nextSponsorshipSequence:(state.nextSponsorshipSequence ?? 1)+1,
+    sponsorships:[deal,...(state.sponsorships ?? [])]
+  };
+  if (deal.signingBonusEgp > 0) {
+    next = appendLedger(next,{
+      date:currentDate,type:"sponsorship-income",direction:"income",incomeKind:"signing",
+      referenceId:deal.id,amountEgp:deal.signingBonusEgp,paidEgp:deal.signingBonusEgp,
+      arrearsAfterEgp:state.arrearsEgp,note:"مكافأة توقيع اتفاق " + deal.name
+    });
+  }
+  const updated = {
+    ...save,
+    agency:{...save.agency,balance:save.agency.balance+deal.signingBonusEgp,management:next}
+  };
+  return {changed:true,deal,save:updated};
+}
+
+function appendCompetitiveHistory(state, agency, player, date, type, note) {
+  const event = {
+    id:"agency-competition-" + state.nextCompetitiveSequence,
+    agencyId:agency.id,agencyName:agency.name,playerId:player.id,
+    playerName:player.name,date,type,note
+  };
+  return {
+    ...state,nextCompetitiveSequence:state.nextCompetitiveSequence+1,
+    competitiveHistory:[event,...state.competitiveHistory].slice(0,MAX_COMPETITIVE_HISTORY)
+  };
+}
+
+function advanceCompetitorMarket(save, currentDate, players, state) {
+  if (!Array.isArray(players)) return state;
+  const competitors = (state.competitors ?? createInitialAgencyManagementState().competitors)
+    .map((agency) => ({...agency,clients:[...agency.clients],pendingOffers:[...agency.pendingOffers]}));
+  let next = {
+    ...state,competitors,
+    competitiveHistory:Array.isArray(state.competitiveHistory)?state.competitiveHistory:[],
+    nextCompetitiveSequence:state.nextCompetitiveSequence ?? 1
+  };
+  const userOpenOfferIds = new Set((save.agency.representation?.offers ?? [])
+    .filter((offer) => ["pending","countered"].includes(offer.status)).map((offer) => offer.playerId));
+  const userClientIds = new Set(save.agency.clients ?? []);
+  const rivalClientIds = new Set(competitors.flatMap((agency) => agency.clients.map((client) => client.playerId)));
+  const modifiers = getAgencyStaffModifiers(save);
+
+  for (const competitor of next.competitors) {
+    for (const offer of competitor.pendingOffers) {
+      if (offer.status !== "pending" || currentDate < offer.dueDate) continue;
+      const userHasTakenInterest = userClientIds.has(offer.playerId) || userOpenOfferIds.has(offer.playerId);
+      const score = competitor.reputation +
+        Math.round((offer.rating + offer.potential) / 2) + modifiers.legalProtectionBonus;
+      const canAfford = competitor.budgetEgp >= competitor.acquisitionCostEgp &&
+        competitor.clients.length < competitor.maxClients;
+      const accepted = !userHasTakenInterest && score >= 135 && canAfford &&
+        !rivalClientIds.has(offer.playerId);
+      offer.status = accepted ? "accepted" : "rejected";
+      offer.decisionDate = currentDate;
+      if (accepted) {
+        competitor.budgetEgp -= competitor.acquisitionCostEgp;
+        competitor.clients.unshift({
+          playerId:offer.playerId,playerName:offer.playerName,position:offer.position,
+          rating:offer.rating,potential:offer.potential,commissionRate:offer.commissionRate,
+          signedDate:currentDate
+        });
+        rivalClientIds.add(offer.playerId);
+        next = appendCompetitiveHistory(next,competitor,offer,currentDate,"offer-accepted",
+          "نجحت الوكالة المنافسة في ضم اللاعب بعد تقييم العرض.");
+      } else {
+        const reason = userHasTakenInterest ? "دخلت وكالتك في المنافسة على اللاعب." :
+          !canAfford ? "لم تسمح ميزانية الوكالة المنافسة بإتمام التعاقد." :
+          "رفض اللاعب العرض المنافس وفق تقييمه لشروط التمثيل.";
+        next = appendCompetitiveHistory(next,competitor,offer,currentDate,"offer-rejected",reason);
+      }
+    }
+    competitor.pendingOffers = competitor.pendingOffers.slice(-40);
+  }
+
+  if (new Date(currentDate + "T00:00:00.000Z").getUTCDay() !== 1) return next;
+  const allReserved = new Set([
+    ...userClientIds,...userOpenOfferIds,...rivalClientIds,
+    ...next.competitors.flatMap((agency) => agency.pendingOffers
+      .filter((offer) => offer.status === "pending").map((offer) => offer.playerId))
+  ]);
+  for (const competitor of next.competitors) {
+    if (competitor.lastActionDate === currentDate ||
+        competitor.pendingOffers.some((offer) => offer.status === "pending") ||
+        competitor.clients.length >= competitor.maxClients ||
+        competitor.budgetEgp < competitor.acquisitionCostEgp) continue;
+    const eligible = players.filter((player) =>
+      player && typeof player.id === "string" && typeof player.name === "string" &&
+      !allReserved.has(player.id) && Number.isInteger(player.rating) &&
+      Number.isInteger(player.potential) && player.potential >= player.rating
+    ).map((player) => ({
+      player,
+      score:player.rating * 0.6 + player.potential * 0.4 +
+        stablePositionBonus(player,competitor.focusKey) +
+        (modifiers.scoutingAccuracyBonus > 0 ? 2 : 0)
+    })).filter((item) => item.score >= 61)
+      .sort((a,b) => b.score-a.score || a.player.id.localeCompare(b.player.id));
+    competitor.lastActionDate = currentDate;
+    const selected = eligible[0]?.player;
+    if (!selected) continue;
+    const preferredCommission = selected.rating >= 80 ? 8 : selected.rating >= 72 ? 9 : 10;
+    const commissionRate = Math.max(5,preferredCommission-(competitor.reputation >= 80 ? 1 : 0));
+    const offer = {
+      id:"rival-offer-" + competitor.id + "-" + currentDate.replaceAll("-",""),
+      playerId:selected.id,playerName:selected.name,position:selected.position ?? "غير محدد",
+      rating:selected.rating,potential:selected.potential,commissionRate,
+      offeredDate:currentDate,dueDate:addDays(currentDate,3),
+      status:"pending",decisionDate:null
+    };
+    competitor.pendingOffers = [offer,...competitor.pendingOffers].slice(0,100);
+    allReserved.add(selected.id);
+    next = appendCompetitiveHistory(next,competitor,offer,currentDate,"offer-sent",
+      "أرسلت الوكالة المنافسة عرض تمثيل للاعب ضمن حملتها الأسبوعية.");
+  }
+  return next;
+}
+
 export function getAgencyManagementSummary(save) {
   const management = save?.agency?.management ?? createInitialAgencyManagementState();
   const activeStaff = management.staff.filter((item) => item.status === "active");
