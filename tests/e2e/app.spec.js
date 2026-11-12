@@ -1716,8 +1716,17 @@ test.describe("Agency operations management", () => {
     expect(saved.agency.management.ledger.some((entry) =>
       entry.type === "sponsorship-income" && entry.incomeKind === "signing"
     )).toBe(true);
+
+    await panel.locator(".agency-credit-request-button").first().click();
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.agency.management.creditFacilities).toHaveLength(1);
+    expect(saved.agency.balance).toBe(131000);
+    expect(saved.agency.management.creditFacilities[0].totalRepaymentEgp).toBe(56000);
+
     await expect(panel).toContainText("إجمالي الإيرادات");
     await expect(panel).toContainText("دخل الرعايات أسبوعيًا");
+    await expect(panel).toContainText("إجمالي الدين");
+    await expect(panel).toContainText("اهتمامات الأندية بعملائك");
     await expect(panel).toContainText("سجل مصروفات الإدارة");
     await hasNoHorizontalOverflow(page);
   });
