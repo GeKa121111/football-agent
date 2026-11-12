@@ -16,38 +16,42 @@ concurrency:
 
 jobs:
   build:
-    # Manual runs from feature branches must never publish an unreviewed build.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Configure GitHub Pages
+        id: pages
+        uses: actions/configure-pages@v5
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Install dependencies
-        run: npm install
-      # Match the validation workflow: use the runner's native libraries and avoid apt mirror downloads.
-      - name: Install Chromium for browser tests
-        run: npx playwright install chromium
+        run: npm ci
+      - name: Install Chromium, Firefox and WebKit
+        run: npx playwright install --with-deps chromium firefox webkit
       - name: Run unit tests
         run: npm test
-      - name: Run desktop and mobile browser tests
+      - name: Run desktop, mobile, accessibility and performance browser tests
         run: npm run test:e2e
       - name: Check JavaScript syntax
         run: npm run check
       - name: Build for GitHub Pages
-        run: npm run build -- --base=/${{ github.event.repository.name }}/
+        run: npm run build -- --base=${{ steps.pages.outputs.base_path }}/
       - name: Add .nojekyll
         run: touch dist/.nojekyll
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
           path: dist
+          include-hidden-files: true
 
   deploy:
     if: github.ref == 'refs/heads/main'
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -57,3 +61,24 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  verify-live:
+    name: Verify the deployed GitHub Pages app
+    if: github.ref == 'refs/heads/main'
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run production smoke test
+        env:
+          FOOTBALL_AGENT_LIVE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: npm run test:live

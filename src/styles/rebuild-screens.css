@@ -794,27 +794,27 @@
 .transfer-window-card.is-closed{border-color:rgba(232,189,114,.22)}
 .transfer-window-icon{display:grid;flex:0 0 44px;width:44px;height:44px;place-items:center;border-radius:13px;color:var(--fa-gold);background:rgba(232,189,114,.1);font-size:22px}
 .transfer-window-copy{min-width:0;flex:1}
-.transfer-window-kicker,.transfer-window-copy p{display:block;color:var(--fa-muted);font-size: 10px}
-.transfer-window-copy h2{margin:4px 0;color:var(--fa-text);font-size:16px}
+.transfer-window-kicker,.transfer-window-copy p{display:block;color:var(--fa-muted);font-size:10px}
+.transfer-window-copy h2{margin:10px 0;color:var(--fa-text);font-size:16px}
 .transfer-window-copy p{margin:0;line-height:1.7}
-.transfer-window-status{padding:6px 9px;border:1px solid var(--fa-border);border-radius:8px;color:var(--fa-muted);font-size: 10px;font-weight:900;letter-spacing:.08em}
+.transfer-window-status{padding:6px 9px;border:1px solid var(--fa-border);border-radius:8px;color:var(--fa-muted);font-size:10px;font-weight:900;letter-spacing:.08em}
 .transfer-window-card.is-open .transfer-window-status{border-color:rgba(83,190,151,.3);color:#70d6ad}
 .transfer-summary{margin-top:0}
 .transfer-proposal-panel,.transfer-list-panel,.transfer-moves-panel{min-width:0}
 .transfer-proposal-form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px;padding:13px;border:1px solid var(--fa-border);border-radius:14px;background:rgba(5,10,18,.2)}
-.transfer-form-field{display:grid;min-width:0;gap:6px;color:var(--fa-muted);font-size: 10px}
+.transfer-form-field{display:grid;min-width:0;gap:6px;color:var(--fa-muted);font-size:10px}
 .transfer-form-field .search-input{width:100%;min-width:0}
 .transfer-form-field[hidden]{display:none!important}
 .transfer-submit-button{align-self:end;min-height:39px}
 .transfer-empty-clients,.transfer-window-hint{margin-top:12px;padding:14px;border:1px dashed var(--fa-border);border-radius:13px;color:var(--fa-muted);background:rgba(5,10,18,.18)}
 .transfer-empty-clients strong{display:block;margin-bottom:5px;color:var(--fa-text);font-size:12px}
-.transfer-empty-clients p{margin:0 0 12px;font-size: 10px;line-height:1.8}
+.transfer-empty-clients p{margin:0 0 12px;font-size:10px;line-height:1.8}
 .transfer-deal-list,.transfer-move-list{display:grid;gap:10px;margin-top:12px}
 .transfer-deal-card,.transfer-move-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:12px;padding:13px;border:1px solid var(--fa-border);border-radius:13px;background:rgba(17,24,39,.65)}
 .transfer-deal-details{min-width:0}
 .transfer-deal-title{color:var(--fa-text);font-size:12px;font-weight:800}
-.transfer-deal-details p,.transfer-deal-details small{display:block;margin:5px 0 0;color:var(--fa-muted);font-size: 10px;line-height:1.7;overflow-wrap:anywhere}
-.transfer-deal-status{display:inline-flex;margin-top:8px;padding:5px 8px;border-radius:7px;color:var(--fa-muted);background:rgba(255,255,255,.045);font-size: 10px}
+.transfer-deal-details p,.transfer-deal-details small{display:block;margin:5px 0 0;color:var(--fa-muted);font-size:10px;line-height:1.7;overflow-wrap:anywhere}
+.transfer-deal-status{display:inline-flex;margin-top:8px;padding:5px 8px;border-radius:7px;color:var(--fa-muted);background:rgba(255,255,255,.045);font-size:10px}
 .transfer-status-agreed .transfer-deal-status,.transfer-status-completed .transfer-deal-status{color:#70d6ad}
 .transfer-status-countered .transfer-deal-status{color:var(--fa-gold)}
 .transfer-status-rejected .transfer-deal-status,.transfer-status-expired .transfer-deal-status{color:#e28a8a}
@@ -823,9 +823,9 @@
 .transfer-counter-form .button-outline{align-self:end}
 .transfer-move-row{grid-template-columns:repeat(2,minmax(0,1fr))}
 .transfer-move-row strong{color:var(--fa-text);font-size:11px}
-.transfer-move-row span,.transfer-move-row small{color:var(--fa-muted);font-size: 10px;overflow-wrap:anywhere}
-.transfer-market-disclaimer{margin:5px 0 12px;color:var(--fa-muted);font-size: 10px;line-height:1.8}
-.transfer-history-empty{margin:10px 0 0;padding:12px;color:var(--fa-muted);border:1px dashed var(--fa-border);border-radius:11px;font-size: 10px}
+.transfer-move-row span,.transfer-move-row small{color:var(--fa-muted);font-size:10px;overflow-wrap:anywhere}
+.transfer-market-disclaimer{margin:5px 0 12px;color:var(--fa-muted);font-size:10px;line-height:1.8}
+.transfer-history-empty{margin:10px 0 0;padding:12px;color:var(--fa-muted);border:1px dashed var(--fa-border);border-radius:11px;font-size:10px}
 @media(max-width:1080px){.transfer-proposal-form,.transfer-counter-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){
  .transfer-window-card{align-items:flex-start;flex-wrap:wrap}.transfer-window-status{margin-inline-start:auto}
@@ -846,7 +846,7 @@
 .agency-management-panel{display:grid;gap:18px}
 .agency-operations-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
 .agency-operations-metric{display:grid;gap:6px;min-width:0;padding:12px;border:1px solid var(--fa-border);border-radius:12px;background:rgba(8,13,22,.38)}
-.agency-operations-metric small,.agency-operations-offer small{color:var(--fa-muted);font-size: 10px;line-height:1.6}
+.agency-operations-metric small,.agency-operations-offer small{color:var(--fa-muted);font-size:10px;line-height:1.6}
 .agency-operations-metric strong{color:var(--fa-text);font-size:13px;overflow-wrap:anywhere}
 .agency-operations-section{display:grid;gap:10px;min-width:0;padding-top:14px;border-top:1px solid var(--fa-border)}
 .agency-operations-section h3{margin:0;color:var(--fa-text);font-size:13px}
@@ -856,12 +856,12 @@
 .agency-operations-row .representation-copy{min-width:0}
 .agency-operations-row .button-outline{white-space:nowrap}
 .agency-operations-offer strong,.agency-operations-ledger-row strong{color:var(--fa-text);font-size:10px}
-.agency-operations-offer p{margin:0;color:var(--fa-muted);font-size: 10px;line-height:1.7}
+.agency-operations-offer p{margin:0;color:var(--fa-muted);font-size:10px;line-height:1.7}
 .agency-operations-offer .button-primary{width:100%;margin-top:4px}
 .agency-operations-offer .button-primary:disabled{opacity:.45;cursor:not-allowed}
 .agency-operations-ledger-row{grid-template-columns:auto auto;align-items:center}
-.agency-operations-ledger-row small{grid-column:1/-1;color:var(--fa-muted);font-size: 10px;line-height:1.6}
-.agency-operations-ledger-row span{color:var(--fa-muted);font-size: 10px;text-align:end}
+.agency-operations-ledger-row small{grid-column:1/-1;color:var(--fa-muted);font-size:10px;line-height:1.6}
+.agency-operations-ledger-row span{color:var(--fa-muted);font-size:10px;text-align:end}
 @media(max-width:760px){
  .agency-operations-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
  .agency-operations-list,.agency-operations-catalog{grid-template-columns:minmax(0,1fr)}
@@ -879,7 +879,7 @@
 .agency-competitors-section .agency-operations-offer{align-content:start}
 .agency-sponsorship-sign-button{width:100%;margin-top:4px;white-space:normal}
 .agency-sponsorship-sign-button:disabled{opacity:.48;cursor:not-allowed}
-.agency-management-note{display:block;color:var(--fa-muted);font-size: 10px;line-height:1.7}
+.agency-management-note{display:block;color:var(--fa-muted);font-size:10px;line-height:1.7}
 .agency-competitor-card{background:linear-gradient(145deg,rgba(98,82,155,.12),rgba(17,24,39,.62))}
 .agency-competitor-card strong{font-size:11px}
 .agency-competitor-card small{overflow-wrap:anywhere}

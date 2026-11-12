@@ -565,3 +565,45 @@ test("migrates legacy v7 saves to schema v8 with agency operations defaults", ()
   assert.equal(isValidSave(result.save), true);
   assert.equal(storage.getItem(STORAGE_KEY), raw, "migration must not rewrite the file on read");
 });
+
+
+test("reports unavailable storage access without pretending a save was loaded", () => {
+  const denied = new Error("Storage access denied");
+  const blockedStorage = {
+    getItem() { throw denied; },
+    setItem() { throw denied; }
+  };
+
+  const result = readSave(blockedStorage);
+  assert.equal(result.status, "unavailable");
+  assert.equal(result.save, null);
+  assert.equal(result.error, denied);
+});
+
+test("preserves the previous save when LocalStorage rejects a write because of quota", () => {
+  const original = createInitialSave("2026-07-01T00:00:00.000Z");
+  original.agency.name = "Existing Agency";
+  const originalRaw = JSON.stringify(original);
+  const quotaError = new Error("Storage quota exceeded");
+  quotaError.name = "QuotaExceededError";
+  const storage = {
+    getItem(key) {
+      return key === STORAGE_KEY ? originalRaw : null;
+    },
+    setItem() {
+      throw quotaError;
+    }
+  };
+
+  const candidate = structuredClone(original);
+  candidate.agency.name = "Unsaved Agency";
+
+  assert.throws(
+    () => writeSave(candidate, storage, "2026-07-01T02:00:00.000Z"),
+    (error) => error === quotaError
+  );
+  assert.equal(storage.getItem(STORAGE_KEY), originalRaw);
+  const restored = readSave(storage);
+  assert.equal(restored.status, "loaded");
+  assert.equal(restored.save.agency.name, "Existing Agency");
+});
