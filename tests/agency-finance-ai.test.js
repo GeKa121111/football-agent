@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createInitialSave, isValidSave } from "../src/core/storage.js";
 import { getWorldPlayerProfiles } from "../src/data/world-database.js";
 import {
+  getAgencyClubInterestSummary,
   getAgencyCompetitorSummary,
   getAgencyCreditOffers,
   getAgencyManagementSummary,
@@ -15,7 +16,9 @@ import {
   advanceAgencyManagementDay
 } from "../src/engines/agency-management.js";
 import {
+  acceptRepresentationCounterOffer,
   createRepresentationOffer,
+  evaluateRepresentationOffer,
   getPlayerRepresentationProfile
 } from "../src/engines/representation.js";
 import { advanceCareerSimulationDays } from "../src/engines/career-simulation.js";
@@ -173,4 +176,44 @@ test("credit repayment remains bounded by available cash and records missed inst
   assert.equal(monday.save.agency.balance, 0);
   assert.ok(loan.remainingEgp > 0);
   assert.equal(isValidSave(monday.save), true);
+});
+
+
+test("clubs independently monitor agency clients and raise enquiries during open windows", () => {
+  const initial = createInitialSave();
+  const player = PLAYERS[0];
+  const preferences = getPlayerRepresentationProfile(player);
+  const offer = createRepresentationOffer(initial,player,{
+    commissionRate:preferences.preferredCommissionRate,
+    termDays:preferences.preferredTermDays,
+    representationType:preferences.prefersExclusive ? "exclusive" : "non-exclusive"
+  });
+  assert.equal(offer.changed,true,offer.error);
+  const response = evaluateRepresentationOffer(offer.save,offer.offer.id);
+  let signedSave = response.save;
+  if (response.status === "countered") {
+    const accepted = acceptRepresentationCounterOffer(response.save,offer.offer.id);
+    assert.equal(accepted.changed,true,accepted.error);
+    signedSave = accepted.save;
+  }
+  assert.ok(signedSave.agency.clients.includes(player.id));
+  assert.equal(isValidSave(signedSave),true);
+
+  const monday = advanceCareerSimulationDays(signedSave,5,PLAYERS);
+  const summary = getAgencyClubInterestSummary(monday.save);
+  assert.equal(monday.save.world.currentDate,"2026-07-06");
+  assert.ok(summary.total > 0);
+  assert.ok(summary.monitoring + summary.enquiries > 0);
+  assert.ok(monday.save.agency.management.clubInterests.some((interest) =>
+    interest.playerId === player.id
+  ));
+  assert.equal(isValidSave(monday.save),true);
+
+  const nextWeek = advanceCareerSimulationDays(monday.save,7,PLAYERS);
+  const playerInterests = nextWeek.save.agency.management.clubInterests.filter((interest) =>
+    interest.playerId === player.id && ["monitoring","enquiry"].includes(interest.status)
+  );
+  const uniqueClubs = new Set(playerInterests.map((interest) => interest.clubId));
+  assert.equal(uniqueClubs.size,playerInterests.length);
+  assert.equal(isValidSave(nextWeek.save),true);
 });
