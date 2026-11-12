@@ -227,7 +227,7 @@ export function getClubTransferFinancials(clubId, transferState, currentDate, da
   const roster = getWorldSquadPlayers(database).filter((player) =>
     getPlayerCurrentClubIdFromState(player.id, player.clubId, transferState, currentDate, database) === clubId
   );
-  const committedWagesWeeklyEur = roster.reduce((sum, player) => {
+  const squadWagesWeeklyEur = roster.reduce((sum, player) => {
     const latestMove = (transferState?.moves ?? [])
       .filter((move) => move.playerId === player.id && move.effectiveDate <= currentDate &&
         (move.status === "active" || (move.status === "purchased" && currentDate < move.purchasedDate)) &&
@@ -239,6 +239,16 @@ export function getClubTransferFinancials(clubId, transferState, currentDate, da
     const paidShare = latestMove?.type === "loan" ? (latestMove.wageSharePercent ?? 100) : 100;
     return sum + Math.round(wage * paidShare / 100);
   }, 0);
+  // The parent club continues paying its retained share while the player is on loan.
+  const retainedLoanWagesWeeklyEur = (transferState?.moves ?? [])
+    .filter((move) => move.type === "loan" && move.status === "active" &&
+      move.fromClubId === clubId && move.effectiveDate <= currentDate &&
+      (!isDate(move.recallReturnDate ?? move.returnDate) ||
+        currentDate < (move.recallReturnDate ?? move.returnDate)))
+    .reduce((sum, move) => sum + Math.round(
+      move.weeklyWageEur * (100 - (move.wageSharePercent ?? 100)) / 100
+    ), 0);
+  const committedWagesWeeklyEur = squadWagesWeeklyEur + retainedLoanWagesWeeklyEur;
   // The roster's estimated payroll is the baseline; the profile-based margin
   // is the additional weekly room available for new contracts.
   const wageBudgetWeeklyEur = committedWagesWeeklyEur + profile * 650;
