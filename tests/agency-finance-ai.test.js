@@ -281,6 +281,45 @@ test("club interest scores reflect actual appearances and recent match ratings w
     save = accepted.save;
   }
 
+  const seasonAward = {
+    playerId: player.id,
+    playerName: player.name,
+    clubId: player.clubId,
+    clubName: player.club,
+    value: 8.9,
+    appearances: 8,
+    averageRating: 8.9
+  };
+  save = {
+    ...save,
+    world: {
+      ...save.world,
+      football: {
+        ...save.world.football,
+        archives: [{
+          id: "archive-1-performance-interest",
+          season: 1,
+          competitionId: "competition-eg-premier",
+          competitionName: "الدوري المصري الممتاز",
+          format: "round-robin",
+          matchesTotal: 2,
+          matchesPlayed: 2,
+          matchesScheduled: 0,
+          complete: true,
+          championClubId: player.clubId,
+          championName: player.club,
+          standings: [],
+          groups: [],
+          awards: {
+            playerOfSeason: seasonAward,
+            goldenBoot: { ...seasonAward, value: 6 },
+            topAssists: null
+          },
+          archivedOn: save.world.currentDate
+        }]
+      }
+    }
+  };
   const development = save.world.football.playerDevelopment.players.find((item) =>
     item.playerId === player.id
   );
@@ -322,6 +361,9 @@ test("club interest scores reflect actual appearances and recent match ratings w
   assert.ok(interest.performanceSnapshot.assists >= 2);
   assert.ok(interest.performanceSnapshot.averageMatchRating >= 7);
   assert.ok(interest.performanceSnapshot.performanceBonus > 0);
+  assert.deepEqual(interest.performanceSnapshot.awardLabels.sort(), ["golden-boot", "player-of-season"]);
+  assert.equal(interest.performanceSnapshot.awardCount, 2);
+  assert.equal(interest.performanceSnapshot.awardBonus, 4);
 
   const createdTransferOffers = (monday.save.world.transfers.offers ?? []).filter((offer) =>
     offer.playerId === player.id &&
