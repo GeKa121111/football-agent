@@ -1467,6 +1467,10 @@ function renderMarket(context) {
       } else if (offer.status === "countered" && offer.counterOffer) {
         card.append(actionButton("قبول شروط النادي", "button-primary", () => context.acceptTransferCounterOffer(offer.id)));
         const counterForm = node("form", "transfer-counter-form");
+        counterForm.hidden = offer.round >= 4;
+        if (offer.round >= 4) {
+          details.append(node("p", "transfer-window-hint", "ده آخر عرض من النادي في الجولة الرابعة؛ تقدر تقبله أو ترفضه، لكن لا توجد جولة تفاوض إضافية."));
+        }
         const counterAmount = node("input", "search-input");
         counterAmount.type = "number"; counterAmount.min = "0"; counterAmount.step = "1000"; counterAmount.required = true;
         counterAmount.value = String(offer.type === "loan" ? offer.counterOffer.loanFeeEur : offer.counterOffer.feeEur);
