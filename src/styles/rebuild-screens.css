@@ -872,3 +872,18 @@
  .agency-operations-ledger-row{grid-template-columns:minmax(0,1fr)}
  .agency-operations-ledger-row span{text-align:start}
 }
+
+
+/* Phase 7 — sponsorship income and autonomous competitor market */
+.agency-sponsorship-section .agency-operations-offer,
+.agency-competitors-section .agency-operations-offer{align-content:start}
+.agency-sponsorship-sign-button{width:100%;margin-top:4px;white-space:normal}
+.agency-sponsorship-sign-button:disabled{opacity:.48;cursor:not-allowed}
+.agency-management-note{display:block;color:var(--fa-muted);font-size:8px;line-height:1.7}
+.agency-competitor-card{background:linear-gradient(145deg,rgba(98,82,155,.12),rgba(17,24,39,.62))}
+.agency-competitor-card strong{font-size:11px}
+.agency-competitor-card small{overflow-wrap:anywhere}
+@media(max-width:760px){
+ .agency-sponsorship-section .agency-operations-catalog,
+ .agency-competitors-section .agency-operations-catalog{grid-template-columns:minmax(0,1fr)}
+}
