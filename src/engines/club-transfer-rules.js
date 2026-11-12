@@ -10,8 +10,10 @@ const DEFAULT_RULES = Object.freeze({
   ]),
   maxRegisteredPlayers: 30,
   maxSeniorPlayers: 25,
+  u21ExemptionAge: 21,
   maxForeignPlayers: 10,
-  maxIncomingLoans: 5
+  maxIncomingLoans: 5,
+  maxMidSeasonRegistrations: 10
 });
 
 // These are deliberately labeled simulation rules, not live federation regulations.
@@ -72,6 +74,39 @@ export function getLeagueTransferRules(leagueId) {
   return LEAGUE_TRANSFER_RULES[leagueId] ?? DEFAULT_RULES;
 }
 
+/**
+ * Registration rules are explicit simulation presets. They are intentionally
+ * not presented as a live copy of any federation's current regulations.
+ */
+export function getCompetitionRegistrationRules(leagueId, competition = "league") {
+  const leagueRules = getLeagueTransferRules(leagueId);
+  if (competition === "continental") {
+    return {
+      ...leagueRules,
+      maxRegisteredPlayers: 25,
+      maxSeniorPlayers: 25,
+      u21ExemptionAge: 21,
+      maxForeignPlayers: leagueRules.maxForeignPlayers,
+      maxNonAssociationPlayers: 17,
+      maxIncomingLoans: 3,
+      maxMidSeasonRegistrations: 3,
+      competition
+    };
+  }
+  if (competition === "domestic-cup") {
+    return {
+      ...leagueRules,
+      maxRegisteredPlayers: 30,
+      maxSeniorPlayers: 25,
+      u21ExemptionAge: 21,
+      maxIncomingLoans: 5,
+      maxMidSeasonRegistrations: 10,
+      competition
+    };
+  }
+  return { ...leagueRules, competition: "league" };
+}
+
 export function getTransferWindowForClub(currentDate, clubId = null, database = WORLD_DATABASE) {
   if (!isDate(currentDate)) return { active: false, window: null, nextWindow: null, leagueId: null };
   const club = clubId ? getClub(database, clubId) : null;
@@ -109,7 +144,8 @@ export function getPlayerCurrentClubIdFromState(playerId, fallbackClubId, transf
   );
   const moves = (transferState?.moves ?? [])
     .filter((move) => move.playerId === playerId && move.effectiveDate <= currentDate &&
-      (move.status === "active" || (move.status === "purchased" && currentDate < move.purchasedDate)))
+      (move.status === "active" || (move.status === "purchased" && currentDate < move.purchasedDate)) &&
+      (move.type !== "loan" || currentDate < (move.recallReturnDate ?? move.returnDate)))
     .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate) ||
       Number(a.id.split("-").pop()) - Number(b.id.split("-").pop()));
   if (freeAgent && !moves.some((move) => move.type === "permanent" && move.effectiveDate >= freeAgent.sinceDate)) return null;
@@ -125,11 +161,14 @@ export function getPlayerCurrentClubIdFromState(playerId, fallbackClubId, transf
   return clubId;
 }
 
-export function getClubRegistrationStatus(clubId, playerId, transferState, currentDate, database = WORLD_DATABASE, moveType = "permanent") {
+export function getClubRegistrationStatus(
+  clubId, playerId, transferState, currentDate, database = WORLD_DATABASE,
+  moveType = "permanent", competition = "league"
+) {
   const club = getClub(database, clubId);
   const player = getWorldSquadPlayers(database).find((item) => item.id === playerId);
   if (!club || !player) return { eligible: false, reason: "بيانات النادي أو اللاعب غير موجودة.", total: 0, senior: 0, foreign: 0 };
-  const rules = getLeagueTransferRules(club.leagueId);
+  const rules = getCompetitionRegistrationRules(club.leagueId, competition);
   const allPlayers = getWorldSquadPlayers(database);
   const roster = allPlayers.filter((item) =>
     getPlayerCurrentClubIdFromState(item.id, item.clubId, transferState, currentDate, database) === clubId && item.id !== playerId
@@ -142,18 +181,30 @@ export function getClubRegistrationStatus(clubId, playerId, transferState, curre
         (player.countryId && player.countryId !== club.countryId ? 1 : 0), rules };
   }
   const total = roster.length + 1;
-  const senior = roster.filter((item) => Number(item.age ?? 22) >= 21).length + (Number(player.age ?? 22) >= 21 ? 1 : 0);
+  const senior = roster.filter((item) => Number(item.age ?? 22) >= rules.u21ExemptionAge).length +
+    (Number(player.age ?? 22) >= rules.u21ExemptionAge ? 1 : 0);
   const foreign = roster.filter((item) => item.countryId && item.countryId !== club.countryId).length +
     (player.countryId && player.countryId !== club.countryId ? 1 : 0);
   const incomingLoans = (transferState?.moves ?? []).filter((move) =>
     move.type === "loan" && move.status === "active" && move.toClubId === clubId &&
-    move.playerId !== playerId && currentDate < move.returnDate
+    move.playerId !== playerId && currentDate < (move.recallReturnDate ?? move.returnDate)
   ).length + (moveType === "loan" ? 1 : 0);
+  const nonAssociation = foreign;
+  const year = Number(currentDate.slice(0, 4));
+  const seasonStart = currentDate >= year + "-07-01" ? year + "-07-01" : (year - 1) + "-07-01";
+  const midSeasonRegistrations = (transferState?.moves ?? []).filter((move) =>
+    move.toClubId === clubId && move.playerId !== playerId && move.effectiveDate >= seasonStart &&
+    move.effectiveDate <= currentDate && (move.type !== "loan" || move.status === "active")
+  ).length + 1;
   if (total > rules.maxRegisteredPlayers) return { eligible: false, reason: "قائمة النادي وصلت للحد الأقصى للتسجيل (" + rules.maxRegisteredPlayers + " لاعبًا).", total, senior, foreign, rules };
-  if (senior > rules.maxSeniorPlayers) return { eligible: false, reason: "تجاوز النادي الحد الأقصى للاعبين فوق 21 سنة (" + rules.maxSeniorPlayers + ").", total, senior, foreign, rules };
+  if (senior > rules.maxSeniorPlayers) return { eligible: false, reason: "تجاوز النادي الحد الأقصى للاعبين فوق " + (rules.u21ExemptionAge - 1) + " سنة (" + rules.maxSeniorPlayers + ").", total, senior, foreign, rules };
   if (foreign > rules.maxForeignPlayers) return { eligible: false, reason: "لا توجد خانة متاحة للاعب أجنبي في قائمة النادي (" + rules.maxForeignPlayers + " كحد أقصى).", total, senior, foreign, rules };
+  if (Number.isInteger(rules.maxNonAssociationPlayers) && nonAssociation > rules.maxNonAssociationPlayers)
+    return { eligible: false, reason: "قائمة " + (competition === "continental" ? "المسابقة القارية" : "المسابقة") + " لا تسمح بأكثر من " + rules.maxNonAssociationPlayers + " لاعبًا غير محلي.", total, senior, foreign, rules };
   if (incomingLoans > rules.maxIncomingLoans) return { eligible: false, reason: "النادي تجاوز الحد الأقصى للإعارات الواردة (" + rules.maxIncomingLoans + ").", total, senior, foreign, rules };
-  return { eligible: true, reason: "", total, senior, foreign, rules };
+  if (midSeasonRegistrations > rules.maxMidSeasonRegistrations)
+    return { eligible: false, reason: "تم استنفاد عدد التسجيلات المسموح بها خلال الموسم (" + rules.maxMidSeasonRegistrations + ").", total, senior, foreign, rules };
+  return { eligible: true, reason: "", total, senior, foreign, incomingLoans, midSeasonRegistrations, competition: rules.competition, rules };
 }
 
 function estimateWeeklyWage(player) {
@@ -168,7 +219,9 @@ export function getClubTransferFinancials(clubId, transferState, currentDate, da
   const profile = Math.max(40, Math.min(99, Number.isInteger(club.simulationProfile) ? club.simulationProfile : 60));
   const baseBudgetEur = Math.round(profile * profile * 10000);
   const financeEntries = (transferState?.financeLedger ?? []).filter((entry) => entry.clubId === clubId);
-  const budgetEur = baseBudgetEur + financeEntries.reduce((sum, entry) => sum + entry.amountEur, 0);
+  const seasonEntries = (transferState?.financeSeasons ?? []).filter((entry) => entry.clubId === clubId);
+  const seasonBalanceEur = seasonEntries.reduce((sum, entry) => sum + entry.netEur, 0);
+  const budgetEur = baseBudgetEur + financeEntries.reduce((sum, entry) => sum + entry.amountEur, 0) + seasonBalanceEur;
   const roster = getWorldSquadPlayers(database).filter((player) =>
     getPlayerCurrentClubIdFromState(player.id, player.clubId, transferState, currentDate, database) === clubId
   );
@@ -178,7 +231,9 @@ export function getClubTransferFinancials(clubId, transferState, currentDate, da
         (move.status === "active" || (move.status === "purchased" && currentDate < move.purchasedDate)))
       .sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate) ||
         Number(b.id.split("-").pop()) - Number(a.id.split("-").pop()))[0];
-    return sum + (latestMove ? latestMove.weeklyWageEur : estimateWeeklyWage(player));
+    const wage = latestMove ? latestMove.weeklyWageEur : estimateWeeklyWage(player);
+    const paidShare = latestMove?.type === "loan" ? (latestMove.wageSharePercent ?? 100) : 100;
+    return sum + Math.round(wage * paidShare / 100);
   }, 0);
   // The roster's estimated payroll is the baseline; the profile-based margin
   // is the additional weekly room available for new contracts.
@@ -189,6 +244,12 @@ export function getClubTransferFinancials(clubId, transferState, currentDate, da
     wageBudgetWeeklyEur,
     committedWagesWeeklyEur,
     availableWagesWeeklyEur: Math.max(0, wageBudgetWeeklyEur - committedWagesWeeklyEur),
+    seasonBalanceEur,
+    projectedAnnualRevenueEur: Math.round(profile * profile * 4500),
+    projectedAnnualWageCostsEur: committedWagesWeeklyEur * 52,
+    projectedAnnualOperatingCostsEur: Math.round(profile * 15000),
+    projectedAnnualNetEur: Math.round(profile * profile * 4500) -
+      committedWagesWeeklyEur * 52 - Math.round(profile * 15000),
     valid: budgetEur >= 0
   };
 }
