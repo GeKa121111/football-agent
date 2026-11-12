@@ -256,6 +256,39 @@ test("excludes injured world players from a matchday starting XI", () => {
   assert.ok(team.lineup.every((item) => item.simulationOnly === false));
 });
 
+test("keeps a player out for the full injury day and restores eligibility on the following day", () => {
+  const initial = createInitialFootballState(1, "2026-07-01");
+  const fixture = initial.fixtures[0];
+  const clubId = fixture.homeClubId;
+  const starter = buildSimulationTeam(clubId).lineup.find((player) => player.simulationOnly !== true);
+  assert.ok(starter, "fixture club must have a real starting player");
+
+  const injuredState = {
+    ...initial,
+    playerDevelopment: {
+      ...initial.playerDevelopment,
+      players: initial.playerDevelopment.players.map((player) => player.playerId === starter.id
+        ? { ...player, injuryDays: 1 }
+        : player)
+    }
+  };
+  const advanced = advanceFootballSeasonDay(injuredState, fixture.date, 1);
+  const match = advanced.resultsToday.find((result) =>
+    result.home.clubId === clubId || result.away.clubId === clubId
+  );
+  assert.ok(match);
+  assert.equal(match.playerPerformances.some((player) => player.playerId === starter.id), false);
+  assert.equal(advanced.football.playerDevelopment.players
+    .find((player) => player.playerId === starter.id).injuryDays, 0);
+
+  const nextTimestamp = Date.parse(fixture.date + "T00:00:00.000Z") + 86400000;
+  const nextDate = new Date(nextTimestamp).toISOString().slice(0, 10);
+  const nextTeam = buildSimulationTeam(
+    clubId, WORLD_DATABASE, advanced.football.playerDevelopment, null, nextDate
+  );
+  assert.equal(nextTeam.squad.some((player) => player.id === starter.id), true);
+});
+
 test("calculates competition standings from saved results with deterministic tie-breaks", () => {
   const competition = WORLD_DATABASE.competitions.find((item) => item.id === "competition-eg-premier");
   const [ahly, zamalek] = competition.clubIds;
