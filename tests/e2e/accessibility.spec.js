@@ -1,7 +1,18 @@
 import { test, expect } from "@playwright/test";
 
 function luminance(color) {
-  const channels = color.match(/[0-9.]+/g)?.slice(0, 3).map(Number) ?? [];
+  const value = color.trim();
+  const hexMatch = value.match(/^#([\\da-f]{3}|[\\da-f]{6}|[\\da-f]{8})$/i);
+  let channels;
+
+  if (hexMatch) {
+    let hex = hexMatch[1].slice(0, 6);
+    if (hex.length === 3) hex = [...hex].map((digit) => digit + digit).join("");
+    channels = [0, 2, 4].map((index) => Number.parseInt(hex.slice(index, index + 2), 16));
+  } else {
+    channels = value.match(/[0-9.]+/g)?.slice(0, 3).map(Number) ?? [];
+  }
+
   if (channels.length !== 3) throw new Error("Unsupported computed color: " + color);
   const linear = channels.map((channel) => {
     const normalized = channel / 255;
