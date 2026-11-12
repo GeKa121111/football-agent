@@ -2,10 +2,10 @@ import { WORLD_DATABASE } from "../data/world-database.js";
 import { getRepresentationContractExpiry, getRepresentationContractCommission } from "./representation.js";
 
 export const TRANSFER_OFFER_VALIDITY_DAYS = 14;
-export const MAX_TRANSFER_OFFERS = 100;
-export const MAX_TRANSFER_MOVES = 200;
-export const MAX_TRANSFER_HISTORY = 500;
-export const MAX_TRANSFER_LEDGER = 300;
+export const MAX_TRANSFER_OFFERS = 1000;
+export const MAX_TRANSFER_MOVES = 1000;
+export const MAX_TRANSFER_HISTORY = 5000;
+export const MAX_TRANSFER_LEDGER = 1000;
 export const TRANSFER_CONTRACT_YEARS = Object.freeze([1, 2, 3, 4, 5]);
 export const TRANSFER_LOAN_MONTHS = Object.freeze([3, 6, 9, 12, 18, 24]);
 const MAX_EUR = 2_000_000_000;
