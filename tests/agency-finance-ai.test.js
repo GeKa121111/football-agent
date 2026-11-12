@@ -9,6 +9,7 @@ import {
   getAgencyManagementSummary,
   getAgencySponsorshipOffers,
   getAgencyStaffModifiers,
+  isValidAgencyManagementState,
   getRivalClientIds,
   hireAgencyEmployee,
   signAgencySponsorship,
