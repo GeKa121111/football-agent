@@ -430,12 +430,36 @@ test("migrates older saves by assigning legacy continental matches to valid grou
 
   const nextDate = new Date(Date.parse(firstFixture.date + "T00:00:00.000Z") + 86400000)
     .toISOString().slice(0, 10);
+  const groups = buildCompetitionGroups(continental, WORLD_DATABASE);
+  const oldCrossGroupFixture = {
+    id: "legacy-cross-group-" + continental.id,
+    season: 1,
+    competitionId: continental.id,
+    competitionName: continental.nameAr,
+    date: nextDate,
+    round: 1,
+    leg: 1,
+    homeClubId: groups[0].clubIds[0],
+    awayClubId: groups[1].clubIds[0],
+    status: "scheduled",
+    resultId: null
+  };
+  legacy.fixtures = [...legacy.fixtures, oldCrossGroupFixture];
+
   const migrated = advanceFootballSeasonDay(legacy, nextDate, 1).football;
   const migratedFixture = migrated.fixtures.find((fixture) => fixture.id === firstFixture.id);
+  const migratedLegacyFixture = migrated.fixtures.find((fixture) =>
+    fixture.id === oldCrossGroupFixture.id
+  );
+  const migratedLegacyResult = migrated.results.find((result) =>
+    result.id === oldCrossGroupFixture.id
+  );
   const migratedResult = migrated.results.find((result) => result.id === firstFixture.id);
 
   assert.ok(migratedFixture.groupId);
   assert.equal(migratedResult.groupId, migratedFixture.groupId);
+  assert.equal(migratedLegacyFixture.legacyCompetitionMatch, true);
+  assert.equal(migratedLegacyResult.knockoutDecision, undefined);
   assert.equal(isValidFootballState(migrated, nextDate, 1), true);
   const table = getCompetitionStandings(migrated, continental.id, WORLD_DATABASE, 1, migratedFixture.groupId);
   assert.ok(table.some((row) => row.played > 0));
