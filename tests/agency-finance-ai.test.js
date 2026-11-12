@@ -325,17 +325,19 @@ test("keeps agency finance, sponsorship, rivals and club interest valid across t
   };
 
   for (let week=0;week<156;week+=1) {
-    save = {...save,world:{...save.world,currentDate}};
-    const result = advanceAgencyManagementDay(save,currentDate,PLAYERS);
-    assert.equal(result.error,undefined,"agency tick must remain valid at " + currentDate);
-    save = result.save;
-    assert.equal(isValidAgencyManagementState(save.agency.management,currentDate),true,
-      "management schema must remain valid at " + currentDate);
-    assert.ok(save.agency.balance >= 0);
-    assert.ok(save.agency.management.ledger.length <= 1000);
-    assert.ok(save.agency.management.competitiveHistory.length <= 300);
-    assert.ok(save.agency.management.clubInterests.length <= 200);
-    currentDate = addDays(currentDate,7);
+    for (let day=0;day<7;day+=1) {
+      save = {...save,world:{...save.world,currentDate}};
+      const result = advanceAgencyManagementDay(save,currentDate,PLAYERS);
+      assert.equal(result.error,undefined,"agency tick must remain valid at " + currentDate);
+      save = result.save;
+      assert.equal(isValidAgencyManagementState(save.agency.management,currentDate),true,
+        "management schema must remain valid at " + currentDate);
+      assert.ok(save.agency.balance >= 0);
+      assert.ok(save.agency.management.ledger.length <= 1000);
+      assert.ok(save.agency.management.competitiveHistory.length <= 300);
+      assert.ok(save.agency.management.clubInterests.length <= 200);
+      currentDate = addDays(currentDate,1);
+    }
   }
 
   const management = save.agency.management;
