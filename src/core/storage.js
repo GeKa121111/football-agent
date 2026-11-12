@@ -5,10 +5,11 @@ import { createInitialTalentPipelineState, isValidTalentPipelineState } from "..
 import { createInitialFootballState, isValidFootballState } from "../engines/football-season.js";
 import { mergePlayerDevelopmentRoster } from "../engines/player-development.js";
 import { createInitialTransferState, isValidTransferState } from "../engines/transfers.js";
+import { createInitialAgencyManagementState, isValidAgencyManagementState } from "../engines/agency-management.js";
 import { getWorldSquadPlayers } from "../data/world-database.js";
 
 export const STORAGE_KEY = "football-agent.save";
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 export const WATCHLIST_KEY = "football-agent.watchlist";
 
 export function createInitialSave(now = new Date().toISOString()) {
@@ -31,7 +32,8 @@ export function createInitialSave(now = new Date().toISOString()) {
       reputation: 1,
       clients: [],
       representation: createInitialRepresentationState(),
-      talentPipeline: createInitialTalentPipelineState()
+      talentPipeline: createInitialTalentPipelineState(),
+      management: createInitialAgencyManagementState()
     },
     world: {
       currentDate: "2026-07-01",
@@ -356,7 +358,8 @@ export function isValidSave(value) {
     isValidFootballState(value.world.football, currentDate, season) &&
     isValidTransferState(value.world.transfers, currentDate, clients, value.agency.representation) &&
     isValidRepresentationState(value.agency.representation, currentDate, clients) &&
-    isValidTalentPipelineState(value.agency.talentPipeline, currentDate);
+    isValidTalentPipelineState(value.agency.talentPipeline, currentDate) &&
+    isValidAgencyManagementState(value.agency.management, currentDate);
 }
 
 export function readWatchlist(storage) {
@@ -402,7 +405,7 @@ function resolveStorage(storage) {
 
 function migrateSave(value) {
   if (!isRecord(value) || !isRecord(value.meta) || !isRecord(value.world)) return value;
-  if (![1, 2, 3, 4, 5, 6].includes(value.meta.version)) return value;
+  if (![1, 2, 3, 4, 5, 6, 7].includes(value.meta.version)) return value;
 
   return {
     ...value,
@@ -417,7 +420,10 @@ function migrateSave(value) {
         : createInitialRepresentationState(),
       talentPipeline: isRecord(value.agency?.talentPipeline)
         ? value.agency.talentPipeline
-        : createInitialTalentPipelineState()
+        : createInitialTalentPipelineState(),
+      management: isRecord(value.agency?.management)
+        ? value.agency.management
+        : createInitialAgencyManagementState()
     },
     world: {
       ...value.world,
@@ -470,7 +476,7 @@ export function readSave(storage) {
       return { status: "unsupported", save: null, error: null };
     }
 
-    const migrated = [1, 2, 3, 4, 5, 6].includes(parsed?.meta?.version);
+    const migrated = [1, 2, 3, 4, 5, 6, 7].includes(parsed?.meta?.version);
     if (migrated) parsed = migrateSave(parsed);
 
     if (!isValidSave(parsed)) {
