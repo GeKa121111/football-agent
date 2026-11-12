@@ -2,6 +2,7 @@ import { advanceCareerDay } from "./career-calendar.js";
 import { settleTransferPerformanceBonuses } from "./transfers.js";
 import { advanceScoutingMissions } from "./scouting.js";
 import { advanceRepresentationState } from "./representation.js";
+import { advanceAgencyManagementDay } from "./agency-management.js";
 
 /**
  * Runs one complete in-game day across the shared career world.
@@ -24,13 +25,15 @@ export function advanceCareerSimulationDay(save, players) {
   const bonusSettlement = settleTransferPerformanceBonuses(calendarSave, currentDate);
   const scouting = advanceScoutingMissions(bonusSettlement.save, dailyPlayers, currentDate);
   const representation = advanceRepresentationState(scouting.save, currentDate);
+  const agencyOperations = advanceAgencyManagementDay(representation.save, currentDate);
 
   return {
-    save: representation.save,
+    save: agencyOperations.save,
     completedReports: scouting.completedReports,
     expiredOffers: representation.expiredOffers,
     expiredContracts: representation.expiredContracts,
-    paidPerformanceBonuses: bonusSettlement.paidBonuses
+    paidPerformanceBonuses: bonusSettlement.paidBonuses,
+    agencyOperations: agencyOperations.processed ? agencyOperations : null
   };
 }
 
