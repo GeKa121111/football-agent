@@ -7,6 +7,7 @@
 نعيد بناء التجربة عبر خارطة من 8 مراحل مع الحفاظ على المحركات وملفات المسيرة التي تجتاز اختبارات التوافق.
 
 - [خارطة Rebuild 2.0 — 8 مراحل](docs/REBUILD-ROADMAP-8-PHASES.md)
+- [المرحلة التاسعة — المسابقات والعالم التنافسي](docs/PHASE-9-COMPETITIONS-WORLD.md)
 - [سجل المرحلة السابعة — إدارة الوكالة والاقتصاد والذكاء الاصطناعي](docs/REBUILD-PHASE-7-AGENCY-ECONOMY-AI.md)
 - [مراجعة المرحلة الثامنة — تدقيق الإصدار وخطة الإغلاق](docs/REBUILD-PHASE-8-RELEASE-AUDIT.md)
 - [قرارات المعمارية](docs/ARCHITECTURE.md)
