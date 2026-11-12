@@ -205,6 +205,40 @@ test("supports loans, tracks the temporary club, and returns the player on the d
   assert.equal(isValidTransferState(returned.save.world.transfers, "2027-01-01", returned.save.agency.clients, returned.save.agency.representation), true);
 });
 
+test("expires open transfer negotiations when the representation mandate ends", () => {
+  const sent = send();
+  const terminated = structuredClone(sent.save);
+  terminated.agency.clients = [];
+  terminated.agency.representation.contracts[0] = {
+    ...terminated.agency.representation.contracts[0],
+    status: "terminated",
+    endedOn: "2026-07-02"
+  };
+  const advanced = advanceTransferState(terminated, "2026-07-02");
+  assert.deepEqual(advanced.expiredOffers, [sent.offer.id]);
+  assert.equal(advanced.save.world.transfers.offers[0].status, "expired");
+  assert.equal(isValidTransferState(advanced.save.world.transfers, "2026-07-02", [],
+    terminated.agency.representation), true);
+});
+
+test("expires agreed transfer files when no active representation mandate remains", () => {
+  const sent = send();
+  const countered = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
+  const agreed = acceptTransferCounterOffer(countered.save, sent.offer.id, "2026-07-02");
+  const terminated = structuredClone(agreed.save);
+  terminated.agency.clients = [];
+  terminated.agency.representation.contracts[0] = {
+    ...terminated.agency.representation.contracts[0],
+    status: "terminated",
+    endedOn: "2026-07-03"
+  };
+  const advanced = advanceTransferState(terminated, "2026-07-03");
+  assert.deepEqual(advanced.expiredOffers, [sent.offer.id]);
+  assert.equal(advanced.save.world.transfers.offers[0].status, "expired");
+  assert.equal(isValidTransferState(advanced.save.world.transfers, "2026-07-03", [],
+    terminated.agency.representation), true);
+});
+
 test("expires stale offers as career time advances", () => {
   const sent = send();
   const advanced = advanceTransferState(sent.save, "2026-07-16");
