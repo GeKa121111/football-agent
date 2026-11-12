@@ -2496,6 +2496,11 @@ function renderAgencyManagementPanel(context) {
       copy.append(
         node("strong", "", interest.clubName + " · " + interest.playerName),
         node("span", "", (club?.nameAr ?? "نادي") + " · " + interest.position + " · ملاءمة " + interest.fitScore + "/100"),
+        ...(interest.seasonAppearances > 0 ? [node("small", "", "أداء الموسم: " +
+          interest.seasonAppearances + " مشاركة · " + interest.seasonGoals + " أهداف · " +
+          interest.seasonAssists + " صناعة · " +
+          (interest.averageMatchRating === null ? "لا يوجد متوسط تقييم" : interest.averageMatchRating + "/10") +
+          (interest.honorsCount > 0 ? " · " + interest.honorsCount + " جائزة فردية" : ""))] : []),
         node("small", "", "ميزانية انتقال النادي " + formatEuroMoney(interest.clubBudgetEur) +
           " · قيمة تقديرية للاعب " + formatEuroMoney(interest.estimatedFeeEur)),
         node("small", "", interest.status === "enquiry"
