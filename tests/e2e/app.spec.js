@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { isValidSave } from "../../src/core/storage.js";
+import { advanceCareerDays } from "../../src/engines/career-calendar.js";
+import { advanceRepresentationState } from "../../src/engines/representation.js";
 
 async function navigateTo(page, view) {
   const mobileNav = page.locator(".mobile-nav");
@@ -38,8 +40,26 @@ function prepareNearExpirySave(save, contractId, remainingDays) {
   contract.signedOn = signedOn;
   contract.expiresOn = expiresOn;
   offer.createdDate = signedOn;
-  offer.expiresDate = addCalendarDays(signedOn, 14);
+  offer.expiresDate = addCalendarDays(signedOn, 30);
   return prepared;
+}
+
+// Advance a short test interval through the same calendar and representation
+// engines used by the application instead of calling a removed test helper.
+function advanceSaveToDate(save, targetDate) {
+  const current = Date.parse(save.world.currentDate + "T00:00:00.000Z");
+  const target = Date.parse(targetDate + "T00:00:00.000Z");
+  let days = Math.round((target - current) / 86400000);
+  if (!Number.isFinite(current) || !Number.isFinite(target) || days < 0) {
+    throw new Error("Target date must be a valid date on or after the saved career date.");
+  }
+  let advanced = save;
+  while (days > 0) {
+    const step = Math.min(days, 31);
+    advanced = advanceCareerDays(advanced, step);
+    days -= step;
+  }
+  return advanceRepresentationState(advanced, targetDate).save;
 }
 
 test.describe("Desktop experience", () => {
@@ -578,7 +598,9 @@ test.describe("Desktop experience", () => {
     expect(permanentMove.status).toBe("active");
     expect(permanentMove.feeEur).toBe(500000);
     expect(saved.world.transfers.offers[0].purchaseClause).toBe("option");
-    await expect(page.locator(".transfer-move-row")).toContainText(loan.playerName);
+    const playerMoveRows = page.locator(".transfer-move-row").filter({ hasText: loan.playerName });
+    await expect(playerMoveRows).toHaveCount(2);
+    await expect(playerMoveRows.filter({ hasText: "انتقال نهائي" })).toContainText(loan.playerName);
     await hasNoHorizontalOverflow(page);
   });
 
