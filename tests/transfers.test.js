@@ -114,6 +114,31 @@ test("supports counter-proposals and reaches an agreement within bounded rounds"
   assert.equal(isValidTransferState(agreement.save.world.transfers, "2026-07-01", agreement.save.agency.clients, agreement.save.agency.representation), true);
 });
 
+test("supports a final club counter in round four and blocks a fifth negotiation turn", () => {
+  const sent = send();
+  const clubCounterOne = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
+  assert.equal(clubCounterOne.offer.round, 2);
+
+  const agencyCounter = submitTransferCounterOffer(clubCounterOne.save, sent.offer.id,
+    { ...permanentTerms, feeEur: 1_200_000 }, "2026-07-01");
+  assert.equal(agencyCounter.offer.round, 3);
+
+  const clubCounterTwo = evaluateTransferOffer(agencyCounter.save, sent.offer.id, "2026-07-01", database);
+  assert.equal(clubCounterTwo.status, "countered");
+  assert.equal(clubCounterTwo.offer.round, 4);
+  assert.equal(clubCounterTwo.counterOffer.feeEur, 1_800_000);
+
+  const blockedFifthTurn = submitTransferCounterOffer(clubCounterTwo.save, sent.offer.id,
+    { ...permanentTerms, feeEur: 1_700_000 }, "2026-07-01");
+  assert.equal(blockedFifthTurn.changed, false);
+
+  const agreement = acceptTransferCounterOffer(clubCounterTwo.save, sent.offer.id, "2026-07-02");
+  assert.equal(agreement.status, "agreed");
+  assert.equal(agreement.offer.round, 4);
+  assert.equal(isValidTransferState(agreement.save.world.transfers, "2026-07-02",
+    agreement.save.agency.clients, agreement.save.agency.representation), true);
+});
+
 test("rejects offers without creating moves or earning commissions", () => {
   const sent = send();
   const rejected = rejectTransferOffer(sent.save, sent.offer.id, "2026-07-02");
