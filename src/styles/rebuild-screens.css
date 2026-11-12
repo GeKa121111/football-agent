@@ -702,6 +702,10 @@
 .talent-contact-form { max-width: 100%; }
 .talent-contact-form select, .talent-contact-form input { width: 100%; min-width: 0; }
 .talent-contact-form textarea { width: 100%; min-width: 0; }
+.talent-performance-summary { display: grid; gap: 5px; padding: 12px; border: 1px solid var(--fa-border); border-radius: 11px; background: rgba(49,124,157,.1); }
+.talent-performance-summary strong { color: var(--fa-text); font-size: 11px; }
+.talent-performance-summary span { color: var(--fa-text); font-size: 10px; font-variant-numeric: tabular-nums; }
+.talent-performance-summary small { color: var(--fa-muted); font-size: 10px; line-height: 1.6; }
 .talent-activity-history { display: grid; gap: 9px; max-height: min(58vh, 520px); overflow-y: auto; }
 .talent-activity-row { display: grid; gap: 5px; padding: 11px; border: 1px solid var(--fa-border); border-radius: 11px; background: rgba(255,255,255,.025); }
 .talent-activity-row strong { color: var(--fa-text); font-size: 10px; }
@@ -895,6 +899,7 @@
 .agency-credit-request-button:disabled{opacity:.48;cursor:not-allowed}
 .agency-club-interests-section .agency-operations-row{background:linear-gradient(140deg,rgba(54,119,151,.1),rgba(17,24,39,.56))}
 .agency-club-interest-row .representation-count{white-space:nowrap}
+.agency-interest-performance{color:var(--fa-accent);font-variant-numeric:tabular-nums;line-height:1.7}
 @media(max-width:760px){
  .agency-club-interest-row{grid-template-columns:minmax(0,1fr)}
  .agency-club-interest-row .representation-count{justify-self:start}

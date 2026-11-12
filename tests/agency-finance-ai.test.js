@@ -263,6 +263,116 @@ test("clubs independently monitor agency clients and raise enquiries during open
 });
 
 
+test("club interest scores reflect actual appearances and recent match ratings without auto-creating offers", () => {
+  const initial = createInitialSave();
+  const player = PLAYERS[0];
+  const preferences = getPlayerRepresentationProfile(player);
+  const sent = createRepresentationOffer(initial, player, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays,
+    representationType: preferences.prefersExclusive ? "exclusive" : "non-exclusive"
+  });
+  assert.equal(sent.changed, true, sent.error);
+  const response = evaluateRepresentationOffer(sent.save, sent.offer.id);
+  let save = response.save;
+  if (response.status === "countered") {
+    const accepted = acceptRepresentationCounterOffer(response.save, sent.offer.id);
+    assert.equal(accepted.changed, true, accepted.error);
+    save = accepted.save;
+  }
+
+  const seasonAward = {
+    playerId: player.id,
+    playerName: player.name,
+    clubId: player.clubId,
+    clubName: player.club,
+    value: 8.9,
+    appearances: 8,
+    averageRating: 8.9
+  };
+  save = {
+    ...save,
+    world: {
+      ...save.world,
+      football: {
+        ...save.world.football,
+        archives: [{
+          id: "archive-1-performance-interest",
+          season: 1,
+          competitionId: "competition-eg-premier",
+          competitionName: "الدوري المصري الممتاز",
+          format: "round-robin",
+          matchesTotal: 2,
+          matchesPlayed: 2,
+          matchesScheduled: 0,
+          complete: true,
+          championClubId: player.clubId,
+          championName: player.club,
+          standings: [],
+          groups: [],
+          awards: {
+            playerOfSeason: seasonAward,
+            goldenBoot: { ...seasonAward, value: 6 },
+            topAssists: null
+          },
+          archivedOn: save.world.currentDate
+        }]
+      }
+    }
+  };
+  const development = save.world.football.playerDevelopment.players.find((item) =>
+    item.playerId === player.id
+  );
+  assert.ok(development);
+  const updatedDevelopment = {
+    ...development,
+    rating: Math.min(development.potential, development.rating + 8),
+    appearances: 8,
+    minutesPlayed: 720,
+    goals: 3,
+    assists: 2,
+    averageMatchRating: 8.2
+  };
+  save = {
+    ...save,
+    world: {
+      ...save.world,
+      football: {
+        ...save.world.football,
+        playerDevelopment: {
+          ...save.world.football.playerDevelopment,
+          players: save.world.football.playerDevelopment.players.map((item) =>
+            item.playerId === player.id ? updatedDevelopment : item
+          )
+        }
+      }
+    }
+  };
+  assert.equal(isValidSave(save), true);
+
+  const monday = advanceCareerSimulationDays(save, 5, PLAYERS);
+  const interest = monday.save.agency.management.clubInterests.find((item) =>
+    item.playerId === player.id
+  );
+  assert.ok(interest);
+  assert.equal(interest.performanceSnapshot.appearances >= 8, true);
+  assert.ok(interest.performanceSnapshot.minutesPlayed >= 720);
+  assert.ok(interest.performanceSnapshot.goals >= 3);
+  assert.ok(interest.performanceSnapshot.assists >= 2);
+  assert.ok(interest.performanceSnapshot.averageMatchRating >= 7);
+  assert.ok(interest.performanceSnapshot.performanceBonus > 0);
+  assert.deepEqual(interest.performanceSnapshot.awardLabels.sort(), ["golden-boot", "player-of-season"]);
+  assert.equal(interest.performanceSnapshot.awardCount, 2);
+  assert.equal(interest.performanceSnapshot.awardBonus, 4);
+
+  const createdTransferOffers = (monday.save.world.transfers.offers ?? []).filter((offer) =>
+    offer.playerId === player.id &&
+    ["pending", "countered", "agreed"].includes(offer.status)
+  );
+  assert.equal(createdTransferOffers.length, 0);
+  assert.equal(isValidSave(monday.save), true);
+});
+
 test("retains a new competitor offer after the rival history reaches its rolling cap", () => {
   const initial = createInitialSave();
   const rival = initial.agency.management.competitors[0];

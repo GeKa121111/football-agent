@@ -6,10 +6,12 @@ import {
   writeWatchlist
 } from "./core/storage.js";
 import { WORLD_DATABASE, getWorldPlayerProfiles, getWorldSummary } from "./data/world-database.js";
+import { buildCompetitionGroups } from "./data/competition-rules.js";
 import {
   getUpcomingFootballFixtures,
   getRecentFootballResults,
-  getCompetitionStandings
+  getCompetitionStandings,
+  getCompetitionSeasonHistory
 } from "./engines/football-season.js";
 import {
   TRAINING_FOCUSES,
@@ -33,6 +35,7 @@ import {
 import { createPlayerPortrait } from "./ui/player-portrait.js";
 import {
   getTalentProspect,
+  getTalentProspectPerformanceSummary,
   upsertTalentProspect,
   recordTalentProspectContact,
   completeTalentProspectFollowUp,
@@ -145,6 +148,11 @@ function getCurrentWorldPlayers(save) {
       rating: Math.round(development?.rating ?? player.rating),
       potential: Math.round(development?.potential ?? player.potential),
       age: development?.age ?? player.age,
+      appearances: development?.appearances ?? 0,
+      minutesPlayed: development?.minutesPlayed ?? 0,
+      goals: development?.goals ?? 0,
+      assists: development?.assists ?? 0,
+      averageMatchRating: development?.averageMatchRating ?? null,
       clubId: club?.id ?? null,
       club: club?.nameAr ?? "لاعب حر",
       clubShortName: club?.shortName ?? "حر",
@@ -869,6 +877,8 @@ function renderFootball(context) {
   const standingsTitle = node("h2", "", "جدول الترتيب");
   const competitionSelect = node("select", "filter-select");
   competitionSelect.setAttribute("aria-label", "اختيار المسابقة للترتيب");
+  const groupSelect = node("select", "filter-select");
+  groupSelect.setAttribute("aria-label", "اختيار المجموعة");
   [...WORLD_DATABASE.competitions]
     .sort((a, b) => a.nameAr.localeCompare(b.nameAr, "ar"))
     .forEach((competition) => {
@@ -876,11 +886,82 @@ function renderFootball(context) {
       option.value = competition.id;
       competitionSelect.append(option);
     });
-  standingsHeading.append(standingsTitle, competitionSelect);
+  standingsHeading.append(standingsTitle, competitionSelect, groupSelect);
   standingsPanel.append(standingsHeading);
   const standingsTable = node("div", "football-standings-table");
   const renderStandings = () => {
-    const standings = getCompetitionStandings(football, competitionSelect.value);
+    const competition = WORLD_DATABASE.competitions.find((item) => item.id === competitionSelect.value);
+    if (competition?.type === "cup") {
+      groupSelect.style.display = "none";
+      const cupFixtures = football.fixtures
+        .filter((fixture) => fixture.competitionId === competition.id && fixture.season === football.season)
+        .sort((a, b) => a.round - b.round || a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+      const rounds = [...new Set(cupFixtures.map((fixture) => fixture.round))].sort((a, b) => a - b);
+      const bracket = node("div", "football-knockout-bracket");
+      if (cupFixtures.length === 0) {
+        bracket.append(node("p", "representation-empty", "لا توجد مواجهات مسجلة للكأس في هذا الموسم."));
+      } else {
+        rounds.forEach((roundNumber) => {
+          const roundPanel = node("section", "football-knockout-round");
+          roundPanel.append(node("h3", "", roundNumber === rounds.at(-1)
+            ? "النهائي"
+            : "دور " + formatHomeNumber(roundNumber)));
+          cupFixtures.filter((fixture) => fixture.round === roundNumber).forEach((fixture) => {
+            const match = node("article", "football-knockout-match");
+            const result = football.results.find((item) => item.id === fixture.id);
+            const home = clubById.get(fixture.homeClubId);
+            const away = clubById.get(fixture.awayClubId);
+            const score = result
+              ? result.home.goals + " - " + result.away.goals
+              : "VS";
+            const winnerId = result?.knockoutDecision?.winnerClubId;
+            const winner = winnerId ? clubById.get(winnerId)?.nameAr ?? winnerId : null;
+            const method = result?.knockoutDecision?.decidedBy === "penalties"
+              ? "تأهل بركلات الترجيح"
+              : result?.knockoutDecision?.decidedBy === "extra-time"
+                ? "تأهل بعد الوقت الإضافي"
+                : result?.knockoutDecision?.decidedBy === "regular-time"
+                  ? "تأهل في الوقت الأصلي"
+                  : "موعد المباراة " + formatHomeDate(fixture.date);
+            match.append(
+              node("span", "", (home?.shortName ?? fixture.homeClubId) + "  " + score + "  " +
+                (away?.shortName ?? fixture.awayClubId)),
+              node("small", "", winner ? winner + " · " + method : method)
+            );
+            roundPanel.append(match);
+          });
+          bracket.append(roundPanel);
+        });
+      }
+      standingsTable.replaceChildren(bracket);
+      return;
+    }
+
+    const groups = competition?.type === "continental"
+      ? buildCompetitionGroups(competition, WORLD_DATABASE)
+      : [];
+    groupSelect.replaceChildren();
+    if (groups.length > 0) {
+      groups.forEach((group) => {
+        const option = node("option", "", group.nameAr);
+        option.value = group.id;
+        groupSelect.append(option);
+      });
+      groupSelect.style.display = "";
+      if (!groups.some((group) => group.id === groupSelect.value)) {
+        groupSelect.value = groups[0].id;
+      }
+    } else {
+      groupSelect.style.display = "none";
+    }
+
+    const standings = getCompetitionStandings(
+      football,
+      competitionSelect.value,
+      WORLD_DATABASE,
+      football.season,
+      groups.length > 0 ? groupSelect.value : null
+    );
     const header = node("div", "football-standings-row is-header");
     ["#", "النادي", "لعب", "ف", "ت", "خ", "له", "عليه", "النقاط"].forEach((label) => {
       header.append(node("span", "", label));
@@ -909,6 +990,7 @@ function renderFootball(context) {
     }
   };
   competitionSelect.addEventListener("change", renderStandings);
+  groupSelect.addEventListener("change", renderStandings);
   renderStandings();
   standingsPanel.append(standingsTable);
 
@@ -981,6 +1063,50 @@ function renderFootball(context) {
       resultList.append(row);
     });
     resultsPanel.append(resultList);
+  }
+
+  const archivePanel = node("section", "surface-card football-panel football-archive-panel");
+  const archiveHeading = node("div", "football-panel-heading");
+  archiveHeading.append(
+    node("h2", "", "أرشيف المواسم والجوائز"),
+    node("span", "representation-count", "البطولات المكتملة")
+  );
+  archivePanel.append(archiveHeading);
+  const archivedCompetitions = WORLD_DATABASE.competitions
+    .flatMap((competition) => getCompetitionSeasonHistory(football, competition.id)
+      .filter((archive) => archive.complete && archive.season < football.season)
+      .map((archive) => ({ competition, archive })))
+    .sort((a, b) => b.archive.season - a.archive.season ||
+      a.archive.competitionName.localeCompare(b.archive.competitionName, "ar"))
+    .slice(0, 12);
+  if (archivedCompetitions.length === 0) {
+    archivePanel.append(node("p", "representation-empty", "أول موسم مكتمل هيظهر هنا مع البطل وجوائز اللاعبين."));
+  } else {
+    const archiveList = node("div", "football-archive-list");
+    archivedCompetitions.forEach(({ archive }) => {
+      const card = node("article", "football-archive-card");
+      card.append(
+        node("strong", "", archive.competitionName),
+        node("span", "", "موسم " + formatHomeNumber(archive.season) +
+          " · البطل " + (archive.championName ?? "لم يُحسم"))
+      );
+      const awards = archive.awards ?? {};
+      const awardLines = [
+        ["أفضل لاعب", awards.playerOfSeason],
+        ["الهداف", awards.goldenBoot],
+        ["الأكثر صناعة", awards.topAssists]
+      ].filter(([, award]) => award);
+      if (awardLines.length > 0) {
+        const details = awardLines.map(([label, award]) =>
+          label + ": " + award.playerName + " · " + award.clubName
+        );
+        card.append(node("small", "", details.join(" | ")));
+      } else {
+        card.append(node("small", "", "لا توجد جوائز فردية كافية في السجل."));
+      }
+      archiveList.append(card);
+    });
+    archivePanel.append(archiveList);
   }
 
   const trainingPanel = node("section", "surface-card football-panel football-training-panel");
@@ -1110,7 +1236,7 @@ function renderFootball(context) {
     context.updatePlayerTrainingPlan(playerSelect.value, focusSelect.value, intensitySelect.value);
   });
   trainingPanel.append(form, savePlanButton, playerDetails);
-  page.append(summary, schedulePanel, standingsPanel, resultsPanel, trainingPanel);
+  page.append(summary, schedulePanel, standingsPanel, resultsPanel, archivePanel, trainingPanel);
   return page;
 }
 
@@ -2464,6 +2590,20 @@ function renderAgencyManagementPanel(context) {
         node("span", "", (club?.nameAr ?? "نادي") + " · " + interest.position + " · ملاءمة " + interest.fitScore + "/100"),
         node("small", "", "ميزانية انتقال النادي " + formatEuroMoney(interest.clubBudgetEur) +
           " · قيمة تقديرية للاعب " + formatEuroMoney(interest.estimatedFeeEur)),
+        ...(interest.performanceSnapshot?.appearances > 0 ? [node("small", "agency-interest-performance",
+          "الأداء المسجل: " + interest.performanceSnapshot.appearances + " مشاركة · " +
+          (interest.performanceSnapshot.averageMatchRating === null
+            ? "متوسط التقييم غير متاح"
+            : "متوسط التقييم " + interest.performanceSnapshot.averageMatchRating.toFixed(2) + "/10") +
+          " · " + interest.performanceSnapshot.goals + " هدف · " +
+          interest.performanceSnapshot.assists + " صناعة · دعم الملاءمة +" +
+          interest.performanceSnapshot.performanceBonus +
+          (interest.performanceSnapshot.awardLabels?.length
+            ? " · جوائز: " + interest.performanceSnapshot.awardLabels.map((award) =>
+              award === "player-of-season" ? "أفضل لاعب موسم"
+                : award === "golden-boot" ? "هداف البطولة" : "الأكثر صناعة"
+            ).join("، ")
+            : ""))] : []),
         node("small", "", interest.status === "enquiry"
           ? "النافذة مفتوحة حتى " + formatHomeDate(interest.transferWindowEndDate)
           : "متابعة مستقبلية · ينتهي الاهتمام " + formatHomeDate(interest.expiresDate))
@@ -3150,6 +3290,20 @@ export function mountApp(root) {
     const staffRoster = getScoutingRoster(state.save.world.scouting, state.save.world.currentDate);
     const staffName = (staffId) => staffRoster.find((scout) => scout.id === staffId)?.name ?? "عضو سابق";
     const body = node("div", "talent-activity-history");
+    const performanceSummary = getTalentProspectPerformanceSummary(entry);
+    if (performanceSummary.appearances > 0) {
+      const performancePanel = node("section", "talent-performance-summary");
+      performancePanel.append(
+        node("strong", "", "ملخص الأداء داخل الملعب"),
+        node("span", "", performanceSummary.appearances + " مشاركة · " +
+          performanceSummary.minutesPlayed + " دقيقة · متوسط " +
+          performanceSummary.averageMatchRating.toFixed(2) + "/10"),
+        node("small", "", performanceSummary.goals + " هدف · " +
+          performanceSummary.assists + " صناعة · آخر ظهور " +
+          formatHomeDate(performanceSummary.lastAppearanceDate))
+      );
+      body.append(performancePanel);
+    }
     if (!entry || activity.length === 0) {
       body.append(node("p", "representation-empty", "لا يوجد نشاط مسجل لهذا اللاعب حتى الآن."));
     } else {
@@ -3162,7 +3316,9 @@ export function mountApp(root) {
               " ← " + (event.toScoutId ? staffName(event.toScoutId) : "بدون مسؤول")
             : event.type === "follow-up-reviewed"
               ? "إتمام مراجعة المتابعة"
-              : event.type === "contact"
+              : event.type === "match-performance"
+                ? "مشاركة في " + event.competitionName + " · " + event.clubName
+                : event.type === "contact"
                 ? "تواصل " + kindLabels[event.kind] + " · " + outcomeLabels[event.outcome]
                 : "نشاط الوكالة";
         row.append(
@@ -3929,6 +4085,19 @@ export function mountApp(root) {
           statMini("الإمكانيات المقدرة", finding.estimatedPotential),
           statMini("الثقة", finding.confidence + "%")
         );
+        const currentDevelopment = getPlayerDevelopmentRecord(
+          state.save.world.football.playerDevelopment,
+          finding.playerId
+        );
+        if (currentDevelopment?.appearances > 0) {
+          stats.append(
+            statMini("مشاركات فعلية", currentDevelopment.appearances),
+            statMini("دقائق", formatHomeNumber(currentDevelopment.minutesPlayed)),
+            statMini("متوسط تقييم الأداء", currentDevelopment.averageMatchRating === null
+              ? "غير متاح"
+              : currentDevelopment.averageMatchRating.toFixed(2) + "/10")
+          );
+        }
         const history = getPlayerScoutingHistory(state.save.world.scouting, finding.playerId);
         const player = getCurrentWorldPlayers(state.save)
           .find((candidate) => candidate.id === finding.playerId);
@@ -4501,12 +4670,19 @@ export function mountApp(root) {
     hero.append(art, identity);
 
     const ratingCards = node("div", "player-profile-stats");
-    [
+    const profileStats = [
       ["التقييم الحالي", player.rating, "OVR"],
       ["الإمكانيات", player.potential, "POT"],
       ["العمر", player.age, "سنة"],
       ["القيمة السوقية", player.value, "EUR"]
-    ].forEach(([label, value, suffix]) => {
+    ];
+    if (player.appearances > 0) {
+      profileStats.push(["المشاركات", player.appearances, "ظهور"]);
+      if (Number.isFinite(player.averageMatchRating)) {
+        profileStats.push(["متوسط تقييم المباريات", player.averageMatchRating.toFixed(2), "/10"]);
+      }
+    }
+    profileStats.forEach(([label, value, suffix]) => {
       const item = node("article", "player-profile-stat");
       item.append(
         node("small", "", label),

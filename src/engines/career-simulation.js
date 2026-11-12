@@ -3,6 +3,7 @@ import { settleTransferPerformanceBonuses } from "./transfers.js";
 import { advanceScoutingMissions } from "./scouting.js";
 import { advanceRepresentationState } from "./representation.js";
 import { advanceAgencyManagementDay } from "./agency-management.js";
+import { recordTalentProspectMatchPerformances } from "./talent-pipeline.js";
 
 /**
  * Runs one complete in-game day across the shared career world.
@@ -22,7 +23,19 @@ export function advanceCareerSimulationDay(save, players) {
   if (!Array.isArray(dailyPlayers)) {
     throw new TypeError("مزود قاعدة لاعبي الكشافة لم يُرجع قائمة صالحة.");
   }
-  const bonusSettlement = settleTransferPerformanceBonuses(calendarSave, currentDate);
+  const previousResultIds = new Set((save.world.football?.results ?? []).map((result) => result.id));
+  const newMatchResults = (calendarSave.world.football?.results ?? []).filter((result) =>
+    result.date === currentDate && !previousResultIds.has(result.id)
+  );
+  const performanceTracking = recordTalentProspectMatchPerformances(
+    calendarSave,
+    newMatchResults,
+    currentDate
+  );
+  const bonusSettlement = settleTransferPerformanceBonuses(
+    performanceTracking.save,
+    currentDate
+  );
   const scouting = advanceScoutingMissions(bonusSettlement.save, dailyPlayers, currentDate);
   const representation = advanceRepresentationState(scouting.save, currentDate);
   const agencyOperations = advanceAgencyManagementDay(representation.save, currentDate, dailyPlayers);
@@ -33,6 +46,7 @@ export function advanceCareerSimulationDay(save, players) {
     expiredOffers: representation.expiredOffers,
     expiredContracts: representation.expiredContracts,
     paidPerformanceBonuses: bonusSettlement.paidBonuses,
+    recordedTalentPerformances: performanceTracking.recordedCount,
     agencyOperations: agencyOperations.processed ? agencyOperations : null
   };
 }
@@ -53,6 +67,7 @@ export function advanceCareerSimulationDays(save, days, players) {
   const completedReports = [];
   const expiredOffers = [];
   const expiredContracts = [];
+  let recordedTalentPerformances = 0;
 
   for (let offset = 0; offset < days; offset += 1) {
     const daily = advanceCareerSimulationDay(nextSave, players);
@@ -60,12 +75,14 @@ export function advanceCareerSimulationDays(save, days, players) {
     completedReports.push(...daily.completedReports);
     expiredOffers.push(...daily.expiredOffers);
     expiredContracts.push(...daily.expiredContracts);
+    recordedTalentPerformances += daily.recordedTalentPerformances ?? 0;
   }
 
   return {
     save: nextSave,
     completedReports,
     expiredOffers,
-    expiredContracts
+    expiredContracts,
+    recordedTalentPerformances
   };
 }
