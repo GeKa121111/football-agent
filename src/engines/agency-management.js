@@ -210,7 +210,8 @@ export function isValidAgencyManagementState(state, currentDate) {
            deal.lastPaidDate < deal.signedDate ||
            new Date(deal.lastPaidDate + "T00:00:00.000Z").getUTCDay() !== 1)) ||
         !["active","expired"].includes(deal.status) ||
-        (deal.status === "active" && currentDate > deal.expiresDate) ||
+        // An agreement may cross its expiry between saved ticks; the next
+        // daily update closes it. Explicitly expired records cannot be early.
         (deal.status === "expired" && currentDate <= deal.expiresDate)) return false;
     sponsorshipIds.add(deal.id);
     highestSponsorship = Math.max(highestSponsorship,sequenceOf(deal.id,"agency-sponsorship"));
