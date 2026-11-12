@@ -600,11 +600,22 @@ export function settleTransferPerformanceBonuses(
         (!move.appearanceBonus && !move.goalBonus)) continue;
 
     const trackingStartDate = move.performanceTrackingStartDate ?? move.effectiveDate;
+    const laterPermanentMove = state.moves
+      .filter((candidate) => candidate.playerId === move.playerId &&
+        candidate.type === "permanent" &&
+        (candidate.effectiveDate > move.effectiveDate ||
+          (candidate.effectiveDate === move.effectiveDate &&
+            sequenceOf(candidate.id, "transfer-move") > sequenceOf(move.id, "transfer-move"))))
+      .sort((left, right) => left.effectiveDate.localeCompare(right.effectiveDate) ||
+        sequenceOf(left.id, "transfer-move") - sequenceOf(right.id, "transfer-move"))[0];
+    const supersededDate = laterPermanentMove
+      ? addDays(laterPermanentMove.effectiveDate, -1)
+      : null;
     const trackingEndDate = move.status === "returned"
       ? addDays(move.returnedDate, -1)
       : move.status === "expired"
         ? addDays(move.expiredDate, -1)
-        : currentDate;
+        : supersededDate ?? currentDate;
     const processThroughDate = trackingEndDate < currentDate ? trackingEndDate : currentDate;
     const lastProcessedDate = isTransferCalendarDate(move.performanceProcessedThroughDate)
       ? move.performanceProcessedThroughDate
