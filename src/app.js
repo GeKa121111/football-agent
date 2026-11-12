@@ -140,11 +140,45 @@ function getCurrentWorldPlayers(save) {
     const league = club ? leaguesById.get(club.leagueId) : null;
     const latestPermanentMove = latestPermanentMoveByPlayer.get(player.id);
     const development = developmentById.get(player.id);
+    const competitionStats = development?.competitionStats ?? [];
+    const currentSeason = save?.world?.football?.season ?? development?.season ?? 1;
+    const seasonRecords = competitionStats.filter((item) => item.season === currentSeason);
+    const seasonPerformance = seasonRecords.reduce((total, item) => ({
+      appearances: total.appearances + item.appearances,
+      minutesPlayed: total.minutesPlayed + item.minutesPlayed,
+      goals: total.goals + item.goals,
+      assists: total.assists + item.assists,
+      ratingTotal: total.ratingTotal + (item.averageMatchRating ?? 0) * item.appearances
+    }), { appearances: 0, minutesPlayed: 0, goals: 0, assists: 0, ratingTotal: 0 });
+    seasonPerformance.averageMatchRating = seasonPerformance.appearances > 0
+      ? Math.round((seasonPerformance.ratingTotal / seasonPerformance.appearances) * 100) / 100
+      : null;
+    delete seasonPerformance.ratingTotal;
+    const honors = (save?.world?.football?.archives ?? []).flatMap((archive) => {
+      const awards = archive.awards ?? {};
+      return ["topScorer", "topAssists", "bestPlayer"]
+        .filter((awardType) => awards[awardType]?.playerId === player.id)
+        .map((awardType) => ({
+          competitionId: archive.competitionId,
+          competitionName: archive.competitionName,
+          season: archive.season,
+          awardType,
+          value: awards[awardType].value
+        }));
+    });
     return {
       ...player,
       rating: Math.round(development?.rating ?? player.rating),
       potential: Math.round(development?.potential ?? player.potential),
       age: development?.age ?? player.age,
+      appearances: development?.appearances ?? 0,
+      minutesPlayed: development?.minutesPlayed ?? 0,
+      goals: development?.goals ?? 0,
+      assists: development?.assists ?? 0,
+      averageMatchRating: development?.averageMatchRating ?? null,
+      competitionStats,
+      seasonPerformance,
+      honors,
       clubId: club?.id ?? null,
       club: club?.nameAr ?? "لاعب حر",
       clubShortName: club?.shortName ?? "حر",
