@@ -1,5 +1,5 @@
 import { WORLD_DATABASE } from "../data/world-database.js";
-import { getClubTransferFinancials, getTransferWindowForClub } from "./club-transfer-rules.js";
+import { getClubTransferFinancials, getTransferWindowForClub, getPlayerCurrentClubIdFromState } from "./club-transfer-rules.js";
 const MAX_LEDGER_ENTRIES = 1000;
 const MAX_MONEY_EGP = 2000000000;
 const MAX_ACTIVE_STAFF = 6;
@@ -148,6 +148,23 @@ export function isValidAgencyManagementState(state, currentDate) {
         !Number.isInteger(interest.fitScore) || interest.fitScore < 0 || interest.fitScore > 100 ||
         !Number.isSafeInteger(interest.clubBudgetEur) || interest.clubBudgetEur < 0 ||
         !Number.isSafeInteger(interest.estimatedFeeEur) || interest.estimatedFeeEur < 0 ||
+        (interest.performanceSnapshot !== undefined &&
+          (!isRecord(interest.performanceSnapshot) ||
+            !Number.isSafeInteger(interest.performanceSnapshot.appearances) ||
+            interest.performanceSnapshot.appearances < 0 ||
+            !Number.isSafeInteger(interest.performanceSnapshot.minutesPlayed) ||
+            interest.performanceSnapshot.minutesPlayed < 0 ||
+            !Number.isSafeInteger(interest.performanceSnapshot.goals) ||
+            interest.performanceSnapshot.goals < 0 ||
+            !Number.isSafeInteger(interest.performanceSnapshot.assists) ||
+            interest.performanceSnapshot.assists < 0 ||
+            (interest.performanceSnapshot.averageMatchRating !== null &&
+              (!Number.isFinite(interest.performanceSnapshot.averageMatchRating) ||
+               interest.performanceSnapshot.averageMatchRating < 4 ||
+               interest.performanceSnapshot.averageMatchRating > 10)) ||
+            !Number.isInteger(interest.performanceSnapshot.performanceBonus) ||
+            interest.performanceSnapshot.performanceBonus < 0 ||
+            interest.performanceSnapshot.performanceBonus > 10)) ||
         !["monitoring","enquiry","expired","window-closed","withdrawn"].includes(interest.status) ||
         (interest.transferWindowEndDate !== null && !validDate(interest.transferWindowEndDate)) ||
         (interest.status === "expired" && currentDate <= interest.expiresDate)) return false;
@@ -456,6 +473,29 @@ export function getAgencyClubInterestSummary(save) {
   };
 }
 
+function createPlayerPerformanceSnapshot(development) {
+  const appearances = Number.isSafeInteger(development?.appearances) ? development.appearances : 0;
+  const minutesPlayed = Number.isSafeInteger(development?.minutesPlayed) ? development.minutesPlayed : 0;
+  const goals = Number.isSafeInteger(development?.goals) ? development.goals : 0;
+  const assists = Number.isSafeInteger(development?.assists) ? development.assists : 0;
+  const averageMatchRating = Number.isFinite(development?.averageMatchRating)
+    ? Math.max(4, Math.min(10, development.averageMatchRating))
+    : null;
+  const appearanceBonus = appearances >= 10 ? 3 : appearances >= 5 ? 2 : appearances >= 3 ? 1 : 0;
+  const formBonus = appearances >= 3 && averageMatchRating !== null
+    ? averageMatchRating >= 8 ? 5 : averageMatchRating >= 7.5 ? 3 : averageMatchRating >= 7 ? 1 : 0
+    : 0;
+  const contributionBonus = appearances >= 5 ? Math.min(2, Math.floor((goals + assists) / 4)) : 0;
+  return {
+    appearances,
+    minutesPlayed,
+    goals,
+    assists,
+    averageMatchRating,
+    performanceBonus: Math.min(10, appearanceBonus + formBonus + contributionBonus)
+  };
+}
+
 function calculateClubInterestFit(player, club, financials) {
   const baseline = Number.isInteger(club?.simulationProfile) ? club.simulationProfile : 60;
   const rating = Number(player?.rating) || 50;
@@ -465,12 +505,15 @@ function calculateClubInterestFit(player, club, financials) {
   const estimatedFeeEur = Math.round(Math.pow((rating * 0.55) + (potential * 0.45),2) * 8500);
   const budgetCoverage = estimatedFeeEur > 0 ? financials.budgetEur / estimatedFeeEur : 0;
   const budgetBonus = budgetCoverage >= 1 ? 5 : budgetCoverage >= 0.65 ? 1 : -8;
+  const performanceSnapshot = player.performanceSnapshot ?? createPlayerPerformanceSnapshot(null);
   const score = Math.round((rating * 0.55) + (potential * 0.25) +
-    (baseline * 0.2) + ageBonus + youthBonus + budgetBonus);
+    (baseline * 0.2) + ageBonus + youthBonus + budgetBonus +
+    performanceSnapshot.performanceBonus);
   return {
     fitScore:Math.max(0,Math.min(100,score)),
     estimatedFeeEur,
-    clubBudgetEur:Math.max(0,Math.round(financials.budgetEur))
+    clubBudgetEur:Math.max(0,Math.round(financials.budgetEur)),
+    performanceSnapshot
   };
 }
 
@@ -515,8 +558,24 @@ function advanceClubInterestAI(save,currentDate,players,state) {
   const reserved = new Set(next.clubInterests.filter((item) =>
     ["monitoring","enquiry"].includes(item.status)
   ).map((item) => item.playerId + "::" + item.clubId));
+  const developmentById = new Map((save.world.football?.playerDevelopment?.players ?? [])
+    .map((record) => [record.playerId, record]));
   const candidates = [...activeClientIds]
-    .map((playerId) => playerById.get(playerId))
+    .map((playerId) => {
+      const player = playerById.get(playerId);
+      if (!player) return null;
+      const development = developmentById.get(playerId);
+      const currentClubId = getPlayerCurrentClubIdFromState(
+        playerId, player.clubId, save.world.transfers, currentDate, WORLD_DATABASE
+      );
+      return {
+        ...player,
+        rating: Math.round(development?.rating ?? player.rating),
+        potential: Math.round(development?.potential ?? player.potential),
+        clubId: currentClubId,
+        performanceSnapshot: createPlayerPerformanceSnapshot(development)
+      };
+    })
     .filter((player) => player && Number.isInteger(player.rating) && Number.isInteger(player.potential));
   if (candidates.length === 0) return next;
 
@@ -547,6 +606,7 @@ function advanceClubInterestAI(save,currentDate,players,state) {
       fitScore:selected.fitScore,
       estimatedFeeEur:selected.estimatedFeeEur,
       clubBudgetEur:selected.clubBudgetEur,
+      performanceSnapshot:selected.performanceSnapshot,
       status:selected.window.active ? "enquiry" : "monitoring",
       transferWindowEndDate:selected.window.window?.endDate ?? null
     };
