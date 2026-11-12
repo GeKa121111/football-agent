@@ -1529,8 +1529,13 @@ test.describe("Advanced transfer clauses on mobile", () => {
     await expect(page.getByLabel("السماح بالاستدعاء المبكر")).toBeVisible();
     await expect(page.getByLabel("مهلة إشعار الاستدعاء")).toBeVisible();
     await expect(page.getByLabel("حصة الراتب على النادي المستعير")).toBeVisible();
-    await page.getByLabel("شراء إلزامي عند نهاية الإعارة").check();
-    await page.getByLabel("السماح بالاستدعاء المبكر").check();
+    const mandatoryBuy = page.getByLabel("شراء إلزامي عند نهاية الإعارة");
+    const recallable = page.getByLabel("السماح بالاستدعاء المبكر");
+    await mandatoryBuy.check();
+    await expect(recallable).toBeDisabled();
+    await expect(recallable).not.toBeChecked();
+    await mandatoryBuy.uncheck();
+    await recallable.check();
     await page.getByLabel("حصة الراتب على النادي المستعير").selectOption("50");
     await expect(page.locator(".transfer-finance-panel")).toBeVisible();
     await hasNoHorizontalOverflow(page);
