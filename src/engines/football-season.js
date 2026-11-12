@@ -1,4 +1,5 @@
 import { WORLD_DATABASE, getWorldSquadPlayers } from "../data/world-database.js";
+import { buildCompetitionGroups, getCompetitionRules, COMPETITION_FORMATS } from "../data/competition-rules.js";
 import { simulateMatch } from "./match-simulation.js";
 import { getPlayerCurrentClubId } from "./transfers.js";
 import {
@@ -155,31 +156,46 @@ export function generateSeasonFixtures(season, startDate, database = WORLD_DATAB
     .sort((a, b) => compareText(a.id, b.id));
 
   for (const competition of competitions) {
-    const clubIds = [...competition.clubIds].sort(compareText);
-    const firstLegRounds = createRoundRobinRounds(clubIds);
-    const totalRounds = firstLegRounds.length;
-    firstLegRounds.forEach((roundMatches, roundIndex) => {
-      roundMatches.forEach((match) => {
-        templates.push({
-          competition,
-          round: roundIndex + 1,
-          leg: 1,
-          ...match
-        });
-        templates.push({
-          competition,
-          round: roundIndex + 1 + totalRounds,
-          leg: 2,
-          homeClubId: match.awayClubId,
-          awayClubId: match.homeClubId
+    const rules = getCompetitionRules(competition);
+    const stages = rules.format === COMPETITION_FORMATS.GROUP_STAGE
+      ? buildCompetitionGroups(competition, database)
+      : [{ id: null, nameAr: null, clubIds: [...competition.clubIds] }];
+
+    for (const stage of stages) {
+      const clubIds = [...stage.clubIds].sort(compareText);
+      const firstLegRounds = createRoundRobinRounds(clubIds);
+      const totalRounds = firstLegRounds.length;
+
+      firstLegRounds.forEach((roundMatches, roundIndex) => {
+        roundMatches.forEach((match) => {
+          templates.push({
+            competition,
+            groupId: stage.id,
+            groupName: stage.nameAr,
+            round: roundIndex + 1,
+            leg: 1,
+            ...match
+          });
+          if (rules.legs === 2) {
+            templates.push({
+              competition,
+              groupId: stage.id,
+              groupName: stage.nameAr,
+              round: roundIndex + 1 + totalRounds,
+              leg: 2,
+              homeClubId: match.awayClubId,
+              awayClubId: match.homeClubId
+            });
+          }
         });
       });
-    });
+    }
   }
 
   templates.sort((a, b) =>
     a.round - b.round ||
     compareText(a.competition.id, b.competition.id) ||
+    compareText(a.groupId ?? "", b.groupId ?? "") ||
     compareText(a.homeClubId, b.homeClubId) ||
     compareText(a.awayClubId, b.awayClubId)
   );
@@ -200,6 +216,7 @@ export function generateSeasonFixtures(season, startDate, database = WORLD_DATAB
       "match",
       season,
       template.competition.id,
+      template.groupId ?? "main-stage",
       "round-" + template.round,
       "leg-" + template.leg,
       template.homeClubId,
@@ -211,6 +228,8 @@ export function generateSeasonFixtures(season, startDate, database = WORLD_DATAB
       season,
       competitionId: template.competition.id,
       competitionName: template.competition.nameAr,
+      groupId: template.groupId,
+      groupName: template.groupName,
       date: matchDate,
       round: template.round,
       leg: template.leg,
@@ -325,6 +344,7 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
       round: fixture.round,
       leg: fixture.leg,
       competitionName: fixture.competitionName,
+      ...(fixture.groupId ? { groupId: fixture.groupId, groupName: fixture.groupName } : {}),
       rosterType: "fictional-mixed-with-simulation-only-fillers"
     };
     playerDevelopment = recordPlayerMatchPerformances(playerDevelopment, result, currentDate);
@@ -422,6 +442,9 @@ export function isValidFootballState(state, currentDate, season, database = WORL
     isRecord(fixture) &&
     Number.isSafeInteger(fixture.season) && fixture.season >= 1 && fixture.season <= season &&
     competitionIds.has(fixture.competitionId) &&
+    (fixture.groupId === undefined || fixture.groupId === null ||
+      buildCompetitionGroups(database.competitions.find((item) => item.id === fixture.competitionId), database)
+        .some((group) => group.id === fixture.groupId)) &&
     typeof fixture.competitionName === "string" && fixture.competitionName.trim() &&
     dateValue(fixture.date) !== null &&
     Number.isSafeInteger(fixture.round) && fixture.round >= 1 &&
@@ -459,11 +482,15 @@ export function getRecentFootballResults(state, limit = 10) {
 }
 
 /** Builds a deterministic competition table from persisted match results. */
-export function getCompetitionStandings(state, competitionId, database = WORLD_DATABASE, season = state?.season) {
+export function getCompetitionStandings(state, competitionId, database = WORLD_DATABASE, season = state?.season, groupId = null) {
   const competition = database.competitions.find((item) => item.id === competitionId);
   if (!competition || !Array.isArray(state?.results)) return [];
+  const groups = buildCompetitionGroups(competition, database);
+  const selectedGroup = groupId ? groups.find((group) => group.id === groupId) : null;
+  if (groupId && !selectedGroup) return [];
+  const clubIds = selectedGroup?.clubIds ?? competition.clubIds;
   const clubById = new Map(database.clubs.map((club) => [club.id, club]));
-  const standings = new Map(competition.clubIds.map((clubId) => [clubId, {
+  const standings = new Map(clubIds.map((clubId) => [clubId, {
     clubId,
     clubName: clubById.get(clubId)?.nameAr ?? clubId,
     played: 0,
@@ -478,6 +505,7 @@ export function getCompetitionStandings(state, competitionId, database = WORLD_D
 
   for (const result of state.results) {
     if (result.competitionId !== competitionId) continue;
+    if (groupId && result.groupId !== groupId) continue;
     if (season !== undefined && result.season !== season) continue;
     const home = standings.get(result.home.clubId);
     const away = standings.get(result.away.clubId);
