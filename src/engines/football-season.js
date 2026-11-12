@@ -349,9 +349,23 @@ export function createInitialFootballState(season = 1, currentDate = "2026-07-01
 function createMatchEvent(result, fixture) {
   const score = result.home.goals + " - " + result.away.goals;
   const title = result.home.name + " " + score + " " + result.away.name;
+  const winnerName = result.knockoutDecision?.winnerClubId === fixture.homeClubId
+    ? result.home.name
+    : result.knockoutDecision?.winnerClubId === fixture.awayClubId
+      ? result.away.name
+      : null;
+  const knockoutNote = winnerName
+    ? " · تأهل " + winnerName + (
+      result.knockoutDecision.decidedBy === "penalties"
+        ? " بركلات الترجيح"
+        : result.knockoutDecision.decidedBy === "extra-time"
+          ? " بعد الوقت الإضافي"
+          : " في الوقت الأصلي"
+    )
+    : "";
   const description = fixture.competitionName + " · الجولة " + fixture.round +
     " · " + result.home.shotsOnTarget + " تسديدة على المرمى مقابل " +
-    result.away.shotsOnTarget + " للفريق الضيف.";
+    result.away.shotsOnTarget + " للفريق الضيف." + knockoutNote;
 
   const event = {
     id: "event-" + fixture.id,
@@ -359,7 +373,7 @@ function createMatchEvent(result, fixture) {
     type: "football-match-played",
     title,
     description,
-    priority: result.result === "draw" ? "normal" : "high"
+    priority: result.result === "draw" && !result.knockoutDecision ? "normal" : "high"
   };
   return {
     event,
