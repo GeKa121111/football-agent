@@ -2164,7 +2164,11 @@ function renderAgencyManagementPanel(context) {
     ["الموظفون", summary.activeStaff],
     ["الفروع النشطة", summary.activeBranches],
     ["التزامات أسبوعية", formatMoney(summary.weeklyCostsEgp)],
-    ["متأخرات التشغيل", formatMoney(summary.arrearsEgp)]
+    ["متأخرات التشغيل", formatMoney(summary.arrearsEgp)],
+    ["إجمالي الإيرادات", formatMoney(summary.totalRevenueEgp)],
+    ["إجمالي المصروفات", formatMoney(summary.totalExpensesEgp)],
+    ["صافي التدفق النقدي", formatMoney(summary.netCashFlowEgp)],
+    ["دخل الرعايات أسبوعيًا", formatMoney(summary.activeSponsorshipRevenueEgp)]
   ].forEach(([label, value]) => {
     const card = node("article", "agency-operations-metric");
     card.append(node("small", "", label), node("strong", "", value));
