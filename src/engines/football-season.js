@@ -472,7 +472,9 @@ function migrateLegacyCompetitionGroups(state, database = WORLD_DATABASE) {
     );
     return group
       ? { ...fixture, groupId: group.id, groupName: group.nameAr }
-      : fixture;
+      : groups
+        ? { ...fixture, legacyCompetitionMatch: true }
+        : fixture;
   });
   const groupByFixtureId = new Map(fixtures
     .filter((fixture) => fixture.groupId)
@@ -660,7 +662,8 @@ function isValidMatchResult(result, fixture, competition) {
       result.playerPerformances.length !== 22) return false;
 
   const isKnockoutFixture = competition?.type === "cup" ||
-    (competition?.knockoutAfterGroups === true && !fixture.groupId);
+    (competition?.knockoutAfterGroups === true && !fixture.groupId &&
+      fixture.legacyCompetitionMatch !== true);
   if (isKnockoutFixture) {
     const decision = result.knockoutDecision;
     if (!isRecord(decision) ||
@@ -789,6 +792,7 @@ export function isValidFootballState(state, currentDate, season, database = WORL
     (fixture.groupId === undefined || fixture.groupId === null ||
       groupIdsByCompetition.get(fixture.competitionId)?.get(fixture.groupId)?.has(fixture.homeClubId) &&
       groupIdsByCompetition.get(fixture.competitionId)?.get(fixture.groupId)?.has(fixture.awayClubId)) &&
+    (fixture.legacyCompetitionMatch === undefined || typeof fixture.legacyCompetitionMatch === "boolean") &&
     typeof fixture.competitionName === "string" && fixture.competitionName.trim() &&
     dateValue(fixture.date) !== null &&
     Number.isSafeInteger(fixture.round) && fixture.round >= 1 &&
