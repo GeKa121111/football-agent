@@ -218,7 +218,11 @@ function isValidScoutingState(scouting, currentDate) {
           mission.scoutAccuracyBonus < 0 || mission.scoutAccuracyBonus > 0.1 ||
           mission.baseAccuracy !== baseAccuracy ||
           mission.accuracy < mission.baseAccuracy || mission.accuracy > 0.97 ||
-          Math.abs((mission.accuracy - mission.baseAccuracy) - mission.scoutAccuracyBonus) > 0.001 ||
+          (mission.agencyAccuracyBonus !== undefined &&
+            (typeof mission.agencyAccuracyBonus !== "number" || !Number.isFinite(mission.agencyAccuracyBonus) ||
+             mission.agencyAccuracyBonus < 0 || mission.agencyAccuracyBonus > 0.08)) ||
+          Math.abs((mission.accuracy - mission.baseAccuracy) - mission.scoutAccuracyBonus -
+            (mission.agencyAccuracyBonus ?? 0)) > 0.001 ||
           (scouting.scouts !== undefined && !scouting.scouts.some((scout) => scout.id === mission.scoutId)) ||
           assignedScoutIds.has(mission.scoutId)) return false;
       assignedScoutIds.add(mission.scoutId);
