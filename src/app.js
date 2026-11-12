@@ -69,9 +69,9 @@ import {
   recallLoan as recallLoanInEngine,
   advanceTransferState,
   getTransferWindow,
-  getPlayerCurrentClubId,
-  getClubTransferFinancials
+  getPlayerCurrentClubId
 } from "./engines/transfers.js";
+import { getClubTransferFinancials } from "./engines/club-transfer-rules.js";
 import {
   completeCareerTask as completeTaskInEngine,
   markCareerMessageRead,
