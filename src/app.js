@@ -146,6 +146,11 @@ function getCurrentWorldPlayers(save) {
       rating: Math.round(development?.rating ?? player.rating),
       potential: Math.round(development?.potential ?? player.potential),
       age: development?.age ?? player.age,
+      appearances: development?.appearances ?? 0,
+      minutesPlayed: development?.minutesPlayed ?? 0,
+      goals: development?.goals ?? 0,
+      assists: development?.assists ?? 0,
+      averageMatchRating: development?.averageMatchRating ?? null,
       clubId: club?.id ?? null,
       club: club?.nameAr ?? "لاعب حر",
       clubShortName: club?.shortName ?? "حر",
@@ -3954,6 +3959,19 @@ export function mountApp(root) {
           statMini("الإمكانيات المقدرة", finding.estimatedPotential),
           statMini("الثقة", finding.confidence + "%")
         );
+        const currentDevelopment = getPlayerDevelopmentRecord(
+          state.save.world.football.playerDevelopment,
+          finding.playerId
+        );
+        if (currentDevelopment?.appearances > 0) {
+          stats.append(
+            statMini("مشاركات فعلية", currentDevelopment.appearances),
+            statMini("دقائق", formatHomeNumber(currentDevelopment.minutesPlayed)),
+            statMini("متوسط تقييم الأداء", currentDevelopment.averageMatchRating === null
+              ? "غير متاح"
+              : currentDevelopment.averageMatchRating.toFixed(2) + "/10")
+          );
+        }
         const history = getPlayerScoutingHistory(state.save.world.scouting, finding.playerId);
         const player = getCurrentWorldPlayers(state.save)
           .find((candidate) => candidate.id === finding.playerId);
@@ -4526,12 +4544,19 @@ export function mountApp(root) {
     hero.append(art, identity);
 
     const ratingCards = node("div", "player-profile-stats");
-    [
+    const profileStats = [
       ["التقييم الحالي", player.rating, "OVR"],
       ["الإمكانيات", player.potential, "POT"],
       ["العمر", player.age, "سنة"],
       ["القيمة السوقية", player.value, "EUR"]
-    ].forEach(([label, value, suffix]) => {
+    ];
+    if (player.appearances > 0) {
+      profileStats.push(["المشاركات", player.appearances, "ظهور"]);
+      if (Number.isFinite(player.averageMatchRating)) {
+        profileStats.push(["متوسط تقييم المباريات", player.averageMatchRating.toFixed(2), "/10"]);
+      }
+    }
+    profileStats.forEach(([label, value, suffix]) => {
       const item = node("article", "player-profile-stat");
       item.append(
         node("small", "", label),
