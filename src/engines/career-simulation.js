@@ -11,14 +11,18 @@ import { advanceRepresentationState } from "./representation.js";
  * subsystem on one clock without replaying transfer processing in the UI.
  */
 export function advanceCareerSimulationDay(save, players) {
-  if (!Array.isArray(players)) {
+  if (!Array.isArray(players) && typeof players !== "function") {
     throw new TypeError("قاعدة لاعبي الكشافة غير متاحة.");
   }
 
   const calendarSave = advanceCareerDay(save);
   const currentDate = calendarSave.world.currentDate;
+  const dailyPlayers = typeof players === "function" ? players(calendarSave) : players;
+  if (!Array.isArray(dailyPlayers)) {
+    throw new TypeError("مزود قاعدة لاعبي الكشافة لم يُرجع قائمة صالحة.");
+  }
   const bonusSettlement = settleTransferPerformanceBonuses(calendarSave, currentDate);
-  const scouting = advanceScoutingMissions(bonusSettlement.save, players, currentDate);
+  const scouting = advanceScoutingMissions(bonusSettlement.save, dailyPlayers, currentDate);
   const representation = advanceRepresentationState(scouting.save, currentDate);
 
   return {
@@ -38,7 +42,7 @@ export function advanceCareerSimulationDays(save, days, players) {
   if (!Number.isInteger(days) || days < 1 || days > 31) {
     throw new TypeError("يمكن تقدم المسيرة من يوم واحد إلى 31 يومًا في المرة الواحدة.");
   }
-  if (!Array.isArray(players)) {
+  if (!Array.isArray(players) && typeof players !== "function") {
     throw new TypeError("قاعدة لاعبي الكشافة غير متاحة.");
   }
 
