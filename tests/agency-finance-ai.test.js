@@ -349,3 +349,19 @@ test("keeps agency finance, sponsorship, rivals and club interest valid across t
   assert.equal(management.ledger.some((entry) => entry.type === "credit-drawdown" && entry.direction === "financing"),true);
   assert.equal(management.ledger.some((entry) => entry.type === "credit-repayment"),true);
 });
+
+
+test("expires a sponsorship on the first agency tick after its contract end date", () => {
+  const signed = signAgencySponsorship(createInitialSave(),"local-media");
+  assert.equal(signed.changed,true,signed.error);
+  const currentDate = "2027-07-02";
+  const save = {
+    ...signed.save,
+    world:{...signed.save.world,currentDate}
+  };
+  assert.equal(isValidAgencyManagementState(save.agency.management,currentDate),true);
+  const updated = advanceAgencyManagementDay(save,currentDate,PLAYERS);
+  assert.equal(updated.error,undefined);
+  assert.equal(updated.save.agency.management.sponsorships[0].status,"expired");
+  assert.equal(isValidAgencyManagementState(updated.save.agency.management,currentDate),true);
+});
