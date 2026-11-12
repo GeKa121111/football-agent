@@ -174,38 +174,46 @@ export function evaluateTransferOffer(save, offerId, currentDate = save?.world?.
   if (!isTransferCalendarDate(currentDate) || currentDate < offer.createdDate)
     return { changed: false, save, error: "تاريخ الرد لا يمكن أن يسبق إرسال العرض." };
   if (currentDate > offer.expiresDate) return expireTransferOffer(save, offer, currentDate);
-  if (!getTransferWindow(currentDate).active) return { changed: false, save, error: "انتهت نافذة الانتقالات قبل إتمام التفاوض." };
+  if (!getTransferWindow(currentDate, offer.toClubId, database).active)
+    return { changed: false, save, error: "انتهت نافذة انتقالات النادي قبل إتمام التفاوض." };
   if (!getActiveRepresentationContract(save, offer.playerId, currentDate))
     return expireTransferOffer(save, offer, currentDate);
   const player = getPlayer(database, offer.playerId);
   const club = getClub(database, offer.toClubId);
   if (!player || !club) return { changed: false, save, error: "بيانات اللاعب أو النادي غير متاحة." };
   const marketValue = Number.isSafeInteger(player.marketValueEur) ? player.marketValueEur : 0;
-  const clubProfile = Number.isInteger(club.simulationProfile) ? clamp(club.simulationProfile, 40, 99) : 65;
-  const wageCeiling = Math.round(clubProfile * 650);
+  const financials = getClubTransferFinancials(club.id, state, currentDate, database);
+  const wageCeiling = financials.availableWagesWeeklyEur;
+  const maximumAffordableFee = Math.max(0, financials.budgetEur - offer.terms.signingBonusEur);
   const nextRound = offer.round + 1;
   let counter = null;
   if (offer.type === "permanent") {
-    const minFee = Math.round(marketValue * 0.9);
-    if (offer.terms.feeEur >= minFee && offer.terms.weeklyWageEur <= wageCeiling) {
+    const minFee = offer.fromClubId === FREE_AGENT_CLUB_ID ? 0 : Math.round(marketValue * 0.9);
+    const fee = offer.terms.feeEur;
+    if (fee >= minFee && fee + offer.terms.signingBonusEur <= financials.budgetEur &&
+        offer.terms.weeklyWageEur <= wageCeiling) {
       let next = replaceOffer(state, offer.id, { status: "agreed", round: Math.min(4, nextRound),
         agreedDate: currentDate, agreedTerms: offer.terms, counterOffer: null });
       next = appendHistory(next, "offer-agreed", offer, currentDate, "وافق النادي على شروط الانتقال.");
       return { changed: true, status: "agreed", offer: next.offers.find((item) => item.id === offer.id),
         save: { ...save, world: { ...save.world, transfers: next } } };
     }
-    counter = { ...offer.terms, feeEur: Math.max(offer.terms.feeEur, minFee),
+    counter = { ...offer.terms,
+      feeEur: Math.min(maximumAffordableFee, Math.max(offer.terms.feeEur, minFee)),
       weeklyWageEur: Math.min(offer.terms.weeklyWageEur, wageCeiling) };
   } else {
     const minLoanFee = Math.round(marketValue * 0.015);
-    if (offer.terms.loanFeeEur >= minLoanFee && offer.terms.weeklyWageEur <= wageCeiling) {
+    const fee = offer.terms.loanFeeEur;
+    if (fee >= minLoanFee && fee + offer.terms.signingBonusEur <= financials.budgetEur &&
+        offer.terms.weeklyWageEur <= wageCeiling) {
       let next = replaceOffer(state, offer.id, { status: "agreed", round: Math.min(4, nextRound),
         agreedDate: currentDate, agreedTerms: offer.terms, counterOffer: null });
       next = appendHistory(next, "offer-agreed", offer, currentDate, "وافق النادي على شروط الإعارة.");
       return { changed: true, status: "agreed", offer: next.offers.find((item) => item.id === offer.id),
         save: { ...save, world: { ...save.world, transfers: next } } };
     }
-    counter = { ...offer.terms, loanFeeEur: Math.max(offer.terms.loanFeeEur, minLoanFee),
+    counter = { ...offer.terms,
+      loanFeeEur: Math.min(maximumAffordableFee, Math.max(offer.terms.loanFeeEur, minLoanFee)),
       weeklyWageEur: Math.min(offer.terms.weeklyWageEur, wageCeiling) };
   }
   if (offer.round >= 4) {
