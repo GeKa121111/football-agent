@@ -44,7 +44,8 @@ test("one career day advances the calendar, football, transfers, scouting and cl
   const advanced = advanceCareerSimulationDay(interaction.save, PLAYERS);
   assert.equal(advanced.save.world.currentDate, "2026-07-02");
   assert.equal(advanced.save.career.day, 2);
-  assert.equal(advanced.save.world.transfers, advanced.save.world.transfers);
+  assert.equal(advanced.save.world.transfers, interaction.save.world.transfers);
+  assert.equal(interaction.save.career.day, 1);
   assert.equal(advanced.completedReports.length, 0);
   assert.equal(isValidSave(advanced.save), true);
 });
