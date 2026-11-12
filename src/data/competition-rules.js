@@ -120,12 +120,26 @@ export function validateCompetitionDefinition(competition, database) {
     if (!league) {
       errors.push("مسابقة الدوري تشير إلى دوري غير موجود: " + competition.id);
     } else {
+      if (competition.countryId !== league.countryId) {
+        errors.push("دولة المسابقة لا تطابق دولة الدوري: " + competition.id);
+      }
       for (const clubId of competition.clubIds) {
         const club = clubById.get(clubId);
-        if (club && club.leagueId !== league.id) {
-          errors.push("نادي مشارك لا ينتمي إلى دوري المسابقة: " + competition.id + " / " + clubId);
+        if (club && (club.leagueId !== league.id || club.countryId !== league.countryId)) {
+          errors.push("نادي مشارك لا ينتمي إلى دوري أو دولة المسابقة: " + competition.id + " / " + clubId);
         }
       }
+    }
+  } else if (competition.type === "continental") {
+    if (competition.countryId !== null || competition.leagueId !== null) {
+      errors.push("المسابقة القارية لا يجب أن ترتبط بدولة أو دوري محلي: " + competition.id);
+    }
+    const countriesById = new Map((database?.countries ?? []).map((country) => [country.id, country]));
+    const confederations = new Set(competition.clubIds
+      .map((clubId) => countriesById.get(clubById.get(clubId)?.countryId)?.confederation)
+      .filter(Boolean));
+    if (confederations.size > 1) {
+      errors.push("أندية المسابقة القارية يجب أن تنتمي إلى اتحاد قاري واحد: " + competition.id);
     }
   }
 
