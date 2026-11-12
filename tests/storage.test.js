@@ -50,6 +50,20 @@ test("writes and reads a save without losing the agency data", () => {
   assert.equal(loaded.save.agency.name, "GeKa Agency");
 });
 
+test("rejects an invalid updatedAt timestamp without touching stored save data", () => {
+  const storage = memoryStorage();
+  const original = createInitialSave("2026-07-01T00:00:00.000Z");
+  writeSave(original, storage, "2026-07-01T01:00:00.000Z");
+  const before = storage.getItem(STORAGE_KEY);
+
+  assert.throws(
+    () => writeSave(original, storage, "not-a-timestamp"),
+    /تاريخ تحديث الحفظ غير صالح/
+  );
+  assert.equal(storage.getItem(STORAGE_KEY), before);
+  assert.equal(readSave(storage).status, "loaded");
+});
+
 test("does not accept an invalid save structure", () => {
   assert.equal(isValidSave({ meta: { version: SAVE_VERSION } }), false);
   assert.throws(() => writeSave({ bad: true }, memoryStorage()), TypeError);
