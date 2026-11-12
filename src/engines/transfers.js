@@ -371,6 +371,7 @@ export function completeTransfer(save, offerId, currentDate = save?.world?.curre
     id: moveId, offerId: offer.id, playerId: offer.playerId, playerName: offer.playerName,
     type: offer.type, fromClubId: offer.fromClubId, toClubId: offer.toClubId,
     effectiveDate: currentDate, status: "active",
+    performanceTrackingStartDate: currentDate,
     feeEur: offer.type === "permanent" ? terms.feeEur : 0,
     loanFeeEur: offer.type === "loan" ? terms.loanFeeEur : 0,
     optionToBuyEur: offer.type === "loan" ? terms.optionToBuyEur : 0,
@@ -443,7 +444,11 @@ function completeLoanPurchase(save, loan, currentDate, database, mandatory = fal
   if (purchaseFee > financials.budgetEur) {
     return { changed: false, save, error: "ميزانية النادي لا تكفي قيمة بند الشراء." };
   }
-  if (loan.weeklyWageEur > financials.availableWagesWeeklyEur) {
+  const existingLoanWageCommitment = Math.round(
+    loan.weeklyWageEur * (loan.wageSharePercent ?? 100) / 100
+  );
+  const additionalWeeklyWageCommitment = loan.weeklyWageEur - existingLoanWageCommitment;
+  if (additionalWeeklyWageCommitment > financials.availableWagesWeeklyEur) {
     return { changed: false, save, error: "ميزانية الرواتب لا تسمح بتثبيت عقد اللاعب." };
   }
 
@@ -485,6 +490,7 @@ function completeLoanPurchase(save, loan, currentDate, database, mandatory = fal
     id: permanentMoveId, offerId, playerId: loan.playerId, playerName: loan.playerName,
     type: "permanent", fromClubId: loan.fromClubId, toClubId: loan.toClubId,
     effectiveDate: currentDate, status: "active", feeEur: purchaseFee,
+    performanceTrackingStartDate: loan.performanceTrackingStartDate ?? loan.effectiveDate,
     loanFeeEur: 0, optionToBuyEur: 0, weeklyWageEur: loan.weeklyWageEur,
     contractYears, contractEndDate: addMonths(currentDate, contractYears * 12), returnDate: null,
     mandatoryBuy: false, mandatoryBuyContractYears: null, recallable: false,
@@ -581,7 +587,7 @@ export function settleTransferPerformanceBonuses(
   for (const move of state.moves) {
     if (move.status !== "active" || currentDate < move.effectiveDate) continue;
     const performances = results
-      .filter((result) => result.date >= move.effectiveDate && result.date <= currentDate)
+      .filter((result) => result.date >= (move.performanceTrackingStartDate ?? move.effectiveDate) && result.date <= currentDate)
       .flatMap((result) => result.playerPerformances ?? [])
       .filter((item) => item.playerId === move.playerId && item.clubId === move.toClubId);
     const appearances = performances.filter((item) => item.minutesPlayed > 0).length;
@@ -834,6 +840,9 @@ export function isValidTransferState(state, currentDate, clients = [], represent
         move.fromClubId !== offer.fromClubId || move.toClubId !== offer.toClubId ||
         !isTransferCalendarDate(move.effectiveDate) || move.effectiveDate > currentDate ||
         move.effectiveDate !== offer.completedDate || move.effectiveDate < offer.agreedDate ||
+        (move.performanceTrackingStartDate !== undefined &&
+          (!isTransferCalendarDate(move.performanceTrackingStartDate) ||
+           move.performanceTrackingStartDate > move.effectiveDate)) ||
         !["active", "returned", "purchased", "expired"].includes(move.status) || !validMoney(move.feeEur) ||
         !validMoney(move.loanFeeEur) || !validMoney(move.optionToBuyEur) || !validMoney(move.weeklyWageEur)) return false;
     if (move.type === "loan") {
