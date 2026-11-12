@@ -494,6 +494,7 @@ export function getRecentFootballResults(state, limit = 10) {
 export function getCompetitionStandings(state, competitionId, database = WORLD_DATABASE, season = state?.season, groupId = null) {
   const competition = database.competitions.find((item) => item.id === competitionId);
   if (!competition || !Array.isArray(state?.results)) return [];
+  const rules = getCompetitionRules(competition);
   const groups = buildCompetitionGroups(competition, database);
   const selectedGroup = groupId ? groups.find((group) => group.id === groupId) : null;
   if (groupId && !selectedGroup) return [];
@@ -528,11 +529,11 @@ export function getCompetitionStandings(state, competitionId, database = WORLD_D
     if (result.home.goals > result.away.goals) {
       home.wins += 1;
       away.losses += 1;
-      home.points += 3;
+      home.points += rules.points.win;
     } else if (result.away.goals > result.home.goals) {
       away.wins += 1;
       home.losses += 1;
-      away.points += 3;
+      away.points += rules.points.win;
     } else {
       home.draws += 1;
       away.draws += 1;
@@ -543,11 +544,16 @@ export function getCompetitionStandings(state, competitionId, database = WORLD_D
 
   return [...standings.values()]
     .map((row) => ({ ...row, goalDifference: row.goalsFor - row.goalsAgainst }))
-    .sort((a, b) =>
-      b.points - a.points ||
-      b.goalDifference - a.goalDifference ||
-      b.goalsFor - a.goalsFor ||
-      compareText(a.clubId, b.clubId)
-    )
+    .sort((a, b) => {
+      for (const rule of rules.tieBreakers) {
+        const difference = rule === "points" ? b.points - a.points
+          : rule === "goalDifference" ? b.goalDifference - a.goalDifference
+            : rule === "goalsFor" ? b.goalsFor - a.goalsFor
+              : rule === "clubId" ? compareText(a.clubId, b.clubId)
+                : 0;
+        if (difference !== 0) return difference;
+      }
+      return compareText(a.clubId, b.clubId);
+    })
     .map((row, index) => ({ ...row, position: index + 1 }));
 }
