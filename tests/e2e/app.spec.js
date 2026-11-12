@@ -5,10 +5,12 @@ import { advanceRepresentationState } from "../../src/engines/representation.js"
 import { WORLD_DATABASE } from "../../src/data/world-database.js";
 
 async function navigateTo(page, view) {
-  const mobileNav = page.locator(".mobile-nav");
-  const desktopNav = page.locator(".sidebar");
-  const nav = await mobileNav.isVisible() ? mobileNav : desktopNav;
-  await nav.getByRole("button", { name: view, exact: true }).click();
+  const viewport = page.viewportSize();
+  const nav = page.locator(viewport && viewport.width <= 760 ? ".mobile-nav" : ".sidebar");
+  await expect(nav).toBeVisible();
+  const button = nav.getByRole("button", { name: view, exact: true });
+  await button.click();
+  await expect(button).toHaveAttribute("aria-current", "page");
 }
 
 async function hasNoHorizontalOverflow(page) {
