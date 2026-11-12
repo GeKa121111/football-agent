@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 function luminance(color) {
   const value = color.trim();
-  const hexMatch = value.match(/^#([\\da-f]{3}|[\\da-f]{6}|[\\da-f]{8})$/i);
+  const hexMatch = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
   let channels;
 
   if (hexMatch) {
