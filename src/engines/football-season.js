@@ -359,7 +359,8 @@ function buildCompetitionSeasonSummary(state, competition, season, database = WO
   let championClubId = complete && standings.length > 0
     ? standings[0].clubId
     : null;
-  if (complete && rules.format === COMPETITION_FORMATS.KNOCKOUT) {
+  if (complete && (rules.format === COMPETITION_FORMATS.KNOCKOUT ||
+      competition.knockoutAfterGroups === true)) {
     const finalRound = Math.max(...fixtures.map((fixture) => fixture.round));
     const finalFixtures = fixtures.filter((fixture) => fixture.round === finalRound);
     if (finalFixtures.length === 1) {
@@ -584,7 +585,9 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
       leg: fixture.leg,
       competitionName: fixture.competitionName,
       ...(fixture.groupId ? { groupId: fixture.groupId, groupName: fixture.groupName } : {}),
-      ...(database.competitions.find((item) => item.id === fixture.competitionId)?.type === "cup"
+      ...((database.competitions.find((item) => item.id === fixture.competitionId)?.type === "cup" ||
+        database.competitions.find((item) => item.id === fixture.competitionId)?.knockoutAfterGroups === true) &&
+        !fixture.groupId
         ? { knockoutDecision: resolveKnockoutOutcome(simulated, fixture) }
         : {}),
       rosterType: "fictional-mixed-with-simulation-only-fillers"
@@ -606,7 +609,9 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
     : fixture);
   const allResults = [...nextState.results, ...playedResults];
   const generatedKnockoutFixtures = [];
-  for (const competition of database.competitions.filter((item) => item.type === "cup")) {
+  for (const competition of database.competitions.filter((item) =>
+    item.type === "cup" || item.knockoutAfterGroups === true
+  )) {
     const progression = advanceKnockoutRound(
       competition,
       season,
@@ -654,7 +659,9 @@ function isValidMatchResult(result, fixture, competition) {
       !Array.isArray(result.events) || !Array.isArray(result.playerPerformances) ||
       result.playerPerformances.length !== 22) return false;
 
-  if (competition?.type === "cup") {
+  const isKnockoutFixture = competition?.type === "cup" ||
+    (competition?.knockoutAfterGroups === true && !fixture.groupId);
+  if (isKnockoutFixture) {
     const decision = result.knockoutDecision;
     if (!isRecord(decision) ||
         !["regular-time", "extra-time", "penalties"].includes(decision.decidedBy) ||
