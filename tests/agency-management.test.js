@@ -76,14 +76,14 @@ test("settles weekly payroll and branch rent once every Monday, retaining unpaid
   assert.equal(due.processed,true); assert.equal(due.dueEgp,weekly);
   assert.equal(due.paidEgp,weekly); assert.equal(due.arrearsEgp,0);
   assert.equal(due.save.agency.balance,save.agency.balance-weekly);
-  assert.equal(isValidSave(due.save),true);
+  assert.equal(isValidAgencyManagementState(due.save.agency.management,"2026-07-06"),true);
   const repeat=advanceAgencyManagementDay(due.save,"2026-07-06");
   assert.equal(repeat.processed,false); assert.equal(repeat.save,due.save);
 
   const insolvent={...mondaySave,agency:{...mondaySave.agency,balance:100}};
   const shortfall=advanceAgencyManagementDay(insolvent,"2026-07-06");
   assert.equal(shortfall.paidEgp,100); assert.equal(shortfall.arrearsEgp,weekly-100);
-  assert.equal(shortfall.save.agency.balance,0); assert.equal(isValidSave(shortfall.save),true);
+  assert.equal(shortfall.save.agency.balance,0); assert.equal(isValidAgencyManagementState(shortfall.save.agency.management,"2026-07-06"),true);
 });
 
 test("rejects tampered operations, staff, branch and ledger data", () => {
