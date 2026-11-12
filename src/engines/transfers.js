@@ -500,7 +500,7 @@ export function advanceTransferState(save, currentDate = save?.world?.currentDat
   return { save: nextSave, expiredOffers, returnedLoans, expiredContracts };
 }
 
-export function isValidTransferState(state, currentDate, clients = [], representation = null) {
+export function isValidTransferState(state, currentDate, clients = [], representation = null, database = WORLD_DATABASE) {
   if (!isRecord(state) || !isTransferCalendarDate(currentDate) || !Array.isArray(clients) ||
       !["nextOfferSequence", "nextMoveSequence", "nextHistorySequence", "nextLedgerSequence", "nextFinanceSequence"].every((key) => Number.isSafeInteger(state[key]) && state[key] >= 1) ||
       !validMoney(state.earnedCommissionEur) ||
@@ -525,12 +525,12 @@ export function isValidTransferState(state, currentDate, clients = [], represent
         !isTransferCalendarDate(offer.createdDate) || !isTransferCalendarDate(offer.expiresDate) ||
         offer.createdDate > currentDate || offer.expiresDate !== addDays(offer.createdDate, TRANSFER_OFFER_VALIDITY_DAYS) ||
         (offer.counterOffer !== null && !validTerms(offer.type, offer.counterOffer))) return false;
-    const createdWindow = getTransferWindow(offer.createdDate).window;
+    const createdWindow = getTransferWindow(offer.createdDate, offer.toClubId, database).window;
     if (!createdWindow || offer.createdDate < createdWindow.startDate || offer.createdDate > createdWindow.endDate) return false;
     if (offer.status === "countered" && !offer.counterOffer) return false;
     if ((offer.status === "countered") !== (offer.counterOffer !== null)) return false;
     if (["agreed", "completed"].includes(offer.status)) {
-      const agreedWindow = isTransferCalendarDate(offer.agreedDate) ? getTransferWindow(offer.agreedDate).window : null;
+      const agreedWindow = isTransferCalendarDate(offer.agreedDate) ? getTransferWindow(offer.agreedDate, offer.toClubId, database).window : null;
       if (!validTerms(offer.type, offer.agreedTerms) || !agreedWindow ||
           offer.agreedDate < offer.createdDate || offer.agreedDate > currentDate ||
           agreedWindow.id !== createdWindow.id ||
