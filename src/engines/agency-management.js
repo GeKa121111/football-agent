@@ -96,6 +96,7 @@ export function createInitialAgencyManagementState() {
     ledger:[],
     sponsorships:[],
     creditFacilities:[],
+    creditFacilities:[],
     competitors:COMPETITOR_BLUEPRINTS.map((profile) => ({
       ...profile, clients:[], pendingOffers:[], lastActionDate:null
     })),
@@ -122,6 +123,39 @@ export function isValidAgencyManagementState(state, currentDate) {
   const competitiveHistory = state.competitiveHistory === undefined ? [] : state.competitiveHistory;
   const nextSponsorshipSequence = state.nextSponsorshipSequence ?? 1;
   const nextCompetitiveSequence = state.nextCompetitiveSequence ?? 1;
+  const creditFacilities = state.creditFacilities === undefined ? [] : state.creditFacilities;
+  const nextCreditSequence = state.nextCreditSequence ?? 1;
+  if (!Number.isSafeInteger(nextCreditSequence) || nextCreditSequence < 1 ||
+      !Array.isArray(creditFacilities) || creditFacilities.length > MAX_CREDIT_FACILITIES) return false;
+  const creditIds = new Set();
+  let highestCredit = 0;
+  for (const loan of creditFacilities) {
+    const product = AGENCY_CREDIT_PRODUCTS.find((item) => item.id === loan?.productId);
+    const expectedTotal = product
+      ? product.principalEgp + Math.ceil(product.principalEgp * product.interestRatePct / 100)
+      : -1;
+    if (!isRecord(loan) || !product || typeof loan.id !== "string" ||
+        !sequenceOf(loan.id,"agency-credit") || creditIds.has(loan.id) ||
+        loan.name !== product.name || loan.principalEgp !== product.principalEgp ||
+        loan.interestRatePct !== product.interestRatePct || loan.totalRepaymentEgp !== expectedTotal ||
+        loan.termWeeks !== product.termWeeks ||
+        loan.weeklyInstallmentEgp !== Math.ceil(expectedTotal / product.termWeeks) ||
+        !validDate(loan.issuedDate) || loan.issuedDate > currentDate ||
+        !validDate(loan.nextPaymentDate) || loan.nextPaymentDate <= loan.issuedDate ||
+        !validMoney(loan.remainingEgp) || loan.remainingEgp > expectedTotal ||
+        !validMoney(loan.paidEgp) || loan.paidEgp !== expectedTotal - loan.remainingEgp ||
+        !Number.isSafeInteger(loan.lateWeeks) || loan.lateWeeks < 0 ||
+        (loan.lastPaymentDate !== null &&
+          (!validDate(loan.lastPaymentDate) || loan.lastPaymentDate < loan.issuedDate ||
+           loan.lastPaymentDate > currentDate ||
+           new Date(loan.lastPaymentDate + "T00:00:00.000Z").getUTCDay() !== 1)) ||
+        !["active","repaid"].includes(loan.status) ||
+        (loan.status === "active" && loan.remainingEgp <= 0) ||
+        (loan.status === "repaid" && loan.remainingEgp !== 0)) return false;
+    creditIds.add(loan.id);
+    highestCredit = Math.max(highestCredit,sequenceOf(loan.id,"agency-credit"));
+  }
+  if (nextCreditSequence <= highestCredit) return false;
   if (!Number.isSafeInteger(nextSponsorshipSequence) || nextSponsorshipSequence < 1 ||
       !Number.isSafeInteger(nextCompetitiveSequence) || nextCompetitiveSequence < 1 ||
       !Array.isArray(sponsorships) || sponsorships.length > MAX_SPONSORSHIPS ||
@@ -277,15 +311,18 @@ export function isValidAgencyManagementState(state, currentDate) {
   for (const entry of state.ledger) {
     if (!isRecord(entry) || !sequenceOf(entry.id,"agency-ledger") || ledgerIds.has(entry.id) ||
         !validDate(entry.date) || entry.date > currentDate ||
-        !["hiring","branch-opening","weekly-operations","sponsorship-income"].includes(entry.type) ||
+        !["hiring","branch-opening","weekly-operations","sponsorship-income","credit-drawdown","credit-repayment"].includes(entry.type) ||
         !validMoney(entry.amountEgp) || entry.amountEgp < 1 ||
         !validMoney(entry.paidEgp) || entry.paidEgp > entry.amountEgp ||
         !validMoney(entry.arrearsAfterEgp) || typeof entry.note !== "string" || !entry.note.trim() ||
         (entry.referenceId !== null && typeof entry.referenceId !== "string") ||
-        (entry.direction !== undefined && !["income","expense"].includes(entry.direction)) ||
+        (entry.direction !== undefined && !["income","expense","financing"].includes(entry.direction)) ||
         (entry.type === "sponsorship-income" && (entry.direction !== "income" ||
           !["signing","weekly"].includes(entry.incomeKind))) ||
-        (entry.type !== "sponsorship-income" && entry.direction === "income")) return false;
+        (entry.type === "credit-drawdown" && entry.direction !== "financing") ||
+        (entry.type === "credit-repayment" && entry.direction !== "expense") ||
+        (!["sponsorship-income","credit-drawdown","credit-repayment"].includes(entry.type) &&
+          entry.direction === "income")) return false;
     highestLedger = Math.max(highestLedger, sequenceOf(entry.id,"agency-ledger"));
     ledgerIds.add(entry.id);
   }
@@ -542,16 +579,20 @@ export function getAgencyManagementSummary(save) {
   const ledger = management.ledger;
   const totalRevenueEgp = ledger.filter((entry) => entry.direction === "income")
     .reduce((sum,entry) => sum + entry.paidEgp,0);
-  const totalExpensesEgp = ledger.filter((entry) => entry.direction !== "income")
+  const totalExpensesEgp = ledger.filter((entry) => entry.direction !== "income" && entry.direction !== "financing")
     .reduce((sum,entry) => sum + entry.paidEgp,0);
   const activeSponsorshipRevenueEgp = (management.sponsorships ?? [])
     .filter((deal) => deal.status === "active")
     .reduce((sum,deal) => sum + deal.weeklyRevenueEgp,0);
+  const activeLoans = (management.creditFacilities ?? []).filter((loan) => loan.status === "active");
+  const totalDebtEgp = activeLoans.reduce((sum,loan) => sum + loan.remainingEgp,0);
+  const weeklyCreditRepaymentEgp = activeLoans.reduce((sum,loan) => sum + Math.min(loan.weeklyInstallmentEgp,loan.remainingEgp),0);
   return {
     activeStaff:activeStaff.length, activeBranches:activeBranches.length,
     weeklyPayrollEgp, weeklyRentEgp, grossWeeklyCostsEgp, operationalSavingsEgp,
-    weeklyCostsEgp, arrearsEgp:management.arrearsEgp,
-    totalOperatingCommitmentEgp:weeklyCostsEgp + management.arrearsEgp,
+    weeklyCostsEgp, weeklyCreditRepaymentEgp, totalDebtEgp, activeCreditFacilities:activeLoans.length,
+    arrearsEgp:management.arrearsEgp,
+    totalOperatingCommitmentEgp:weeklyCostsEgp + weeklyCreditRepaymentEgp + management.arrearsEgp,
     totalRevenueEgp,totalExpensesEgp,netCashFlowEgp:totalRevenueEgp-totalExpensesEgp,
     activeSponsorshipRevenueEgp
   };
