@@ -171,21 +171,34 @@ test.describe("Desktop experience", () => {
     expect(yassin.trainingIntensity).toBe("intense");
 
     await navigateTo(page, "الرئيسية");
-    // Reach Monday so the saved training plan produces a visible rating change.
-    for (let day = 0; day < 5; day += 1) {
+    for (let day = 0; day < 3; day += 1) {
       await page.locator(".day-advance-button").click();
     }
     await navigateTo(page, "المباريات");
     await expect(page.locator(".football-result-row").first()).toBeVisible();
-    // Re-select the Egyptian league because the workspace is rebuilt on navigation.
-    await page.getByLabel("اختيار المسابقة للترتيب").selectOption("competition-eg-premier");
+    // Confirm the match simulation, then clear any simulated injury so the
+    // following Monday session is deterministic and tests training in isolation.
+    const matchdaySave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(matchdaySave.world.football.results.length).toBeGreaterThan(0);
+    expect(matchdaySave.world.events.some((event) => event.type === "football-match-played")).toBe(true);
+    const yassinAfterMatch = matchdaySave.world.football.playerDevelopment.players
+      .find((player) => player.playerId === "demo-yassin-adel");
+    yassinAfterMatch.injuryDays = 0;
+    await page.evaluate((snapshot) => {
+      localStorage.setItem("football-agent.save", JSON.stringify(snapshot));
+    }, matchdaySave);
+    await page.reload();
+
+    await navigateTo(page, "الرئيسية");
+    for (let day = 0; day < 2; day += 1) {
+      await page.locator(".day-advance-button").click();
+    }
+    await navigateTo(page, "المباريات");
     const playedSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(playedSave.world.football.results.length).toBeGreaterThan(0);
-    expect(playedSave.world.events.some((event) => event.type === "football-match-played")).toBe(true);
     const updatedYassin = playedSave.world.football.playerDevelopment.players
       .find((player) => player.playerId === "demo-yassin-adel");
     expect(playedSave.world.football.playerDevelopment.trainingHistory.some((session) =>
-      session.playerId === "demo-yassin-adel"
+      session.playerId === "demo-yassin-adel" && session.date === "2026-07-06"
     )).toBe(true);
 
     await navigateTo(page, "اللاعبون");
