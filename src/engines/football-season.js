@@ -267,6 +267,70 @@ export function generateSeasonFixtures(season, startDate, database = WORLD_DATAB
   );
 }
 
+function buildCompetitionAwards(results) {
+  const totals = new Map();
+  for (const result of results) {
+    for (const performance of result.playerPerformances ?? []) {
+      if (performance.simulationOnly === true || performance.minutesPlayed <= 0) continue;
+      const record = totals.get(performance.playerId) ?? {
+        playerId: performance.playerId,
+        playerName: performance.playerName,
+        clubId: performance.clubId,
+        appearances: 0,
+        minutesPlayed: 0,
+        goals: 0,
+        assists: 0,
+        ratingTotal: 0
+      };
+      record.appearances += 1;
+      record.minutesPlayed += performance.minutesPlayed;
+      record.goals += performance.goals;
+      record.assists += performance.assists;
+      record.ratingTotal += performance.rating;
+      totals.set(performance.playerId, record);
+    }
+  }
+  const players = [...totals.values()].map((player) => ({
+    ...player,
+    averageMatchRating: player.appearances > 0
+      ? Math.round((player.ratingTotal / player.appearances) * 100) / 100
+      : null
+  }));
+  const byPlayerId = (a, b) => a.playerId.localeCompare(b.playerId);
+  const topScorer = [...players].sort((a, b) =>
+    b.goals - a.goals || b.assists - a.assists ||
+    b.averageMatchRating - a.averageMatchRating || byPlayerId(a, b)
+  ).find((player) => player.goals > 0) ?? null;
+  const topAssists = [...players].sort((a, b) =>
+    b.assists - a.assists || b.goals - a.goals ||
+    b.averageMatchRating - a.averageMatchRating || byPlayerId(a, b)
+  ).find((player) => player.assists > 0) ?? null;
+  const eligibleForBestPlayer = players.filter((player) => player.appearances >= Math.min(2, results.length));
+  const bestPlayer = [...(eligibleForBestPlayer.length > 0 ? eligibleForBestPlayer : players)]
+    .sort((a, b) =>
+      b.averageMatchRating - a.averageMatchRating ||
+      b.goals - a.goals || b.assists - a.assists ||
+      b.minutesPlayed - a.minutesPlayed || byPlayerId(a, b)
+    )[0] ?? null;
+  const snapshot = (player, value) => player ? ({
+    playerId: player.playerId,
+    playerName: player.playerName,
+    clubId: player.clubId,
+    value
+  }) : null;
+  return {
+    topScorer: snapshot(topScorer, topScorer?.goals ?? null),
+    topAssists: snapshot(topAssists, topAssists?.assists ?? null),
+    bestPlayer: bestPlayer ? {
+      ...snapshot(bestPlayer, bestPlayer.averageMatchRating),
+      appearances: bestPlayer.appearances,
+      minutesPlayed: bestPlayer.minutesPlayed,
+      goals: bestPlayer.goals,
+      assists: bestPlayer.assists
+    } : null
+  };
+}
+
 function buildCompetitionSeasonSummary(state, competition, season, database = WORLD_DATABASE) {
   const fixtures = state.fixtures.filter((fixture) =>
     fixture.competitionId === competition.id && fixture.season === season
@@ -315,6 +379,7 @@ function buildCompetitionSeasonSummary(state, competition, season, database = WO
     complete,
     championClubId,
     championName: championClubId ? clubById.get(championClubId)?.nameAr ?? championClubId : null,
+    awards: complete ? buildCompetitionAwards(results) : null,
     standings,
     groups
   };
