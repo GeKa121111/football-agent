@@ -1,5 +1,5 @@
 import { WORLD_DATABASE } from "../data/world-database.js";
-import { getTransferWindowForClub } from "./club-transfer-rules.js";
+import { getClubTransferFinancials, getTransferWindowForClub } from "./club-transfer-rules.js";
 const MAX_LEDGER_ENTRIES = 1000;
 const MAX_MONEY_EGP = 2000000000;
 const MAX_ACTIVE_STAFF = 6;
@@ -146,6 +146,8 @@ export function isValidAgencyManagementState(state, currentDate) {
         !validDate(interest.updatedDate) || interest.updatedDate < interest.createdDate || interest.updatedDate > currentDate ||
         !validDate(interest.expiresDate) || interest.expiresDate !== addDays(interest.createdDate,14) ||
         !Number.isInteger(interest.fitScore) || interest.fitScore < 0 || interest.fitScore > 100 ||
+        !Number.isSafeInteger(interest.clubBudgetEur) || interest.clubBudgetEur < 0 ||
+        !Number.isSafeInteger(interest.estimatedFeeEur) || interest.estimatedFeeEur < 0 ||
         !["monitoring","enquiry","expired","window-closed","withdrawn"].includes(interest.status) ||
         (interest.transferWindowEndDate !== null && !validDate(interest.transferWindowEndDate)) ||
         (interest.status === "expired" && currentDate <= interest.expiresDate)) return false;
@@ -453,15 +455,22 @@ export function getAgencyClubInterestSummary(save) {
   };
 }
 
-function calculateClubInterestFit(player, club) {
+function calculateClubInterestFit(player, club, financials) {
   const baseline = Number.isInteger(club?.simulationProfile) ? club.simulationProfile : 60;
   const rating = Number(player?.rating) || 50;
   const potential = Number(player?.potential) || rating;
   const ageBonus = Number(player?.age) <= 23 ? 5 : Number(player?.age) <= 27 ? 2 : 0;
-  const position = String(player?.position ?? "").toLowerCase();
   const youthBonus = Number(player?.age) <= 21 && potential >= 75 ? 4 : 0;
-  const score = Math.round((rating * 0.55) + (potential * 0.25) + (baseline * 0.2) + ageBonus + youthBonus);
-  return Math.max(0,Math.min(100,score));
+  const estimatedFeeEur = Math.round(Math.pow((rating * 0.55) + (potential * 0.45),2) * 8500);
+  const budgetCoverage = estimatedFeeEur > 0 ? financials.budgetEur / estimatedFeeEur : 0;
+  const budgetBonus = budgetCoverage >= 1 ? 5 : budgetCoverage >= 0.65 ? 1 : -8;
+  const score = Math.round((rating * 0.55) + (potential * 0.25) +
+    (baseline * 0.2) + ageBonus + youthBonus + budgetBonus);
+  return {
+    fitScore:Math.max(0,Math.min(100,score)),
+    estimatedFeeEur,
+    clubBudgetEur:Math.max(0,Math.round(financials.budgetEur))
+  };
 }
 
 function advanceClubInterestAI(save,currentDate,players,state) {
@@ -506,12 +515,15 @@ function advanceClubInterestAI(save,currentDate,players,state) {
     const fits = clubs.filter((club) => club.id !== playerClubId &&
       !reserved.has(player.id + "::" + club.id))
       .map((club) => {
-        const fitScore = calculateClubInterestFit(player,club);
+        const financials = getClubTransferFinancials(
+          club.id,save.world.transfers,currentDate,WORLD_DATABASE
+        );
+        const fit = calculateClubInterestFit(player,club,financials);
         const window = getTransferWindowForClub(currentDate,club.id,WORLD_DATABASE);
-        return {club,fitScore,window};
+        return {club,...fit,window};
       })
-      .filter((item) => item.fitScore >= 69)
-      .sort((a,b) => b.fitScore-a.fitScore || a.club.id.localeCompare(b.club.id));
+      .filter((item) => item.fitScore >= 69 && item.clubBudgetEur > 0)
+      .sort((a,b) => b.fitScore-a.fitScore || b.clubBudgetEur-a.clubBudgetEur || a.club.id.localeCompare(b.club.id));
     if (fits.length === 0) continue;
     const seed = [...(player.id + currentDate)].reduce((sum,char) => (sum + char.charCodeAt(0)) >>> 0,0);
     const selected = fits[seed % Math.min(3,fits.length)];
@@ -525,6 +537,8 @@ function advanceClubInterestAI(save,currentDate,players,state) {
       createdDate:currentDate,updatedDate:currentDate,
       expiresDate:addDays(currentDate,14),
       fitScore:selected.fitScore,
+      estimatedFeeEur:selected.estimatedFeeEur,
+      clubBudgetEur:selected.clubBudgetEur,
       status:selected.window.active ? "enquiry" : "monitoring",
       transferWindowEndDate:selected.window.window?.endDate ?? null
     };
