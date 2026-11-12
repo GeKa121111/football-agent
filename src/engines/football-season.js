@@ -1,5 +1,6 @@
 import { WORLD_DATABASE, getWorldSquadPlayers } from "../data/world-database.js";
 import { buildCompetitionGroups, getCompetitionRules, validateCompetitionDefinition, COMPETITION_FORMATS } from "../data/competition-rules.js";
+import { buildKnockoutOpeningPairings, resolveKnockoutOutcome, advanceKnockoutRound } from "./knockout-tournament.js";
 import { simulateMatch } from "./match-simulation.js";
 import { getPlayerCurrentClubId } from "./transfers.js";
 import {
@@ -162,6 +163,20 @@ export function generateSeasonFixtures(season, startDate, database = WORLD_DATAB
       throw new TypeError("تعريف المسابقة " + competition.id + " غير صالح: " + validation.errors.join(" "));
     }
     const rules = getCompetitionRules(competition);
+    if (rules.format === COMPETITION_FORMATS.KNOCKOUT) {
+      for (const pairing of buildKnockoutOpeningPairings(competition, database)) {
+        templates.push({
+          competition,
+          groupId: null,
+          groupName: null,
+          round: 1,
+          leg: 1,
+          ...pairing
+        });
+      }
+      continue;
+    }
+
     const stages = rules.format === COMPETITION_FORMATS.GROUP_STAGE
       ? buildCompetitionGroups(competition, database)
       : [{ id: null, nameAr: null, clubIds: [...competition.clubIds] }];
@@ -275,9 +290,17 @@ function buildCompetitionSeasonSummary(state, competition, season, database = WO
   const standings = rules.format === COMPETITION_FORMATS.ROUND_ROBIN
     ? getCompetitionStandings(state, competition.id, database, season)
     : [];
-  const championClubId = complete && standings.length > 0
+  let championClubId = complete && standings.length > 0
     ? standings[0].clubId
     : null;
+  if (complete && rules.format === COMPETITION_FORMATS.KNOCKOUT) {
+    const finalRound = Math.max(...fixtures.map((fixture) => fixture.round));
+    const finalFixtures = fixtures.filter((fixture) => fixture.round === finalRound);
+    if (finalFixtures.length === 1) {
+      championClubId = results.find((result) => result.id === finalFixtures[0].id)
+        ?.knockoutDecision?.winnerClubId ?? null;
+    }
+  }
   const clubById = new Map(database.clubs.map((club) => [club.id, club]));
 
   return {
@@ -409,6 +432,9 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
       leg: fixture.leg,
       competitionName: fixture.competitionName,
       ...(fixture.groupId ? { groupId: fixture.groupId, groupName: fixture.groupName } : {}),
+      ...(database.competitions.find((item) => item.id === fixture.competitionId)?.type === "cup"
+        ? { knockoutDecision: resolveKnockoutOutcome(simulated, fixture) }
+        : {}),
       rosterType: "fictional-mixed-with-simulation-only-fillers"
     };
     playerDevelopment = recordPlayerMatchPerformances(playerDevelopment, result, currentDate);
@@ -423,10 +449,23 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
   playerDevelopment = recoverPlayerInjuries(playerDevelopment, injuredAtDayStart);
 
   const resultMap = new Map(playedResults.map((result) => [result.id, result]));
-  const fixtures = nextState.fixtures.map((fixture) => resultMap.has(fixture.id)
+  const playedFixtures = nextState.fixtures.map((fixture) => resultMap.has(fixture.id)
     ? { ...fixture, status: "played", resultId: fixture.id }
     : fixture);
-  const results = [...nextState.results, ...playedResults].slice(-MAX_RETAINED_MATCH_RESULTS);
+  const allResults = [...nextState.results, ...playedResults];
+  const generatedKnockoutFixtures = [];
+  for (const competition of database.competitions.filter((item) => item.type === "cup")) {
+    const progression = advanceKnockoutRound(
+      competition,
+      season,
+      [...playedFixtures, ...generatedKnockoutFixtures],
+      allResults,
+      database
+    );
+    generatedKnockoutFixtures.push(...progression.fixtures);
+  }
+  const fixtures = [...playedFixtures, ...generatedKnockoutFixtures];
+  const results = allResults.slice(-MAX_RETAINED_MATCH_RESULTS);
   const retainedResultIds = new Set(results.map((result) => result.id));
   const retainedFixtures = fixtures
     .filter((fixture) => fixture.status === "scheduled" || retainedResultIds.has(fixture.id))
@@ -445,7 +484,7 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
   };
 }
 
-function isValidMatchResult(result, fixture) {
+function isValidMatchResult(result, fixture, competition) {
   const validGroupReference = fixture.groupId
     ? result?.groupId === fixture.groupId
     : result?.groupId === undefined || result?.groupId === null;
@@ -462,6 +501,43 @@ function isValidMatchResult(result, fixture) {
       result.home.possession + result.away.possession !== 100 ||
       !Array.isArray(result.events) || !Array.isArray(result.playerPerformances) ||
       result.playerPerformances.length !== 22) return false;
+
+  if (competition?.type === "cup") {
+    const decision = result.knockoutDecision;
+    if (!isRecord(decision) ||
+        !["regular-time", "extra-time", "penalties"].includes(decision.decidedBy) ||
+        ![fixture.homeClubId, fixture.awayClubId].includes(decision.winnerClubId)) return false;
+    if (result.result !== "draw") {
+      const expectedWinner = result.result === "home-win" ? fixture.homeClubId : fixture.awayClubId;
+      if (decision.decidedBy !== "regular-time" || decision.winnerClubId !== expectedWinner ||
+          decision.extraTime !== null || decision.penalties !== null) return false;
+    } else {
+      if (!isRecord(decision.extraTime) ||
+          ![decision.extraTime.homeGoals, decision.extraTime.awayGoals]
+            .every((value) => Number.isSafeInteger(value) && value >= 0)) return false;
+      if (decision.decidedBy === "extra-time") {
+        if (decision.extraTime.homeGoals === decision.extraTime.awayGoals ||
+            decision.penalties !== null ||
+            decision.winnerClubId !== (decision.extraTime.homeGoals > decision.extraTime.awayGoals
+              ? fixture.homeClubId : fixture.awayClubId)) return false;
+      } else if (decision.decidedBy === "penalties") {
+        const penalties = decision.penalties;
+        if (!isRecord(penalties) ||
+            !Array.isArray(penalties.homeKicks) || !Array.isArray(penalties.awayKicks) ||
+            !penalties.homeKicks.every((kick) => typeof kick === "boolean") ||
+            !penalties.awayKicks.every((kick) => typeof kick === "boolean") ||
+            !Number.isSafeInteger(penalties.home) || !Number.isSafeInteger(penalties.away) ||
+            penalties.home !== penalties.homeKicks.filter(Boolean).length ||
+            penalties.away !== penalties.awayKicks.filter(Boolean).length ||
+            penalties.home === penalties.away ||
+            decision.extraTime.homeGoals !== decision.extraTime.awayGoals ||
+            decision.winnerClubId !== (penalties.home > penalties.away
+              ? fixture.homeClubId : fixture.awayClubId)) return false;
+      } else return false;
+    }
+  } else if (result.knockoutDecision !== undefined) {
+    return false;
+  }
 
   const performanceIds = result.playerPerformances.map((player) => player?.playerId);
   if (performanceIds.some((id) => typeof id !== "string" || !id.trim()) ||
@@ -539,6 +615,8 @@ export function isValidFootballState(state, currentDate, season, database = WORL
     dateValue(fixture.date) !== null &&
     Number.isSafeInteger(fixture.round) && fixture.round >= 1 &&
     [1, 2].includes(fixture.leg) &&
+    (competitionById.get(fixture.competitionId)?.type !== "cup" ||
+      (fixture.leg === 1 && fixture.groupId === null)) &&
     clubIds.has(fixture.homeClubId) && clubIds.has(fixture.awayClubId) &&
     fixture.homeClubId !== fixture.awayClubId &&
     ((fixture.status === "scheduled" && fixture.resultId === null) ||
@@ -547,7 +625,8 @@ export function isValidFootballState(state, currentDate, season, database = WORL
 
   if (!state.results.every((result) => {
     const fixture = fixtureById.get(result.id);
-    return fixture?.status === "played" && isValidMatchResult(result, fixture);
+    const competition = fixture ? competitionById.get(fixture.competitionId) : null;
+    return fixture?.status === "played" && isValidMatchResult(result, fixture, competition);
   })) return false;
 
   return state.fixtures.every((fixture) =>
@@ -576,6 +655,7 @@ export function getCompetitionStandings(state, competitionId, database = WORLD_D
   const competition = database.competitions.find((item) => item.id === competitionId);
   if (!competition || !Array.isArray(state?.results)) return [];
   const rules = getCompetitionRules(competition);
+  if (rules.format === COMPETITION_FORMATS.KNOCKOUT) return [];
   const groups = buildCompetitionGroups(competition, database);
   const selectedGroup = groupId ? groups.find((group) => group.id === groupId) : null;
   if (groupId && !selectedGroup) return [];
