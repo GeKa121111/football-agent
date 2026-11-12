@@ -1,5 +1,6 @@
 // Curated fictional player seed for Phase 3. Club names are reference entities; player identities are fictional.
 import { createPortraitAssignment, validatePortraitAssignments } from "./player-portrait-catalog.js";
+import { validateCompetitionDefinition } from "./competition-rules.js";
 // Club and competition labels are reference entities; every player profile is fictional.
 // This is a compact prototype database, not a live or complete global roster feed.
 
@@ -294,6 +295,8 @@ export function validateWorldDatabase(database = WORLD_DATABASE) {
   }
 
   for (const competition of competitions) {
+    const competitionRulesValidation = validateCompetitionDefinition(competition, database);
+    errors.push(...competitionRulesValidation.errors);
     if (!Array.isArray(competition.clubIds) || competition.clubIds.length === 0) {
       errors.push("المسابقة بلا أندية مشاركة: " + competition.id);
       continue;
