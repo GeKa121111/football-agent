@@ -76,6 +76,15 @@ import {
   getClubTransferFinancials
 } from "./engines/club-transfer-rules.js";
 import {
+  AGENCY_BRANCH_LOCATIONS,
+  AGENCY_JOB_ROLES,
+  closeAgencyBranch as closeAgencyBranchInEngine,
+  dismissAgencyEmployee as dismissAgencyEmployeeInEngine,
+  getAgencyManagementSummary,
+  hireAgencyEmployee as hireAgencyEmployeeInEngine,
+  openAgencyBranch as openAgencyBranchInEngine
+} from "./engines/agency-management.js";
+import {
   completeCareerTask as completeTaskInEngine,
   markCareerMessageRead,
   filterCareerEvents,
@@ -2130,6 +2139,144 @@ function renderTalentPipeline(context) {
   return panel;
 }
 
+function renderAgencyManagementPanel(context) {
+  const agency = context.save.agency;
+  const management = agency.management;
+  const summary = getAgencyManagementSummary(context.save);
+  const panel = node("section", "surface-card agency-management-panel");
+  const heading = node("div", "representation-heading");
+  heading.append(node("div", "talent-pipeline-heading-copy"), node("span", "representation-count", "إدارة وتشغيل"));
+  heading.children[0].append(
+    node("h2", "", "إدارة وتوسّع الوكالة"),
+    node("p", "", "كوّن فريقك، افتح فروعًا جديدة، وراقب الالتزامات الأسبوعية قبل التوسع.")
+  );
+  panel.append(heading);
+
+  const metrics = node("div", "agency-operations-metrics");
+  [
+    ["الموظفون", summary.activeStaff],
+    ["الفروع النشطة", summary.activeBranches],
+    ["التزامات أسبوعية", formatMoney(summary.weeklyCostsEgp)],
+    ["متأخرات التشغيل", formatMoney(summary.arrearsEgp)]
+  ].forEach(([label, value]) => {
+    const card = node("article", "agency-operations-metric");
+    card.append(node("small", "", label), node("strong", "", value));
+    metrics.append(card);
+  });
+  panel.append(metrics);
+
+  const staffSection = node("section", "agency-operations-section");
+  staffSection.append(
+    node("h3", "", "فريق الوكالة"),
+    node("p", "representation-intro", "رواتب الوظائف تُخصم أسبوعيًا يوم الاثنين. إنهاء التعاقد يوقف الراتب من التسوية التالية.")
+  );
+  const activeStaff = management.staff.filter((employee) => employee.status === "active");
+  const staffList = node("div", "agency-operations-list");
+  if (activeStaff.length === 0) {
+    staffList.append(node("p", "representation-empty", "لسه مفيش موظفين متعيّنين. ابدأ بوظيفة تساعدك في إدارة الوكالة."));
+  } else {
+    activeStaff.forEach((employee) => {
+      const row = node("article", "agency-operations-row");
+      const copy = node("div", "representation-copy");
+      copy.append(
+        node("strong", "", employee.name),
+        node("span", "", "راتب أسبوعي " + formatMoney(employee.weeklySalaryEgp)),
+        node("small", "", "تاريخ التعيين " + formatHomeDate(employee.hiredDate))
+      );
+      row.append(copy, actionButton("إنهاء التعاقد", "button-outline agency-dismiss-button",
+        () => context.dismissAgencyEmployee(employee.id)));
+      staffList.append(row);
+    });
+  }
+  staffSection.append(staffList);
+
+  const hiringGrid = node("div", "agency-operations-catalog");
+  AGENCY_JOB_ROLES.forEach((role) => {
+    const count = activeStaff.filter((employee) => employee.roleId === role.id).length;
+    const card = node("article", "agency-operations-offer");
+    card.append(
+      node("strong", "", role.name),
+      node("p", "", role.description),
+      node("small", "", "تكلفة التعيين " + formatMoney(role.hiringCostEgp)),
+      node("small", "", "راتب أسبوعي " + formatMoney(role.weeklySalaryEgp)),
+      node("small", "", "الموظفون في المنصب " + count + " / " + role.maxHeadcount)
+    );
+    const hireButton = actionButton("تعيين الموظف", "button-primary agency-hire-button",
+      () => context.hireAgencyEmployee(role.id));
+    hireButton.disabled = count >= role.maxHeadcount || activeStaff.length >= 6 || agency.balance < role.hiringCostEgp;
+    card.append(hireButton);
+    hiringGrid.append(card);
+  });
+  staffSection.append(hiringGrid);
+
+  const branchesSection = node("section", "agency-operations-section");
+  branchesSection.append(
+    node("h3", "", "شبكة الفروع"),
+    node("p", "representation-intro", "كل فرع له تكلفة افتتاح وإيجار أسبوعي ثابت. المقر الرئيسي لا يمكن إغلاقه.")
+  );
+  const branchList = node("div", "agency-operations-list");
+  management.branches.filter((branch) => branch.status === "active").forEach((branch) => {
+    const row = node("article", "agency-operations-row");
+    const copy = node("div", "representation-copy");
+    copy.append(
+      node("strong", "", branch.name),
+      node("span", "", branch.isHeadquarters ? "المقر الرئيسي" : "فرع " + branch.region),
+      node("small", "", "إيجار أسبوعي " + formatMoney(branch.weeklyRentEgp))
+    );
+    row.append(copy);
+    if (!branch.isHeadquarters) {
+      row.append(actionButton("إغلاق الفرع", "button-outline agency-close-branch-button",
+        () => context.closeAgencyBranch(branch.id)));
+    }
+    branchList.append(row);
+  });
+  branchesSection.append(branchList);
+
+  const expansionGrid = node("div", "agency-operations-catalog");
+  AGENCY_BRANCH_LOCATIONS.forEach((location) => {
+    const active = management.branches.some((branch) =>
+      branch.locationId === location.id && branch.status === "active");
+    const card = node("article", "agency-operations-offer");
+    card.append(
+      node("strong", "", location.name),
+      node("p", "", "منطقة " + location.region),
+      node("small", "", "تكلفة الافتتاح " + formatMoney(location.setupCostEgp)),
+      node("small", "", "إيجار أسبوعي " + formatMoney(location.weeklyRentEgp))
+    );
+    const openButton = actionButton(active ? "الفرع مفتوح" : "افتتاح الفرع", "button-primary agency-open-branch-button",
+      () => context.openAgencyBranch(location.id));
+    openButton.disabled = active || summary.activeBranches >= 4 || agency.balance < location.setupCostEgp;
+    card.append(openButton);
+    expansionGrid.append(card);
+  });
+  branchesSection.append(expansionGrid);
+
+  const ledgerPanel = node("section", "agency-operations-section");
+  ledgerPanel.append(node("h3", "", "سجل مصروفات الإدارة"));
+  const entries = management.ledger.slice(0, 8);
+  if (entries.length === 0) {
+    ledgerPanel.append(node("p", "representation-empty", "أي تعيين أو افتتاح فرع أو تسوية أسبوعية هتظهر هنا."));
+  } else {
+    const list = node("div", "agency-operations-list");
+    entries.forEach((entry) => {
+      const row = node("article", "agency-operations-ledger-row");
+      const label = entry.type === "hiring" ? "تكلفة تعيين" :
+        entry.type === "branch-opening" ? "افتتاح فرع" : "رواتب وإيجارات أسبوعية";
+      row.append(
+        node("strong", "", label),
+        node("span", "", formatHomeDate(entry.date)),
+        node("small", "", "المستحق " + formatMoney(entry.amountEgp) +
+          " · المدفوع " + formatMoney(entry.paidEgp) +
+          (entry.arrearsAfterEgp > 0 ? " · المتأخرات " + formatMoney(entry.arrearsAfterEgp) : ""))
+      );
+      list.append(row);
+    });
+    ledgerPanel.append(list);
+  }
+  panel.append(staffSection, branchesSection, ledgerPanel);
+  return panel;
+}
+
 function renderAgency(context) {
   const page = node("div", "page-content rebuild-screen agency-screen");
   page.append(
@@ -2177,6 +2324,7 @@ function renderAgency(context) {
 
   const talentPipelinePanel = renderTalentPipeline(context);
   const staffAssignmentsPanel = renderAgencyStaffAssignments(context);
+  const managementPanel = renderAgencyManagementPanel(context);
 
   const contractsPanel = node("section", "surface-card representation-panel");
   const contractsHeading = node("div", "representation-heading");
@@ -2484,7 +2632,7 @@ function renderAgency(context) {
     roadmapRow("عقود التمثيل", "المرحلة الحالية", true),
     roadmapRow("سوق الانتقالات والتفاوض مع الأندية", "المرحلة الثامنة", false)
   );
-  page.append(overview, cards, talentPipelinePanel, staffAssignmentsPanel, contractsPanel, interactionsPanel, offersPanel, prospectsPanel, historyPanel, roadmap);
+  page.append(overview, cards, managementPanel, talentPipelinePanel, staffAssignmentsPanel, contractsPanel, interactionsPanel, offersPanel, prospectsPanel, historyPanel, roadmap);
   return page;
 }
 
@@ -4200,7 +4348,43 @@ export function mountApp(root) {
         if (saveCareer()) { render(); toast("تم تحديث نتيجة التفاوض."); } else state.save = previousSave;
       },
       rejectRepresentationOffer,
-      terminateRepresentationContract
+      terminateRepresentationContract,
+      hireAgencyEmployee: (roleId) => {
+        if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم يتم التعيين."); return; }
+        const previousSave = state.save;
+        const result = hireAgencyEmployeeInEngine(state.save, roleId);
+        if (!result.changed) { toast(result.error); return; }
+        state.save = result.save;
+        if (saveCareer()) { render(); toast("تم تعيين " + result.employee.name + " في الوكالة."); }
+        else state.save = previousSave;
+      },
+      dismissAgencyEmployee: (employeeId) => {
+        if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم يتغير الفريق."); return; }
+        const previousSave = state.save;
+        const result = dismissAgencyEmployeeInEngine(state.save, employeeId);
+        if (!result.changed) { toast(result.error); return; }
+        state.save = result.save;
+        if (saveCareer()) { render(); toast("تم إنهاء التعاقد وتحديث قائمة الفريق."); }
+        else state.save = previousSave;
+      },
+      openAgencyBranch: (locationId) => {
+        if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم يتم افتتاح الفرع."); return; }
+        const previousSave = state.save;
+        const result = openAgencyBranchInEngine(state.save, locationId);
+        if (!result.changed) { toast(result.error); return; }
+        state.save = result.save;
+        if (saveCareer()) { render(); toast("تم افتتاح فرع " + result.branch.name + "."); }
+        else state.save = previousSave;
+      },
+      closeAgencyBranch: (branchId) => {
+        if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم يتم إغلاق الفرع."); return; }
+        const previousSave = state.save;
+        const result = closeAgencyBranchInEngine(state.save, branchId);
+        if (!result.changed) { toast(result.error); return; }
+        state.save = result.save;
+        if (saveCareer()) { render(); toast("تم إغلاق الفرع وتوقفت تكلفته الأسبوعية القادمة."); }
+        else state.save = previousSave;
+      }
     };
     const views = {
       dashboard: renderDashboard,
