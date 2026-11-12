@@ -1,4 +1,4 @@
-import { COMPETITION_FORMATS, getCompetitionRules } from "../data/competition-rules.js";
+import { buildCompetitionGroups, COMPETITION_FORMATS, getCompetitionRules } from "../data/competition-rules.js";
 
 function compareText(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -187,23 +187,193 @@ export function buildKnockoutOpeningPairings(competition, database) {
   return pairings;
 }
 
+function getGroupQualificationStandings(competition, group, fixtures, resultById, database) {
+  const rules = getCompetitionRules(competition);
+  const clubById = new Map(database.clubs.map((club) => [club.id, club]));
+  const rows = new Map(group.clubIds.map((clubId) => [clubId, {
+    clubId,
+    played: 0,
+    wins: 0,
+    draws: 0,
+    losses: 0,
+    goalsFor: 0,
+    goalsAgainst: 0,
+    goalDifference: 0,
+    points: 0
+  }]));
+
+  for (const fixture of fixtures) {
+    if (fixture.groupId !== group.id) continue;
+    const result = resultById.get(fixture.id);
+    if (!result) continue;
+    const home = rows.get(fixture.homeClubId);
+    const away = rows.get(fixture.awayClubId);
+    if (!home || !away) continue;
+    home.played += 1;
+    away.played += 1;
+    home.goalsFor += result.home.goals;
+    home.goalsAgainst += result.away.goals;
+    away.goalsFor += result.away.goals;
+    away.goalsAgainst += result.home.goals;
+    if (result.home.goals > result.away.goals) {
+      home.wins += 1;
+      away.losses += 1;
+      home.points += rules.points.win;
+      away.points += rules.points.loss;
+    } else if (result.away.goals > result.home.goals) {
+      away.wins += 1;
+      home.losses += 1;
+      away.points += rules.points.win;
+      home.points += rules.points.loss;
+    } else {
+      home.draws += 1;
+      away.draws += 1;
+      home.points += rules.points.draw;
+      away.points += rules.points.draw;
+    }
+  }
+
+  const compareRows = (left, right) => {
+    left.goalDifference = left.goalsFor - left.goalsAgainst;
+    right.goalDifference = right.goalsFor - right.goalsAgainst;
+    for (const rule of rules.tieBreakers) {
+      const difference = rule === "points" ? right.points - left.points
+        : rule === "goalDifference" ? right.goalDifference - left.goalDifference
+          : rule === "goalsFor" ? right.goalsFor - left.goalsFor
+            : rule === "wins" ? right.wins - left.wins
+              : rule === "goalsAgainst" ? left.goalsAgainst - right.goalsAgainst
+                : rule === "clubId" ? compareText(left.clubId, right.clubId)
+                  : 0;
+      if (difference !== 0) return difference;
+    }
+    return compareText(left.clubId, right.clubId);
+  };
+
+  return [...rows.values()].sort(compareRows).map((row) => ({
+    ...row,
+    clubName: clubById.get(row.clubId)?.nameAr ?? row.clubId
+  }));
+}
+
+function createKnockoutFixtures(competition, season, round, pairings, fixtures, database, baseDate) {
+  const clubById = new Map(database.clubs.map((club) => [club.id, club]));
+  const seeded = pairings.map((pairing) => ({
+    homeClubId: pairing.homeClubId,
+    awayClubId: pairing.awayClubId
+  }));
+  const reserved = [...fixtures];
+  const nextFixtures = [];
+
+  for (const pairing of seeded) {
+    let date = addDays(baseDate, 7);
+    while ([pairing.homeClubId, pairing.awayClubId].some((clubId) =>
+      reserved.some((existing) =>
+        [existing.homeClubId, existing.awayClubId].includes(clubId) &&
+        Math.abs(daysBetween(date, existing.date)) < 3
+      )
+    )) {
+      date = addDays(date, 1);
+    }
+    const fixture = {
+      id: [
+        "match", season, competition.id, "round-" + round,
+        "leg-1", pairing.homeClubId, pairing.awayClubId
+      ].join("-"),
+      season,
+      competitionId: competition.id,
+      competitionName: competition.nameAr,
+      groupId: null,
+      groupName: null,
+      date,
+      round,
+      leg: 1,
+      homeClubId: pairing.homeClubId,
+      awayClubId: pairing.awayClubId,
+      status: "scheduled",
+      resultId: null
+    };
+    nextFixtures.push(fixture);
+    reserved.push(fixture);
+  }
+
+  return nextFixtures;
+}
+
+function buildGroupQualificationPairings(competition, fixtures, results, database) {
+  const rules = getCompetitionRules(competition);
+  const groups = buildCompetitionGroups(competition, database);
+  if (groups.length !== 2 || rules.qualifiersPerGroup !== 2) {
+    throw new TypeError("مسار التأهل الحالي يتطلب مجموعتين ويتأهل أول وثاني كل مجموعة.");
+  }
+  const resultById = new Map(results.map((result) => [result.id, result]));
+  const standings = groups.map((group) =>
+    getGroupQualificationStandings(competition, group, fixtures, resultById, database)
+  );
+  if (standings.some((table) => table.length !== groups[0].clubIds.length ||
+      table.length < rules.qualifiersPerGroup)) {
+    throw new TypeError("تعذر حساب ترتيب التأهل لإحدى المجموعات.");
+  }
+
+  return [
+    {
+      homeClubId: standings[0][0].clubId,
+      awayClubId: standings[1][1].clubId
+    },
+    {
+      homeClubId: standings[1][0].clubId,
+      awayClubId: standings[0][1].clubId
+    }
+  ];
+}
+
 /**
- * Advances a completed knockout round exactly once. It returns the new round
- * fixtures, or the champion when the completed round was the final.
+ * Advances a completed knockout round exactly once. Continental group
+ * competitions may optionally create their semi-finals from the top two clubs
+ * in each group before using the same knockout progression.
  */
 export function advanceKnockoutRound(competition, season, fixtures, results, database) {
   const rules = getCompetitionRules(competition);
-  if (rules.format !== COMPETITION_FORMATS.KNOCKOUT) {
+  const isKnockoutCompetition = rules.format === COMPETITION_FORMATS.KNOCKOUT;
+  const hasGroupQualification = rules.format === COMPETITION_FORMATS.GROUP_STAGE &&
+    competition.knockoutAfterGroups === true;
+  if (!isKnockoutCompetition && !hasGroupQualification) {
     return { fixtures: [], championClubId: null, advanced: false };
   }
 
-  const cupFixtures = fixtures.filter((fixture) =>
+  const competitionFixtures = fixtures.filter((fixture) =>
     fixture.competitionId === competition.id && fixture.season === season
   );
-  if (cupFixtures.length === 0) return { fixtures: [], championClubId: null, advanced: false };
+  if (competitionFixtures.length === 0) {
+    return { fixtures: [], championClubId: null, advanced: false };
+  }
 
-  const currentRound = Math.max(...cupFixtures.map((fixture) => fixture.round));
-  const roundFixtures = cupFixtures
+  const groupFixtures = competitionFixtures.filter((fixture) => fixture.groupId);
+  const knockoutFixtures = competitionFixtures.filter((fixture) => !fixture.groupId);
+
+  if (hasGroupQualification && knockoutFixtures.length === 0) {
+    if (groupFixtures.length === 0 || groupFixtures.some((fixture) => fixture.status !== "played")) {
+      return { fixtures: [], championClubId: null, advanced: false };
+    }
+    const pairings = buildGroupQualificationPairings(
+      competition, groupFixtures, results, database
+    );
+    const latestGroupDate = groupFixtures.reduce((latest, fixture) =>
+      fixture.date > latest ? fixture.date : latest, groupFixtures[0].date);
+    const openingRound = Math.max(...groupFixtures.map((fixture) => fixture.round)) + 1;
+    const openingFixtures = createKnockoutFixtures(
+      competition,
+      season,
+      openingRound,
+      pairings,
+      competitionFixtures,
+      database,
+      latestGroupDate
+    );
+    return { fixtures: openingFixtures, championClubId: null, advanced: true };
+  }
+
+  const currentRound = Math.max(...knockoutFixtures.map((fixture) => fixture.round));
+  const roundFixtures = knockoutFixtures
     .filter((fixture) => fixture.round === currentRound)
     .sort((left, right) => compareText(left.id, right.id));
 
@@ -229,41 +399,24 @@ export function advanceKnockoutRound(competition, season, fixtures, results, dat
       (clubById.get(leftId)?.simulationProfile ?? 0) ||
     compareText(leftId, rightId)
   );
-
-  const latestDate = roundFixtures.reduce((latest, fixture) =>
-    fixture.date > latest ? fixture.date : latest, roundFixtures[0].date);
-  let nextDate = addDays(latestDate, 7);
-  while (seededWinners.some((clubId) => fixtures.some((existing) =>
-    [existing.homeClubId, existing.awayClubId].includes(clubId) &&
-    Math.abs(daysBetween(nextDate, existing.date)) < 3
-  ))) {
-    nextDate = addDays(nextDate, 1);
-  }
-
-  const nextRound = currentRound + 1;
-  const nextFixtures = [];
+  const pairings = [];
   for (let index = 0; index < seededWinners.length / 2; index += 1) {
-    const homeClubId = seededWinners[index];
-    const awayClubId = seededWinners[seededWinners.length - 1 - index];
-    nextFixtures.push({
-      id: [
-        "match", season, competition.id, "round-" + nextRound,
-        "leg-1", homeClubId, awayClubId
-      ].join("-"),
-      season,
-      competitionId: competition.id,
-      competitionName: competition.nameAr,
-      groupId: null,
-      groupName: null,
-      date: nextDate,
-      round: nextRound,
-      leg: 1,
-      homeClubId,
-      awayClubId,
-      status: "scheduled",
-      resultId: null
+    pairings.push({
+      homeClubId: seededWinners[index],
+      awayClubId: seededWinners[seededWinners.length - 1 - index]
     });
   }
 
+  const latestDate = roundFixtures.reduce((latest, fixture) =>
+    fixture.date > latest ? fixture.date : latest, roundFixtures[0].date);
+  const nextFixtures = createKnockoutFixtures(
+    competition,
+    season,
+    currentRound + 1,
+    pairings,
+    competitionFixtures,
+    database,
+    latestDate
+  );
   return { fixtures: nextFixtures, championClubId: null, advanced: true };
 }
