@@ -2444,6 +2444,8 @@ function renderAgencyManagementPanel(context) {
       copy.append(
         node("strong", "", interest.clubName + " · " + interest.playerName),
         node("span", "", (club?.nameAr ?? "نادي") + " · " + interest.position + " · ملاءمة " + interest.fitScore + "/100"),
+        node("small", "", "ميزانية انتقال النادي " + formatEuroMoney(interest.clubBudgetEur) +
+          " · قيمة تقديرية للاعب " + formatEuroMoney(interest.estimatedFeeEur)),
         node("small", "", interest.status === "enquiry"
           ? "النافذة مفتوحة حتى " + formatHomeDate(interest.transferWindowEndDate)
           : "متابعة مستقبلية · ينتهي الاهتمام " + formatHomeDate(interest.expiresDate))
