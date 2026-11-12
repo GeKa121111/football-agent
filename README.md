@@ -39,7 +39,7 @@ npm run dev
 
 ```bash
 npm test
-npx playwright install chromium
+npx playwright install chromium firefox webkit
 npm run test:e2e
 npm run check
 npm run build
