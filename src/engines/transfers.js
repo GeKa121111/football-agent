@@ -541,8 +541,8 @@ export function isValidTransferState(state, currentDate, clients = [], represent
     if (offer.status === "completed" &&
         (!validId(offer.moveId) || !isTransferCalendarDate(offer.completedDate) ||
          offer.completedDate < offer.agreedDate || offer.completedDate > currentDate ||
-         !getTransferWindow(offer.completedDate).active ||
-         getTransferWindow(offer.completedDate).window.id !== createdWindow.id)) return false;
+         !getTransferWindow(offer.completedDate, offer.toClubId, database).active ||
+         getTransferWindow(offer.completedDate, offer.toClubId, database).window.id !== createdWindow.id)) return false;
     if (offer.status !== "completed" && offer.moveId !== null) return false;
     if (["pending", "countered", "agreed"].includes(offer.status)) {
       if (!clients.includes(offer.playerId) || openOfferPlayers.has(offer.playerId)) return false;
