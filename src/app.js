@@ -2460,6 +2460,8 @@ function renderAgencyManagementPanel(context) {
     entries.forEach((entry) => {
       const row = node("article", "agency-operations-ledger-row");
       const label = entry.direction === "income" ? (entry.incomeKind === "signing" ? "مكافأة رعاية" : "دخل رعاية أسبوعي") :
+        entry.direction === "financing" ? "صرف تمويل" :
+        entry.type === "credit-repayment" ? "سداد قسط تمويل" :
         entry.type === "hiring" ? "تكلفة تعيين" :
         entry.type === "branch-opening" ? "افتتاح فرع" : "رواتب وإيجارات أسبوعية";
       row.append(
