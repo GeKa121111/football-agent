@@ -172,8 +172,12 @@ test("records real match performances in a prospect activity trail and ignores r
     ]
   };
 
+  const matchdaySave = {
+    ...tracked.save,
+    world: { ...tracked.save.world, currentDate: "2026-07-04" }
+  };
   const recorded = recordTalentProspectMatchPerformances(
-    tracked.save,
+    matchdaySave,
     [result],
     "2026-07-04"
   );
