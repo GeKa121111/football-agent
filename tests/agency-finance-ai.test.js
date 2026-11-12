@@ -131,7 +131,7 @@ test("legal staff reduces the probability that a rival agency poaches a target",
     agency:{...save.agency,management:{
       ...save.agency.management,
       competitors:save.agency.management.competitors.map((rival,index) =>
-        index===0 ? {...rival,pendingOffers:[target]} : rival
+        index===0 ? {...rival,pendingOffers:[{...target,status:"pending",decisionDate:null}]} : rival
       )
     }},
     world:{...save.world,currentDate:"2026-07-04"}
