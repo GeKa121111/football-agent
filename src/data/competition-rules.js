@@ -10,7 +10,8 @@ const ALLOWED_TIE_BREAKERS = new Set([
 
 export const COMPETITION_FORMATS = Object.freeze({
   ROUND_ROBIN: "round-robin",
-  GROUP_STAGE: "group-stage"
+  GROUP_STAGE: "group-stage",
+  KNOCKOUT: "knockout"
 });
 
 /**
@@ -29,7 +30,9 @@ export function getCompetitionRules(competition) {
       ? COMPETITION_FORMATS.ROUND_ROBIN
       : competition.type === "continental"
         ? COMPETITION_FORMATS.GROUP_STAGE
-        : null
+        : competition.type === "cup"
+          ? COMPETITION_FORMATS.KNOCKOUT
+          : null
   );
 
   if (!Object.values(COMPETITION_FORMATS).includes(format)) {
@@ -38,7 +41,7 @@ export function getCompetitionRules(competition) {
 
   return {
     format,
-    legs: competition.legs ?? 2,
+    legs: competition.legs ?? (format === COMPETITION_FORMATS.KNOCKOUT ? 1 : 2),
     groupCount: format === COMPETITION_FORMATS.GROUP_STAGE
       ? (competition.groupCount ?? 2)
       : null,
@@ -55,7 +58,7 @@ export function validateCompetitionDefinition(competition, database) {
     return { valid: false, errors: ["تعريف المسابقة غير صالح."] };
   }
 
-  if (!["league", "continental"].includes(competition.type)) {
+  if (!["league", "continental", "cup"].includes(competition.type)) {
     errors.push("نوع مسابقة غير مدعوم: " + competition.id);
   }
 
@@ -90,6 +93,9 @@ export function validateCompetitionDefinition(competition, database) {
   if (competition.type === "continental" && rules.format !== COMPETITION_FORMATS.GROUP_STAGE) {
     errors.push("المسابقة القارية يجب أن تستخدم نظام المجموعات في هذا الإصدار: " + competition.id);
   }
+  if (competition.type === "cup" && rules.format !== COMPETITION_FORMATS.KNOCKOUT) {
+    errors.push("مسابقة الكأس يجب أن تستخدم نظام خروج المغلوب: " + competition.id);
+  }
 
   const points = rules.points;
   if (![points.win, points.draw, points.loss].every((value) =>
@@ -104,6 +110,20 @@ export function validateCompetitionDefinition(competition, database) {
   }
   if (rules.format === COMPETITION_FORMATS.ROUND_ROBIN && ![1, 2].includes(rules.legs)) {
     errors.push("عدد مراحل الدوري يجب أن يكون ذهابًا فقط أو ذهابًا وإيابًا: " + competition.id);
+  }
+
+  if (rules.format === COMPETITION_FORMATS.KNOCKOUT) {
+    const participantCount = competition.clubIds.length;
+    if (!Number.isSafeInteger(rules.legs) || rules.legs !== 1) {
+      errors.push("مواجهات الكأس يجب أن تكون من مباراة واحدة في هذا الإصدار: " + competition.id);
+    }
+    if (participantCount < 2 || participantCount > 32 ||
+        (participantCount & (participantCount - 1)) !== 0) {
+      errors.push("عدد أندية الكأس يجب أن يكون قوة للعدد 2 بين 2 و32: " + competition.id);
+    }
+    if (competition.countryId !== null || competition.leagueId !== null) {
+      errors.push("الكأس المفتوح لا يجب أن يرتبط بدولة أو دوري محلي: " + competition.id);
+    }
   }
 
   if (rules.format === COMPETITION_FORMATS.GROUP_STAGE) {
