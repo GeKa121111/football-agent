@@ -19,7 +19,6 @@ import {
 import {
   SCOUTING_MISSION_TYPES,
   SCOUTING_SOURCES,
-  advanceScoutingMissions,
   getPlayerScoutingHistory,
   getScoutingCandidates,
   getScoutingSourceLabel,
@@ -56,8 +55,7 @@ import {
   getRepresentationRelationshipLabel,
   getAgencyReputationScore,
   createRepresentationInteraction as createRepresentationInteractionInEngine,
-  completeRepresentationMeeting as completeRepresentationMeetingInEngine,
-  advanceRepresentationState
+  completeRepresentationMeeting as completeRepresentationMeetingInEngine
 } from "./engines/representation.js";
 
 import {
@@ -73,8 +71,6 @@ import {
   getPlayerCurrentClubId
 } from "./engines/transfers.js";
 import {
-  advanceCareerDay,
-  advanceCareerDays,
   completeCareerTask as completeTaskInEngine,
   markCareerMessageRead,
   filterCareerEvents,
@@ -84,6 +80,10 @@ import {
   filterCareerTasks,
   filterCareerMessages
 } from "./engines/career-calendar.js";
+import {
+  advanceCareerSimulationDay,
+  advanceCareerSimulationDays
+} from "./engines/career-simulation.js";
 
 const WORLD_PLAYERS = getWorldPlayerProfiles();
 const WORLD_COUNTS = getWorldSummary();
@@ -3334,16 +3334,13 @@ export function mountApp(root) {
 
     const previousSave = state.save;
     try {
-      const advancedSave = advanceCareerDay(state.save);
-      const scoutingResult = advanceScoutingMissions(advancedSave, WORLD_PLAYERS);
-      const representationResult = advanceRepresentationState(scoutingResult.save, scoutingResult.save.world.currentDate);
-      const transferResult = advanceTransferState(representationResult.save, representationResult.save.world.currentDate);
-      state.save = transferResult.save;
+      const simulationResult = advanceCareerSimulationDay(state.save, WORLD_PLAYERS);
+      state.save = simulationResult.save;
       if (saveCareer()) {
         render();
-        if (scoutingResult.completedReports.length > 0) {
+        if (simulationResult.completedReports.length > 0) {
           toast("اكتملت بعثة كشف ووصل تقرير جديد إلى مكتبك.");
-        } else if (representationResult.expiredContracts.length > 0 || representationResult.expiredOffers.length > 0) {
+        } else if (simulationResult.expiredContracts.length > 0 || simulationResult.expiredOffers.length > 0) {
           toast("انتهت صلاحية عقد أو عرض تمثيل وتم تحديث سجل الوكالة.");
         }
       } else state.save = previousSave;
@@ -3362,16 +3359,13 @@ export function mountApp(root) {
 
     const previousSave = state.save;
     try {
-      const advancedSave = advanceCareerDays(state.save, 7);
-      const scoutingResult = advanceScoutingMissions(advancedSave, WORLD_PLAYERS);
-      const representationResult = advanceRepresentationState(scoutingResult.save, scoutingResult.save.world.currentDate);
-      const transferResult = advanceTransferState(representationResult.save, representationResult.save.world.currentDate);
-      state.save = transferResult.save;
+      const simulationResult = advanceCareerSimulationDays(state.save, 7, WORLD_PLAYERS);
+      state.save = simulationResult.save;
       if (saveCareer()) {
         render();
-        toast(scoutingResult.completedReports.length > 0
+        toast(simulationResult.completedReports.length > 0
           ? "تم تقدم أسبوع واكتمل تقرير بعثة كشف جديدة."
-          : representationResult.expiredContracts.length > 0 || representationResult.expiredOffers.length > 0
+          : simulationResult.expiredContracts.length > 0 || simulationResult.expiredOffers.length > 0
             ? "تم تقدم 7 أيام وأُرشف عقد أو عرض انتهت صلاحيته."
             : "تم تقدم 7 أيام بالترتيب، مع معالجة المواعيد والأحداث والمهام اليومية.");
       } else {

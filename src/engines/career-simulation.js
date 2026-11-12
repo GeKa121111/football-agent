@@ -1,0 +1,61 @@
+import { advanceCareerDay } from "./career-calendar.js";
+import { advanceScoutingMissions } from "./scouting.js";
+import { advanceRepresentationState } from "./representation.js";
+
+/**
+ * Runs one complete in-game day across the shared career world.
+ *
+ * The calendar owns football and transfer transitions; scouting and client
+ * representation are then advanced to that exact same date. This keeps every
+ * subsystem on one clock without replaying transfer processing in the UI.
+ */
+export function advanceCareerSimulationDay(save, players) {
+  if (!Array.isArray(players)) {
+    throw new TypeError("قاعدة لاعبي الكشافة غير متاحة.");
+  }
+
+  const calendarSave = advanceCareerDay(save);
+  const currentDate = calendarSave.world.currentDate;
+  const scouting = advanceScoutingMissions(calendarSave, players, currentDate);
+  const representation = advanceRepresentationState(scouting.save, currentDate);
+
+  return {
+    save: representation.save,
+    completedReports: scouting.completedReports,
+    expiredOffers: representation.expiredOffers,
+    expiredContracts: representation.expiredContracts
+  };
+}
+
+/**
+ * Advances complete game days in sequence. Weekly progression therefore runs
+ * each subsystem on every intermediate date rather than only at week end.
+ */
+export function advanceCareerSimulationDays(save, days, players) {
+  if (!Number.isInteger(days) || days < 1 || days > 31) {
+    throw new TypeError("يمكن تقدم المسيرة من يوم واحد إلى 31 يومًا في المرة الواحدة.");
+  }
+  if (!Array.isArray(players)) {
+    throw new TypeError("قاعدة لاعبي الكشافة غير متاحة.");
+  }
+
+  let nextSave = save;
+  const completedReports = [];
+  const expiredOffers = [];
+  const expiredContracts = [];
+
+  for (let offset = 0; offset < days; offset += 1) {
+    const daily = advanceCareerSimulationDay(nextSave, players);
+    nextSave = daily.save;
+    completedReports.push(...daily.completedReports);
+    expiredOffers.push(...daily.expiredOffers);
+    expiredContracts.push(...daily.expiredContracts);
+  }
+
+  return {
+    save: nextSave,
+    completedReports,
+    expiredOffers,
+    expiredContracts
+  };
+}
