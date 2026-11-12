@@ -1534,7 +1534,7 @@ function renderMarket(context) {
           (move.type === "loan" ? " · عودة " + formatHomeDate(move.returnDate) + (move.status === "returned" ? " · عاد" : " · نشطة") : "")),
         node("small", "", move.type === "loan" ? "رسوم الإعارة " + formatEuroMoney(move.loanFeeEur) : "رسوم الانتقال " + formatEuroMoney(move.feeEur))
       );
-      moveList.append(row);
+      if (move.type === "loan" && move.status === "active" && move.optionToBuyEur > 0) {\n        row.append(actionButton("تفعيل خيار الشراء · " + formatEuroMoney(move.optionToBuyEur), "button-primary", () => context.exerciseLoanOption(move.id)));\n      }\n      moveList.append(row);
     });
     movesPanel.append(moveList);
   }
