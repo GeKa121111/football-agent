@@ -77,11 +77,11 @@ import {
 } from "./engines/club-transfer-rules.js";
 import {
   AGENCY_BRANCH_LOCATIONS,
-  AGENCY_CREDIT_PRODUCTS,
   AGENCY_JOB_ROLES,
   closeAgencyBranch as closeAgencyBranchInEngine,
   dismissAgencyEmployee as dismissAgencyEmployeeInEngine,
   getAgencyManagementSummary,
+  getAgencyClubInterestSummary,
   getAgencyStaffModifiers,
   getAgencySponsorshipOffers,
   getAgencyCompetitorSummary,
@@ -2407,6 +2407,49 @@ function renderAgencyManagementPanel(context) {
     competitorsSection.append(historyList);
   }
 
+  const clubInterestSection = node("section", "agency-operations-section agency-club-interests-section");
+  const clubInterestSummary = getAgencyClubInterestSummary(context.save);
+  clubInterestSection.append(
+    node("h3", "", "اهتمامات الأندية بعملائك"),
+    node("p", "representation-intro", "محرك الأندية يراقب عملاء الوكالة كل أسبوع ويحدد الأندية التي قد تحتاج خدماتهم. الاهتمام ليس عرض انتقال رسميًا حتى يصل لمرحلة تفاوض من سوق الانتقالات.")
+  );
+  const interestMetrics = node("div", "agency-operations-metrics");
+  [
+    ["إجمالي الاهتمامات", clubInterestSummary.total],
+    ["متابعة", clubInterestSummary.monitoring],
+    ["استفسارات خلال نافذة", clubInterestSummary.enquiries]
+  ].forEach(([label,value]) => {
+    const card = node("article", "agency-operations-metric");
+    card.append(node("small", "", label),node("strong", "", value));
+    interestMetrics.append(card);
+  });
+  clubInterestSection.append(interestMetrics);
+  const interestList = node("div", "agency-operations-list");
+  const clubInterests = (management.clubInterests ?? [])
+    .filter((interest) => ["monitoring","enquiry"].includes(interest.status))
+    .slice(0,10);
+  if (clubInterests.length === 0) {
+    interestList.append(node("p", "representation-empty", "لا توجد اهتمامات مسجلة حتى الآن. ستظهر بعد تقدم المسيرة وقيام الأندية بمراجعة عملائك."));
+  } else {
+    clubInterests.forEach((interest) => {
+      const row = node("article", "agency-operations-row agency-club-interest-row");
+      const copy = node("div", "representation-copy");
+      const club = WORLD_DATABASE.clubs.find((item) => item.id === interest.clubId);
+      copy.append(
+        node("strong", "", interest.clubName + " · " + interest.playerName),
+        node("span", "", (club?.nameAr ?? "نادي") + " · " + interest.position + " · ملاءمة " + interest.fitScore + "/100"),
+        node("small", "", interest.status === "enquiry"
+          ? "النافذة مفتوحة حتى " + formatHomeDate(interest.transferWindowEndDate)
+          : "متابعة مستقبلية · ينتهي الاهتمام " + formatHomeDate(interest.expiresDate))
+      );
+      row.append(copy,
+        node("span", "representation-count", interest.status === "enquiry" ? "استفسار" : "متابعة")
+      );
+      interestList.append(row);
+    });
+  }
+  clubInterestSection.append(interestList);
+
   const ledgerPanel = node("section", "agency-operations-section");
   ledgerPanel.append(node("h3", "", "سجل مصروفات الإدارة"));
   const entries = management.ledger.slice(0, 8);
@@ -2430,7 +2473,7 @@ function renderAgencyManagementPanel(context) {
     });
     ledgerPanel.append(list);
   }
-  panel.append(staffSection, skillPanel, branchesSection, sponsorshipSection, creditSection, competitorsSection, ledgerPanel);
+  panel.append(staffSection, skillPanel, branchesSection, sponsorshipSection, creditSection, competitorsSection, clubInterestSection, ledgerPanel);
   return panel;
 }
 
