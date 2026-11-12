@@ -160,6 +160,59 @@ test("generates deterministic home-and-away fixtures for all seeded competitions
   }
 });
 
+test("plays a full continental group stage then semi-finals and a final exactly once", () => {
+  const competition = WORLD_DATABASE.competitions.find((item) =>
+    item.type === "continental" && item.knockoutAfterGroups === true
+  );
+  const database = { ...WORLD_DATABASE, competitions: [competition] };
+  let football = createInitialFootballState(1, "2026-07-01", database);
+  const initialGroupFixtures = football.fixtures.filter((fixture) =>
+    fixture.competitionId === competition.id && fixture.groupId
+  );
+  assert.ok(initialGroupFixtures.length > 0);
+  assert.equal(football.fixtures.some((fixture) =>
+    fixture.competitionId === competition.id && !fixture.groupId
+  ), false);
+
+  const start = new Date("2026-07-01T00:00:00.000Z");
+  const end = new Date("2026-10-31T00:00:00.000Z");
+  for (const cursor = new Date(start); cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+    const currentDate = cursor.toISOString().slice(0, 10);
+    football = advanceFootballSeasonDay(football, currentDate, 1, database).football;
+    const competitionFixtures = football.fixtures.filter((fixture) =>
+      fixture.competitionId === competition.id
+    );
+    const knockoutFixtures = competitionFixtures.filter((fixture) => !fixture.groupId);
+    if (knockoutFixtures.length === 3 && knockoutFixtures.every((fixture) => fixture.status === "played")) {
+      break;
+    }
+  }
+
+  const competitionFixtures = football.fixtures.filter((fixture) =>
+    fixture.competitionId === competition.id
+  );
+  const knockoutFixtures = competitionFixtures.filter((fixture) => !fixture.groupId);
+  const competitionResults = football.results.filter((result) =>
+    result.competitionId === competition.id
+  );
+  assert.equal(knockoutFixtures.length, 3);
+  assert.ok(knockoutFixtures.every((fixture) => fixture.status === "played"));
+  assert.deepEqual([...new Set(knockoutFixtures.map((fixture) => fixture.round))].sort((a, b) => a - b),
+    [Math.max(...initialGroupFixtures.map((fixture) => fixture.round)) + 1,
+      Math.max(...initialGroupFixtures.map((fixture) => fixture.round)) + 2,
+      Math.max(...initialGroupFixtures.map((fixture) => fixture.round)) + 2]);
+  assert.ok(knockoutFixtures.every((fixture) =>
+    competitionResults.find((result) => result.id === fixture.id)?.knockoutDecision?.winnerClubId
+  ));
+  assert.equal(new Set(knockoutFixtures.flatMap((fixture) => [
+    fixture.homeClubId, fixture.awayClubId
+  ])).size, 6);
+  assert.equal(isValidFootballState(football, "2026-10-31", 1, database), true);
+  const history = getCompetitionSeasonHistory(football, competition.id, database);
+  assert.equal(history[0].complete, true);
+  assert.ok(competition.clubIds.includes(history[0].championClubId));
+});
+
 test("calculates player of the season, golden boot and top assists from match records", () => {
   const competition = WORLD_DATABASE.competitions.find((item) => item.type === "league");
   const state = {
