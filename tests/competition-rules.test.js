@@ -81,6 +81,31 @@ test("validates the new global cup as a one-leg knockout bracket", () => {
   }, WORLD_DATABASE).valid, false);
 });
 
+test("requires two groups and two qualifiers for continental knockout paths", () => {
+  const continental = WORLD_DATABASE.competitions.find((item) =>
+    item.type === "continental" && item.knockoutAfterGroups === true
+  );
+  assert.equal(validateCompetitionDefinition(continental, WORLD_DATABASE).valid, true);
+
+  const invalidGroupCount = validateCompetitionDefinition({
+    ...continental,
+    groupCount: 3
+  }, WORLD_DATABASE);
+  assert.equal(invalidGroupCount.valid, false);
+
+  const invalidQualifiers = validateCompetitionDefinition({
+    ...continental,
+    qualifiersPerGroup: 1
+  }, WORLD_DATABASE);
+  assert.equal(invalidQualifiers.valid, false);
+
+  const invalidFlag = validateCompetitionDefinition({
+    ...continental,
+    knockoutAfterGroups: "yes"
+  }, WORLD_DATABASE);
+  assert.equal(invalidFlag.valid, false);
+});
+
 test("rejects unsupported formats, invalid league points and impossible group counts", () => {
   const league = WORLD_DATABASE.competitions.find((item) => item.type === "league");
   assert.equal(validateCompetitionDefinition({ ...league, format: "group-stage" }, WORLD_DATABASE).valid, false);
