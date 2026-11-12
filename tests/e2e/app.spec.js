@@ -1725,7 +1725,7 @@ test.describe("Agency operations management", () => {
 
     await expect(panel).toContainText("إجمالي الإيرادات");
     await expect(panel).toContainText("دخل الرعايات أسبوعيًا");
-    await expect(panel).toContainText("إجمالي الدين");
+    await expect(panel).toContainText("الدين القائم");
     await expect(panel).toContainText("اهتمامات الأندية بعملائك");
     await expect(panel).toContainText("سجل مصروفات الإدارة");
     await hasNoHorizontalOverflow(page);
