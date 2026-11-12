@@ -887,3 +887,15 @@
  .agency-sponsorship-section .agency-operations-catalog,
  .agency-competitors-section .agency-operations-catalog{grid-template-columns:minmax(0,1fr)}
 }
+
+
+/* Phase 7 — credit facilities and club interest feed */
+.agency-credit-section .agency-operations-offer{align-content:start}
+.agency-credit-request-button{width:100%;white-space:normal;margin-top:4px}
+.agency-credit-request-button:disabled{opacity:.48;cursor:not-allowed}
+.agency-club-interests-section .agency-operations-row{background:linear-gradient(140deg,rgba(54,119,151,.1),rgba(17,24,39,.56))}
+.agency-club-interest-row .representation-count{white-space:nowrap}
+@media(max-width:760px){
+ .agency-club-interest-row{grid-template-columns:minmax(0,1fr)}
+ .agency-club-interest-row .representation-count{justify-self:start}
+}
