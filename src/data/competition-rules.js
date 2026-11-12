@@ -34,7 +34,6 @@ export function getCompetitionRules(competition) {
     throw new TypeError("صيغة المسابقة غير مدعومة: " + String(format));
   }
 
-  const isLeague = format === COMPETITION_FORMATS.ROUND_ROBIN;
   return {
     format,
     legs: competition.legs ?? 2,
