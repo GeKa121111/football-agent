@@ -734,3 +734,57 @@ test("continues counting unearned appearance milestones after a loan purchase", 
   assert.equal(secondSettlement.save.world.transfers.financeLedger
     .filter((entry) => entry.type === "performance-bonus").length, 1);
 });
+
+
+test("does not double-count a loan converted into a permanent seasonal registration", async () => {
+  const { getClubRegistrationStatus } = await import("../src/engines/club-transfer-rules.js");
+  const db = {
+    clubs: [
+      { id: "club-home", nameAr: "المصدر", countryId: "EG", leagueId: "test-league", simulationProfile: 70 },
+      { id: "club-target", nameAr: "الوجهة", countryId: "EG", leagueId: "test-league", simulationProfile: 80 },
+      { id: "club-other", nameAr: "آخر", countryId: "EG", leagueId: "test-league", simulationProfile: 60 }
+    ],
+    players: [
+      { id: "candidate", clubId: "club-home", countryId: "EG", age: 22, rating: 65 }
+    ],
+    squadPlayers: []
+  };
+  const moves = Array.from({ length: 8 }, (_, index) => ({
+    id: "transfer-move-" + (index + 1),
+    playerId: "other-player-" + (index + 1),
+    type: "permanent",
+    status: "active",
+    fromClubId: "club-other",
+    toClubId: "club-target",
+    effectiveDate: "2026-08-10"
+  }));
+  moves.push(
+    {
+      id: "transfer-move-9",
+      playerId: "bought-loanee",
+      type: "loan",
+      status: "purchased",
+      fromClubId: "club-home",
+      toClubId: "club-target",
+      effectiveDate: "2026-08-01",
+      returnDate: "2027-02-01",
+      purchasedDate: "2026-10-01",
+      purchaseMoveId: "transfer-move-10"
+    },
+    {
+      id: "transfer-move-10",
+      playerId: "bought-loanee",
+      type: "permanent",
+      status: "active",
+      fromClubId: "club-home",
+      toClubId: "club-target",
+      effectiveDate: "2026-10-01"
+    }
+  );
+
+  const result = getClubRegistrationStatus(
+    "club-target", "candidate", { moves }, "2026-11-01", db, "permanent", "league"
+  );
+  assert.equal(result.eligible, true);
+  assert.equal(result.midSeasonRegistrations, 10);
+});
