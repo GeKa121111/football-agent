@@ -470,6 +470,7 @@ test.describe("Desktop experience", () => {
   });
 
   test("renders distinct SVG player portraits and reuses them in player details", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.goto("/");
     await navigateTo(page, "اللاعبون");
 
