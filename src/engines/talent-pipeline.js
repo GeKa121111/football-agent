@@ -149,8 +149,6 @@ export function recordTalentProspectMatchPerformances(save, results, currentDate
       const opponent = club === result.home ? result.away : result.home;
       const activity = entry.activity ?? [];
       if (activity.some((event) => event.type === "match-performance" && event.matchId === result.id)) continue;
-      if (activity.length >= MAX_ACTIVITY_EVENTS) continue;
-
       const event = {
         id: nextActivityId(activity),
         type: "match-performance",
