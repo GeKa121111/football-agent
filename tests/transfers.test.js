@@ -389,6 +389,73 @@ function agreeOffer(save, offerId, date) {
   return response;
 }
 
+test("does not release a player when an older club contract expires after a later permanent transfer", () => {
+  const firstSent = send(makeSave(), "permanent", {
+    ...permanentTerms, feeEur: 2_000_000, contractYears: 1
+  });
+  const firstAgreed = agreeOffer(firstSent.save, firstSent.offer.id, "2026-07-01");
+  const firstMove = completeTransfer(firstAgreed.save, firstSent.offer.id, "2026-07-01", database);
+  assert.equal(firstMove.changed, true);
+
+  const secondSent = createTransferOffer(
+    firstMove.save, "player-1", "club-other", "permanent",
+    { ...permanentTerms, feeEur: 2_000_000, contractYears: 3 },
+    "2027-01-05", database
+  );
+  assert.equal(secondSent.changed, true);
+  assert.equal(secondSent.offer.fromClubId, "club-target");
+  const secondAgreed = agreeOffer(secondSent.save, secondSent.offer.id, "2027-01-05");
+  const secondMove = completeTransfer(secondAgreed.save, secondSent.offer.id, "2027-01-05", database);
+  assert.equal(secondMove.changed, true);
+
+  const advanced = advanceTransferState(secondMove.save, "2027-07-01", database);
+  assert.equal(advanced.save.world.transfers.moves.find((move) =>
+    move.id === firstMove.move.id
+  ).status, "expired");
+  assert.equal(advanced.save.world.transfers.freeAgents.some((item) =>
+    item.playerId === "player-1"
+  ), false);
+  assert.equal(getPlayerCurrentClubId("player-1", "club-home",
+    advanced.save.world.transfers, "2027-07-01", database), "club-other");
+  assert.equal(isValidTransferState(advanced.save.world.transfers, "2027-07-01",
+    advanced.save.agency.clients, advanced.save.agency.representation), true);
+});
+
+test("defers free agency until a loan ends when the player's parent contract expires", () => {
+  const firstSent = send(makeSave(), "permanent", {
+    ...permanentTerms, feeEur: 2_000_000, contractYears: 1
+  });
+  const firstAgreed = agreeOffer(firstSent.save, firstSent.offer.id, "2026-07-01");
+  const firstMove = completeTransfer(firstAgreed.save, firstSent.offer.id, "2026-07-01", database);
+  assert.equal(firstMove.changed, true);
+
+  const loanSent = createTransferOffer(
+    firstMove.save, "player-1", "club-other", "loan",
+    { ...loanTerms, loanMonths: 9 }, "2027-01-05", database
+  );
+  assert.equal(loanSent.changed, true);
+  const loanAgreed = agreeOffer(loanSent.save, loanSent.offer.id, "2027-01-05");
+  const loanMove = completeTransfer(loanAgreed.save, loanSent.offer.id, "2027-01-05", database);
+  assert.equal(loanMove.changed, true);
+
+  const parentContractExpired = advanceTransferState(loanMove.save, "2027-07-01", database);
+  assert.equal(parentContractExpired.save.world.transfers.freeAgents.some((item) =>
+    item.playerId === "player-1"
+  ), false);
+  assert.equal(getPlayerCurrentClubId("player-1", "club-home",
+    parentContractExpired.save.world.transfers, "2027-07-01", database), "club-other");
+
+  const returned = advanceTransferState(parentContractExpired.save, "2027-10-05", database);
+  assert.deepEqual(returned.returnedLoans, [loanMove.move.id]);
+  assert.equal(returned.save.world.transfers.freeAgents.some((item) =>
+    item.playerId === "player-1"
+  ), true);
+  assert.equal(getPlayerCurrentClubId("player-1", "club-home",
+    returned.save.world.transfers, "2027-10-05", database), null);
+  assert.equal(isValidTransferState(returned.save.world.transfers, "2027-10-05",
+    returned.save.agency.clients, returned.save.agency.representation), true);
+});
+
 test("settles mandatory loan purchase automatically outside the transfer window", () => {
   const terms = {
     ...loanTerms,
