@@ -51,7 +51,9 @@ test("uses saved player development ratings when selecting matchday squads and t
   assert.equal(updatedStarter.rating, 99);
   assert.equal(updatedStarter.potential, 99);
   assert.equal(updatedSquadPlayer.rating, 99);
-  assert.ok(developedTeam.strength > baseline.strength);
+  const averageRating = (team) =>
+    team.lineup.reduce((total, player) => total + player.rating, 0) / team.lineup.length;
+  assert.ok(averageRating(developedTeam) > averageRating(baseline));
 });
 
 test("moves permanent and loaned players between matchday squads using saved transfer records", () => {
