@@ -380,8 +380,12 @@ export function recordPlayerMatchPerformances(state, result, dateKey) {
       const opponentGoals = result.home?.clubId === performance.clubId
         ? result.away.goals
         : result.away?.clubId === performance.clubId ? result.home.goals : null;
-      const won = Number.isFinite(teamGoals) && Number.isFinite(opponentGoals) && teamGoals > opponentGoals;
-      const drawn = Number.isFinite(teamGoals) && Number.isFinite(opponentGoals) && teamGoals === opponentGoals;
+      const knockoutWinner = result.knockoutDecision?.winnerClubId ?? null;
+      const won = knockoutWinner
+        ? knockoutWinner === performance.clubId
+        : Number.isFinite(teamGoals) && Number.isFinite(opponentGoals) && teamGoals > opponentGoals;
+      const drawn = !knockoutWinner &&
+        Number.isFinite(teamGoals) && Number.isFinite(opponentGoals) && teamGoals === opponentGoals;
       const nextAppearances = previous.appearances + (performance.minutesPlayed > 0 ? 1 : 0);
       const nextRatingTotal = (previous.averageMatchRating ?? 0) * previous.appearances + performance.rating;
       const updated = {
