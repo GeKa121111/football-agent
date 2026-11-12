@@ -2173,7 +2173,9 @@ function renderAgencyManagementPanel(context) {
     ["صافي التدفق النقدي", formatMoney(summary.netCashFlowEgp)],
     ["دخل الرعايات أسبوعيًا", formatMoney(summary.activeSponsorshipRevenueEgp)],
     ["الدين القائم", formatMoney(summary.totalDebtEgp)],
-    ["قسط التمويل الأسبوعي", formatMoney(summary.weeklyCreditRepaymentEgp)]
+    ["قسط التمويل الأسبوعي", formatMoney(summary.weeklyCreditRepaymentEgp)],
+    ["متأخرات أقساط", summary.lateCreditFacilities],
+    ["السيولة بعد الالتزامات", formatMoney(summary.cashAfterWeeklyCommitmentsEgp)]
   ].forEach(([label, value]) => {
     const card = node("article", "agency-operations-metric");
     card.append(node("small", "", label), node("strong", "", value));
@@ -2332,7 +2334,11 @@ function renderAgencyManagementPanel(context) {
   const creditSection = node("section", "agency-operations-section agency-credit-section");
   creditSection.append(
     node("h3", "", "السيولة والتمويل"),
-    node("p", "representation-intro", "التسهيل يزيد السيولة لكنه دين مستحق، وليس دخلًا. كل منتج يوضح الفائدة والقسط قبل التوقيع، ولا يمكن طلب تسهيل ثانٍ قبل سداد الأول.")
+    node("p", "representation-intro", "التسهيل يزيد السيولة لكنه دين مستحق، وليس دخلًا. كل منتج يوضح الفائدة والقسط قبل التوقيع، ولا يمكن طلب تسهيل ثانٍ قبل سداد الأول."),
+    node("small", "agency-management-note", "مؤشر السيولة: " +
+      (summary.liquidityStatus === "attention" ? "هناك متأخرات أو أقساط متأخرة تحتاج متابعة." :
+        summary.liquidityStatus === "watch" ? "السيولة المتاحة أقل من التزامات أسبوعين متوقعين." :
+        "السيولة تغطي أكثر من أسبوعين من الالتزامات الحالية."))
   );
   const creditOffers = getAgencyCreditOffers(context.save);
   const creditGrid = node("div", "agency-operations-catalog");
