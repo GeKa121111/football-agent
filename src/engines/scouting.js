@@ -1,3 +1,5 @@
+import { getAgencyStaffModifiers } from "./agency-management.js";
+
 const MISSION_CONFIG = Object.freeze({
   local: Object.freeze({ label: "بعثة محلية", cost: 5000, durationDays: 7, accuracy: 0.62 }),
   regional: Object.freeze({ label: "بعثة إقليمية", cost: 12000, durationDays: 14, accuracy: 0.76 }),
@@ -403,6 +405,10 @@ export function startScoutingMission(save, options, players) {
   }
 
   const sequence = scouting.nextMissionSequence;
+  const agencyAccuracyBonus = Math.min(
+    getAgencyStaffModifiers(save).scoutingAccuracyBonus,
+    Math.max(0,0.97-fit.accuracy)
+  );
   const mission = {
     id: "scout-mission-" + sequence,
     reportId: "scout-report-" + sequence,
@@ -416,6 +422,7 @@ export function startScoutingMission(save, options, players) {
     scoutName: fit.name,
     scoutLevel: fit.level,
     scoutAccuracyBonus: fit.accuracyBonus,
+    agencyAccuracyBonus,
     baseAccuracy: config.accuracy,
     startDate: save.world.currentDate,
     dueDate: addDays(save.world.currentDate, config.durationDays),
