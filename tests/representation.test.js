@@ -580,6 +580,24 @@ test("rejects meetings scheduled on or after the representation contract expiry"
   assert.equal(validMeeting.changed, true);
   assert.equal(validMeeting.interaction.dueDate, dayBeforeExpiry);
   assert.equal(isValidSave(validMeeting.save), true);
+
+  // The meeting was scheduled while the mandate was active. Its seven-day
+  // completion grace period remains valid after natural contract expiry.
+  const afterNaturalExpiry = advanceToDate(validMeeting.save, expiry);
+  assert.equal(
+    afterNaturalExpiry.agency.representation.contracts
+      .find((item) => item.id === signed.contract.id).status,
+    "expired"
+  );
+  const completedDuringGrace = completeRepresentationMeeting(
+    afterNaturalExpiry,
+    validMeeting.interaction.id,
+    "positive"
+  );
+  assert.equal(completedDuringGrace.changed, true);
+  assert.equal(completedDuringGrace.interaction.status, "resolved");
+  assert.equal(completedDuringGrace.interaction.resolvedDate, expiry);
+  assert.equal(isValidSave(completedDuringGrace.save), true);
 });
 
 
