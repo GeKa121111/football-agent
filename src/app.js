@@ -1409,6 +1409,13 @@ function renderMarket(context) {
     const goalThresholdField = field("مكافأة بعد عدد الأهداف", goalThreshold);
     const goalAmountField = field("قيمة مكافأة الأهداف (€)", goalAmount);
     const competitionField = field("قائمة التسجيل المطلوبة", competitionSelect);
+    const refreshLoanClauseAvailability = () => {
+      const hasMandatoryBuy = mandatoryBuy.checked;
+      if (hasMandatoryBuy) recallable.checked = false;
+      recallable.disabled = hasMandatoryBuy;
+      recallNotice.disabled = hasMandatoryBuy;
+    };
+    mandatoryBuy.addEventListener("change", refreshLoanClauseAvailability);
 
     const refreshDestinationClubs = () => {
       const selectedPlayer = representedPlayers.find((item) => item.player.id === playerSelect.value)?.player;
@@ -1438,6 +1445,7 @@ function renderMarket(context) {
       recallField.hidden = !isLoan;
       recallNoticeField.hidden = !isLoan;
       wageShareField.hidden = !isLoan;
+      refreshLoanClauseAvailability();
       const player = representedPlayers.find((item) => item.player.id === playerSelect.value)?.player;
       const marketValue = player?.marketValueEur ?? 0;
       amountInput.value = String(isLoan ? Math.round(marketValue * 0.02) : marketValue);
