@@ -184,7 +184,9 @@ test.describe("Desktop experience", () => {
     expect(playedSave.world.events.some((event) => event.type === "football-match-played")).toBe(true);
     const updatedYassin = playedSave.world.football.playerDevelopment.players
       .find((player) => player.playerId === "demo-yassin-adel");
-    expect(updatedYassin.trainingHistory.length).toBeGreaterThan(0);
+    expect(playedSave.world.football.playerDevelopment.trainingHistory.some((session) =>
+      session.playerId === "demo-yassin-adel"
+    )).toBe(true);
 
     await navigateTo(page, "اللاعبون");
     const yassinCard = page.locator('.player-card[data-player-id="demo-yassin-adel"]');
