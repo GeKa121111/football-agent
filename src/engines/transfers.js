@@ -44,7 +44,9 @@ function getPlayer(database, playerId) {
 }
 function getClub(database, clubId) { return database.clubs.find((club) => club.id === clubId) ?? null; }
 function getActiveRepresentationContract(save, playerId, date) {
-  return (save?.agency?.representation?.contracts ?? []).find((contract) =>
+  const contracts = save?.agency?.representation?.contracts;
+  if (!Array.isArray(contracts)) return null;
+  return contracts.find((contract) =>
     contract.playerId === playerId && contract.status === "active" &&
     isTransferCalendarDate(contract.expiresOn) && date < getRepresentationContractExpiry(contract)
   ) ?? null;
@@ -428,7 +430,8 @@ export function isValidTransferState(state, currentDate, clients = [], represent
         entry.currency !== "EUR" || !validMoney(entry.amountEur) ||
         !Number.isInteger(entry.commissionRate) || entry.commissionRate < 5 || entry.commissionRate > 15 ||
         !validMoney(entry.basisEur) || entry.amountEur !== Math.round(entry.basisEur * entry.commissionRate / 100)) return false;
-    const contract = representation?.contracts?.find((item) => item.id === entry.representationContractId);
+    const contracts = Array.isArray(representation?.contracts) ? representation.contracts : [];
+    const contract = contracts.find((item) => item.id === entry.representationContractId);
     if (!contract || contract.playerId !== entry.playerId || entry.date < contract.signedOn ||
         entry.date >= getRepresentationContractExpiry(contract) ||
         (contract.endedOn && entry.date > contract.endedOn) ||
