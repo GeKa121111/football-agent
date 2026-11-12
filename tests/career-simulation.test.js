@@ -11,6 +11,7 @@ import {
   getPlayerRepresentationProfile
 } from "../src/engines/representation.js";
 import { advanceCareerSimulationDay, advanceCareerSimulationDays } from "../src/engines/career-simulation.js";
+import { hireAgencyEmployee } from "../src/engines/agency-management.js";
 
 const PLAYERS = getWorldPlayerProfiles();
 
@@ -133,4 +134,24 @@ test("rejects invalid multi-day advances and missing scouting data without modif
   assert.throws(() => advanceCareerSimulationDays(save, 0, PLAYERS), /من يوم واحد إلى 31 يومًا/);
   assert.throws(() => advanceCareerSimulationDay(save, null), /قاعدة لاعبي الكشافة/);
   assert.equal(save.world.currentDate, "2026-07-01");
+});
+
+
+test("runs agency payroll on the shared Monday career tick", () => {
+  const initial = createInitialSave();
+  const hired = hireAgencyEmployee(initial, "analyst");
+  assert.equal(hired.changed, true, hired.error);
+  const weeklySalary = hired.employee.weeklySalaryEgp;
+  const advanced = advanceCareerSimulationDays(hired.save, 7, PLAYERS);
+
+  assert.equal(advanced.save.world.currentDate, "2026-07-08");
+  assert.equal(advanced.save.agency.management.lastPayrollDate, "2026-07-06");
+  const payroll = advanced.save.agency.management.ledger.find((entry) =>
+    entry.type === "weekly-operations" && entry.date === "2026-07-06"
+  );
+  assert.ok(payroll);
+  assert.equal(payroll.amountEgp, weeklySalary);
+  assert.equal(payroll.paidEgp, weeklySalary);
+  assert.equal(advanced.save.agency.balance, hired.save.agency.balance - weeklySalary);
+  assert.equal(isValidSave(advanced.save), true);
 });

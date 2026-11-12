@@ -76,6 +76,23 @@ import {
   getClubTransferFinancials
 } from "./engines/club-transfer-rules.js";
 import {
+  AGENCY_BRANCH_LOCATIONS,
+  AGENCY_JOB_ROLES,
+  closeAgencyBranch as closeAgencyBranchInEngine,
+  dismissAgencyEmployee as dismissAgencyEmployeeInEngine,
+  getAgencyManagementSummary,
+  getAgencyClubInterestSummary,
+  getAgencyStaffModifiers,
+  getAgencySponsorshipOffers,
+  getAgencyCompetitorSummary,
+  getAgencyCreditOffers,
+  getRivalClientIds,
+  signAgencySponsorship as signAgencySponsorshipInEngine,
+  takeAgencyCredit as takeAgencyCreditInEngine,
+  hireAgencyEmployee as hireAgencyEmployeeInEngine,
+  openAgencyBranch as openAgencyBranchInEngine
+} from "./engines/agency-management.js";
+import {
   completeCareerTask as completeTaskInEngine,
   markCareerMessageRead,
   filterCareerEvents,
@@ -1329,6 +1346,7 @@ function renderScouting(context) {
 
 function renderMarket(context) {
   const page = node("div", "page-content rebuild-screen market-screen");
+  const marketDraft = context.marketDraft ?? null;
   const currentDate = context.save.world.currentDate;
   const transferState = context.transferState;
   const destinationWindows = WORLD_DATABASE.clubs.map((club) => ({
@@ -1423,6 +1441,9 @@ function renderMarket(context) {
       option.value = player.id;
       playerSelect.append(option);
     });
+    if (marketDraft?.playerId && representedPlayers.some((item) => item.player.id === marketDraft.playerId)) {
+      playerSelect.value = marketDraft.playerId;
+    }
 
     const clubSelect = node("select", "search-input transfer-club-select");
     clubSelect.setAttribute("aria-label", "النادي المستهدف");
@@ -1530,6 +1551,9 @@ function renderMarket(context) {
         option.value = club.id;
         clubSelect.append(option);
       });
+      if (marketDraft?.destinationClubId && openClubs.some((club) => club.id === marketDraft.destinationClubId)) {
+        clubSelect.value = marketDraft.destinationClubId;
+      }
       destinationHint.textContent = openClubs.length > 0
         ? "الوجهات المعروضة هي الأندية التي تسمح نافذتها بإرسال عرض في التاريخ الحالي."
         : "لا يوجد نادٍ آخر بنافذة انتقالات مفتوحة لهذا اللاعب حاليًا.";
@@ -1577,6 +1601,17 @@ function renderMarket(context) {
     competitionSelect.addEventListener("change", refreshDestinationClubs);
     refreshDestinationClubs();
     refreshTerms();
+    if (marketDraft) {
+      const draftPlayer = representedPlayers.find((item) => item.player.id === marketDraft.playerId)?.player;
+      const draftClub = WORLD_DATABASE.clubs.find((club) => club.id === marketDraft.destinationClubId);
+      if (draftPlayer && draftClub && clubSelect.value === marketDraft.destinationClubId) {
+        destinationHint.textContent = "تم تجهيز عرض " + draftPlayer.name + " إلى " + draftClub.nameAr +
+          " بناءً على اهتمام النادي. راجع القيمة والراتب وبنود العقد قبل الإرسال.";
+      } else if (draftPlayer && draftClub) {
+        destinationHint.textContent = "اهتمام " + draftClub.nameAr + " محفوظ، لكن الوجهة غير مؤهلة حاليًا وفق نافذة الانتقالات أو قواعد التسجيل.";
+      }
+      context.clearMarketDraft?.();
+    }
 
     proposalForm.append(
       field("اللاعب العميل", playerSelect),
@@ -1792,6 +1827,7 @@ function renderMarket(context) {
 
 function getTalentPipelineRecords(context) {
   const records = new Map();
+  const rivalClientIds = getRivalClientIds(context.save);
   const representation = context.save.agency.representation;
   const pipeline = context.save.agency.talentPipeline;
   const add = (playerId, sourceId) => {
@@ -1850,7 +1886,7 @@ function getTalentPipelineRecords(context) {
     }
   });
 
-  return [...records.values()].map((record) => {
+  return [...records.values()].filter((record) => !rivalClientIds.has(record.player.id)).map((record) => {
     const playerId = record.player.id;
     const offer = representation.offers.find((item) =>
       item.playerId === playerId && ["pending", "countered"].includes(item.status)
@@ -2130,6 +2166,357 @@ function renderTalentPipeline(context) {
   return panel;
 }
 
+function renderAgencyManagementPanel(context) {
+  const agency = context.save.agency;
+  const management = agency.management;
+  const summary = getAgencyManagementSummary(context.save);
+  const staffModifiers = getAgencyStaffModifiers(context.save);
+  const panel = node("section", "surface-card agency-management-panel");
+  const heading = node("div", "representation-heading");
+  heading.append(node("div", "talent-pipeline-heading-copy"), node("span", "representation-count", "إدارة وتشغيل"));
+  heading.children[0].append(
+    node("h2", "", "إدارة وتوسّع الوكالة"),
+    node("p", "", "كوّن فريقك، افتح فروعًا جديدة، وراقب الالتزامات الأسبوعية قبل التوسع.")
+  );
+  panel.append(heading);
+
+  const metrics = node("div", "agency-operations-metrics");
+  [
+    ["الموظفون", summary.activeStaff],
+    ["الفروع النشطة", summary.activeBranches],
+    ["التزامات أسبوعية", formatMoney(summary.weeklyCostsEgp)],
+    ["متأخرات التشغيل", formatMoney(summary.arrearsEgp)],
+    ["إجمالي الإيرادات", formatMoney(summary.totalRevenueEgp)],
+    ["إجمالي المصروفات", formatMoney(summary.totalExpensesEgp)],
+    ["صافي التدفق النقدي", formatMoney(summary.netCashFlowEgp)],
+    ["دخل الرعايات أسبوعيًا", formatMoney(summary.activeSponsorshipRevenueEgp)],
+    ["الدين القائم", formatMoney(summary.totalDebtEgp)],
+    ["قسط التمويل الأسبوعي", formatMoney(summary.weeklyCreditRepaymentEgp)],
+    ["متأخرات أقساط", summary.lateCreditFacilities],
+    ["السيولة بعد الالتزامات", formatMoney(summary.cashAfterWeeklyCommitmentsEgp)]
+  ].forEach(([label, value]) => {
+    const card = node("article", "agency-operations-metric");
+    card.append(node("small", "", label), node("strong", "", value));
+    metrics.append(card);
+  });
+  panel.append(metrics);
+
+  const staffSection = node("section", "agency-operations-section");
+  staffSection.append(
+    node("h3", "", "فريق الوكالة"),
+    node("p", "representation-intro", "رواتب الوظائف تُخصم أسبوعيًا يوم الاثنين. إنهاء التعاقد يوقف الراتب من التسوية التالية.")
+  );
+  const activeStaff = management.staff.filter((employee) => employee.status === "active");
+  const staffList = node("div", "agency-operations-list");
+  if (activeStaff.length === 0) {
+    staffList.append(node("p", "representation-empty", "لسه مفيش موظفين متعيّنين. ابدأ بوظيفة تساعدك في إدارة الوكالة."));
+  } else {
+    activeStaff.forEach((employee) => {
+      const row = node("article", "agency-operations-row");
+      const copy = node("div", "representation-copy");
+      copy.append(
+        node("strong", "", employee.name),
+        node("span", "", "راتب أسبوعي " + formatMoney(employee.weeklySalaryEgp)),
+        node("small", "", "تاريخ التعيين " + formatHomeDate(employee.hiredDate))
+      );
+      row.append(copy, actionButton("إنهاء التعاقد", "button-outline agency-dismiss-button",
+        () => context.dismissAgencyEmployee(employee.id)));
+      staffList.append(row);
+    });
+  }
+  staffSection.append(staffList);
+
+  const hiringGrid = node("div", "agency-operations-catalog");
+  AGENCY_JOB_ROLES.forEach((role) => {
+    const count = activeStaff.filter((employee) => employee.roleId === role.id).length;
+    const card = node("article", "agency-operations-offer");
+    card.append(
+      node("strong", "", role.name),
+      node("p", "", role.description),
+      node("small", "", "تكلفة التعيين " + formatMoney(role.hiringCostEgp)),
+      node("small", "", "راتب أسبوعي " + formatMoney(role.weeklySalaryEgp)),
+      node("small", "", "الموظفون في المنصب " + count + " / " + role.maxHeadcount)
+    );
+    const hireButton = actionButton("تعيين الموظف", "button-primary agency-hire-button",
+      () => context.hireAgencyEmployee(role.id));
+    hireButton.disabled = count >= role.maxHeadcount || activeStaff.length >= 6 || agency.balance < role.hiringCostEgp;
+    card.append(hireButton);
+    hiringGrid.append(card);
+  });
+  staffSection.append(hiringGrid);
+
+  const branchesSection = node("section", "agency-operations-section");
+  branchesSection.append(
+    node("h3", "", "شبكة الفروع"),
+    node("p", "representation-intro", "كل فرع له تكلفة افتتاح وإيجار أسبوعي ثابت. المقر الرئيسي لا يمكن إغلاقه.")
+  );
+  const branchList = node("div", "agency-operations-list");
+  management.branches.filter((branch) => branch.status === "active").forEach((branch) => {
+    const row = node("article", "agency-operations-row");
+    const copy = node("div", "representation-copy");
+    copy.append(
+      node("strong", "", branch.name),
+      node("span", "", branch.isHeadquarters ? "المقر الرئيسي" : "فرع " + branch.region),
+      node("small", "", "إيجار أسبوعي " + formatMoney(branch.weeklyRentEgp))
+    );
+    row.append(copy);
+    if (!branch.isHeadquarters) {
+      row.append(actionButton("إغلاق الفرع", "button-outline agency-close-branch-button",
+        () => context.closeAgencyBranch(branch.id)));
+    }
+    branchList.append(row);
+  });
+  branchesSection.append(branchList);
+
+  const expansionGrid = node("div", "agency-operations-catalog");
+  AGENCY_BRANCH_LOCATIONS.forEach((location) => {
+    const active = management.branches.some((branch) =>
+      branch.locationId === location.id && branch.status === "active");
+    const card = node("article", "agency-operations-offer");
+    card.append(
+      node("strong", "", location.name),
+      node("p", "", "منطقة " + location.region),
+      node("small", "", "تكلفة الافتتاح " + formatMoney(location.setupCostEgp)),
+      node("small", "", "إيجار أسبوعي " + formatMoney(location.weeklyRentEgp))
+    );
+    const openButton = actionButton(active ? "الفرع مفتوح" : "افتتاح الفرع", "button-primary agency-open-branch-button",
+      () => context.openAgencyBranch(location.id));
+    openButton.disabled = active || summary.activeBranches >= 4 || agency.balance < location.setupCostEgp;
+    card.append(openButton);
+    expansionGrid.append(card);
+  });
+  branchesSection.append(expansionGrid);
+
+  const skillPanel = node("section", "agency-operations-section");
+  skillPanel.append(
+    node("h3", "", "تأثير الفريق على أداء الوكالة"),
+    node("p", "representation-intro", "مهارات الموظفين بتدخل في قرارات التفاوض واستقطاب المواهب وحماية العملاء وجذب الرعاة.")
+  );
+  const skillGrid = node("div", "agency-operations-metrics");
+  [
+    ["قوة التفاوض", "+" + staffModifiers.negotiationBonus],
+    ["دقة الاستكشاف", "+" + Math.round(staffModifiers.scoutingAccuracyBonus * 100) + "%"],
+    ["حماية العملاء", "+" + staffModifiers.legalProtectionBonus],
+    ["قوة العلامة", "+" + staffModifiers.brandReachBonus]
+  ].forEach(([label,value]) => {
+    const card = node("article", "agency-operations-metric");
+    card.append(node("small", "", label),node("strong", "", value));
+    skillGrid.append(card);
+  });
+  skillPanel.append(skillGrid,
+    node("small", "agency-management-note", "مدير العمليات يخفض تكلفة التشغيل الأسبوعية بنسبة " + staffModifiers.operationsEfficiencyPct + "%.")
+  );
+
+  const sponsorshipSection = node("section", "agency-operations-section agency-sponsorship-section");
+  sponsorshipSection.append(
+    node("h3", "", "عقود الرعاية والشراكات"),
+    node("p", "representation-intro", "وقّع اتفاقات تجارية للوكالة. مكافأة التوقيع تُضاف فورًا، والدفعات المتكررة تدخل كل يوم اثنين.")
+  );
+  const sponsorshipOffers = getAgencySponsorshipOffers(context.save);
+  const sponsorshipGrid = node("div", "agency-operations-catalog");
+  sponsorshipOffers.forEach((offer) => {
+    const card = node("article", "agency-operations-offer");
+    card.append(
+      node("strong", "", offer.name),
+      node("p", "", offer.description),
+      node("small", "", "مكافأة التوقيع " + formatMoney(offer.signingBonusEgp)),
+      node("small", "", "دخل أسبوعي " + formatMoney(offer.weeklyRevenueEgp)),
+      node("small", "", "مدة الاتفاق " + Math.round(offer.termDays / 365) + " سنة")
+    );
+    const button = actionButton(offer.active ? "اتفاق نشط" : offer.available ? "توقيع اتفاق الرعاية" : offer.lockedReason,
+      "button-primary agency-sponsorship-sign-button",() => context.signAgencySponsorship(offer.id));
+    button.disabled = !offer.available;
+    card.append(button);
+    sponsorshipGrid.append(card);
+  });
+  sponsorshipSection.append(sponsorshipGrid);
+  const activeSponsorships = (management.sponsorships ?? []).filter((deal) => deal.status === "active");
+  if (activeSponsorships.length > 0) {
+    const activeList = node("div", "agency-operations-list");
+    activeSponsorships.forEach((deal) => {
+      const row = node("article", "agency-operations-row");
+      row.append(
+        node("div", "representation-copy"),
+        node("span", "representation-count", "دخل أسبوعي " + formatMoney(deal.weeklyRevenueEgp))
+      );
+      row.children[0].append(
+        node("strong", "", deal.name),
+        node("small", "", "ينتهي " + formatHomeDate(deal.expiresDate) +
+          (deal.lastPaidDate ? " · آخر دفعة " + formatHomeDate(deal.lastPaidDate) : " · بانتظار أول دفعة"))
+      );
+      activeList.append(row);
+    });
+    sponsorshipSection.append(activeList);
+  }
+
+  const creditSection = node("section", "agency-operations-section agency-credit-section");
+  creditSection.append(
+    node("h3", "", "السيولة والتمويل"),
+    node("p", "representation-intro", "التسهيل يزيد السيولة لكنه دين مستحق، وليس دخلًا. كل منتج يوضح الفائدة والقسط قبل التوقيع، ولا يمكن طلب تسهيل ثانٍ قبل سداد الأول."),
+    node("small", "agency-management-note", "مؤشر السيولة: " +
+      (summary.liquidityStatus === "attention" ? "هناك متأخرات أو أقساط متأخرة تحتاج متابعة." :
+        summary.liquidityStatus === "watch" ? "السيولة المتاحة أقل من التزامات أسبوعين متوقعين." :
+        "السيولة تغطي أكثر من أسبوعين من الالتزامات الحالية."))
+  );
+  const creditOffers = getAgencyCreditOffers(context.save);
+  const creditGrid = node("div", "agency-operations-catalog");
+  creditOffers.forEach((offer) => {
+    const card = node("article", "agency-operations-offer");
+    card.append(
+      node("strong", "", offer.name),
+      node("p", "", offer.description),
+      node("small", "", "قيمة التمويل " + formatMoney(offer.principalEgp)),
+      node("small", "", "الفائدة الثابتة " + offer.interestRatePct + "% · السداد " + offer.termWeeks + " أسبوعًا"),
+      node("small", "", "إجمالي السداد " + formatMoney(offer.totalRepaymentEgp)),
+      node("small", "", "القسط الأسبوعي " + formatMoney(offer.weeklyInstallmentEgp))
+    );
+    const button = actionButton(offer.eligible ? "طلب التسهيل" : offer.lockedReason,
+      "button-primary agency-credit-request-button",() => context.takeAgencyCredit(offer.id));
+    button.disabled = !offer.eligible;
+    card.append(button);
+    creditGrid.append(card);
+  });
+  creditSection.append(creditGrid);
+  const activeLoans = (management.creditFacilities ?? []).filter((loan) => loan.status === "active");
+  if (activeLoans.length > 0) {
+    const loansList = node("div", "agency-operations-list");
+    activeLoans.forEach((loan) => {
+      const row = node("article", "agency-operations-row");
+      const copy = node("div", "representation-copy");
+      copy.append(
+        node("strong", "", loan.name),
+        node("span", "", "المتبقي " + formatMoney(loan.remainingEgp) + " من " + formatMoney(loan.totalRepaymentEgp)),
+        node("small", "", "القسط " + formatMoney(loan.weeklyInstallmentEgp) +
+          " · موعد القسط " + formatHomeDate(loan.nextPaymentDate)),
+        node("small", "", "تأخير " + loan.lateWeeks + " أسبوع")
+      );
+      row.append(copy);
+      loansList.append(row);
+    });
+    creditSection.append(loansList);
+  }
+
+  const competitorsSection = node("section", "agency-operations-section agency-competitors-section");
+  competitorsSection.append(
+    node("h3", "", "الوكالات المنافسة"),
+    node("p", "representation-intro", "الوكالات الأخرى تتحرك كل أسبوع، تستهدف المواهب وترسل عروضًا مستقلة عن فتح الشاشة.")
+  );
+  const competitorGrid = node("div", "agency-operations-catalog");
+  getAgencyCompetitorSummary(context.save).forEach((competitor) => {
+    const card = node("article", "agency-operations-offer agency-competitor-card");
+    card.append(
+      node("strong", "", competitor.name),
+      node("p", "", competitor.region + " · " + competitor.focus),
+      node("small", "", "السمعة " + competitor.reputation + "/100"),
+      node("small", "", competitor.clients + " عميل · " + competitor.pendingOffers + " عرض قيد الرد"),
+      node("small", "", "ميزانية النشاط " + formatMoney(competitor.budgetEgp))
+    );
+    competitorGrid.append(card);
+  });
+  competitorsSection.append(competitorGrid);
+  const competitiveHistory = (management.competitiveHistory ?? []).slice(0,6);
+  if (competitiveHistory.length > 0) {
+    const historyList = node("div", "agency-operations-list");
+    competitiveHistory.forEach((entry) => {
+      const row = node("article", "agency-operations-ledger-row");
+      const eventLabel = entry.type === "offer-sent" ? "عرض منافس جديد" :
+        entry.type === "offer-accepted" ? "ضم لاعب بواسطة منافس" : "فشل عرض منافس";
+      row.append(
+        node("strong", "", eventLabel),
+        node("span", "", formatHomeDate(entry.date)),
+        node("small", "", entry.agencyName + " · " + entry.playerName + " · " + entry.note)
+      );
+      historyList.append(row);
+    });
+    competitorsSection.append(historyList);
+  }
+
+  const clubInterestSection = node("section", "agency-operations-section agency-club-interests-section");
+  const clubInterestSummary = getAgencyClubInterestSummary(context.save);
+  clubInterestSection.append(
+    node("h3", "", "اهتمامات الأندية بعملائك"),
+    node("p", "representation-intro", "محرك الأندية يراقب عملاء الوكالة كل أسبوع ويحدد الأندية التي قد تحتاج خدماتهم. الاهتمام ليس عرض انتقال رسميًا حتى يصل لمرحلة تفاوض من سوق الانتقالات.")
+  );
+  const interestMetrics = node("div", "agency-operations-metrics");
+  [
+    ["إجمالي الاهتمامات", clubInterestSummary.total],
+    ["متابعة", clubInterestSummary.monitoring],
+    ["استفسارات خلال نافذة", clubInterestSummary.enquiries]
+  ].forEach(([label,value]) => {
+    const card = node("article", "agency-operations-metric");
+    card.append(node("small", "", label),node("strong", "", value));
+    interestMetrics.append(card);
+  });
+  clubInterestSection.append(interestMetrics);
+  const interestList = node("div", "agency-operations-list");
+  const clubInterests = (management.clubInterests ?? [])
+    .filter((interest) => ["monitoring","enquiry"].includes(interest.status))
+    .slice(0,10);
+  if (clubInterests.length === 0) {
+    interestList.append(node("p", "representation-empty", "لا توجد اهتمامات مسجلة حتى الآن. ستظهر بعد تقدم المسيرة وقيام الأندية بمراجعة عملائك."));
+  } else {
+    clubInterests.forEach((interest) => {
+      const row = node("article", "agency-operations-row agency-club-interest-row");
+      const copy = node("div", "representation-copy");
+      const club = WORLD_DATABASE.clubs.find((item) => item.id === interest.clubId);
+      copy.append(
+        node("strong", "", interest.clubName + " · " + interest.playerName),
+        node("span", "", (club?.nameAr ?? "نادي") + " · " + interest.position + " · ملاءمة " + interest.fitScore + "/100"),
+        node("small", "", "ميزانية انتقال النادي " + formatEuroMoney(interest.clubBudgetEur) +
+          " · قيمة تقديرية للاعب " + formatEuroMoney(interest.estimatedFeeEur)),
+        node("small", "", interest.status === "enquiry"
+          ? "النافذة مفتوحة حتى " + formatHomeDate(interest.transferWindowEndDate)
+          : "متابعة مستقبلية · ينتهي الاهتمام " + formatHomeDate(interest.expiresDate))
+      );
+      const existingOffer = context.transferState.offers.find((offer) =>
+        offer.playerId === interest.playerId && offer.toClubId === interest.clubId &&
+        ["pending","countered","agreed"].includes(offer.status)
+      );
+      const startNegotiation = actionButton(
+        existingOffer ? "تفاوض قائم" : interest.status === "enquiry" ? "ابدأ التفاوض" : "انتظر فتح النافذة",
+        "button-outline agency-club-interest-action",
+        () => context.openMarketForInterest(interest)
+      );
+      startNegotiation.disabled = Boolean(existingOffer) || interest.status !== "enquiry";
+      row.append(
+        copy,
+        node("span", "representation-count", interest.status === "enquiry" ? "استفسار" : "متابعة"),
+        startNegotiation
+      );
+      interestList.append(row);
+    });
+  }
+  clubInterestSection.append(interestList);
+
+  const ledgerPanel = node("section", "agency-operations-section");
+  ledgerPanel.append(node("h3", "", "سجل مصروفات الإدارة"));
+  const entries = management.ledger.slice(0, 8);
+  if (entries.length === 0) {
+    ledgerPanel.append(node("p", "representation-empty", "أي تعيين أو افتتاح فرع أو تسوية أسبوعية هتظهر هنا."));
+  } else {
+    const list = node("div", "agency-operations-list");
+    entries.forEach((entry) => {
+      const row = node("article", "agency-operations-ledger-row");
+      const label = entry.direction === "income" ? (entry.incomeKind === "signing" ? "مكافأة رعاية" : "دخل رعاية أسبوعي") :
+        entry.direction === "financing" ? "صرف تمويل" :
+        entry.type === "credit-repayment" ? "سداد قسط تمويل" :
+        entry.type === "hiring" ? "تكلفة تعيين" :
+        entry.type === "branch-opening" ? "افتتاح فرع" : "رواتب وإيجارات أسبوعية";
+      row.append(
+        node("strong", "", label),
+        node("span", "", formatHomeDate(entry.date)),
+        node("small", "", "المستحق " + formatMoney(entry.amountEgp) +
+          " · المدفوع " + formatMoney(entry.paidEgp) +
+          (entry.arrearsAfterEgp > 0 ? " · المتأخرات " + formatMoney(entry.arrearsAfterEgp) : ""))
+      );
+      list.append(row);
+    });
+    ledgerPanel.append(list);
+  }
+  panel.append(staffSection, skillPanel, branchesSection, sponsorshipSection, creditSection, competitorsSection, clubInterestSection, ledgerPanel);
+  return panel;
+}
+
 function renderAgency(context) {
   const page = node("div", "page-content rebuild-screen agency-screen");
   page.append(
@@ -2144,8 +2531,9 @@ function renderAgency(context) {
   const openOffers = representation.offers.filter((offer) => ["pending", "countered"].includes(offer.status));
   const interactions = Array.isArray(representation.interactions) ? representation.interactions : [];
   const openInteractions = interactions.filter((item) => ["pending_response", "scheduled"].includes(item.status));
+  const rivalClientIds = getRivalClientIds(context.save);
   const prospects = context.players
-    .filter((player) => !agency.clients.includes(player.id) &&
+    .filter((player) => !rivalClientIds.has(player.id) && !agency.clients.includes(player.id) &&
       !openOffers.some((offer) => offer.playerId === player.id))
     .sort((a, b) => b.potential - a.potential || b.rating - a.rating);
 
@@ -2177,6 +2565,7 @@ function renderAgency(context) {
 
   const talentPipelinePanel = renderTalentPipeline(context);
   const staffAssignmentsPanel = renderAgencyStaffAssignments(context);
+  const managementPanel = renderAgencyManagementPanel(context);
 
   const contractsPanel = node("section", "surface-card representation-panel");
   const contractsHeading = node("div", "representation-heading");
@@ -2484,7 +2873,7 @@ function renderAgency(context) {
     roadmapRow("عقود التمثيل", "المرحلة الحالية", true),
     roadmapRow("سوق الانتقالات والتفاوض مع الأندية", "المرحلة الثامنة", false)
   );
-  page.append(overview, cards, talentPipelinePanel, staffAssignmentsPanel, contractsPanel, interactionsPanel, offersPanel, prospectsPanel, historyPanel, roadmap);
+  page.append(overview, cards, managementPanel, talentPipelinePanel, staffAssignmentsPanel, contractsPanel, interactionsPanel, offersPanel, prospectsPanel, historyPanel, roadmap);
   return page;
 }
 
@@ -2502,6 +2891,7 @@ export function mountApp(root) {
   const state = {
     view: "dashboard",
     save,
+    marketDraft: null,
     isSaved: loaded.status === "loaded" && !loaded.migrated,
     canWrite: loaded.status === "new" || loaded.status === "loaded",
     watchlist: new Set(loadedWatchlist.ids),
@@ -4170,6 +4560,35 @@ export function mountApp(root) {
       addToWatchlist,
       players: currentPlayers,
       transferState: state.save.world.transfers,
+      marketDraft: state.marketDraft,
+      clearMarketDraft: () => { state.marketDraft = null; },
+      openMarketForInterest: (interest) => {
+        if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لا يمكن فتح تفاوض جديد."); return; }
+        const currentDate = state.save.world.currentDate;
+        const activeMandate = state.save.agency.representation.contracts.some((contract) =>
+          contract.playerId === interest.playerId && contract.status === "active" &&
+          getRepresentationContractExpiry(contract) > currentDate
+        );
+        if (!activeMandate || !state.save.agency.clients.includes(interest.playerId)) {
+          toast("اللاعب لم يعد ضمن عملاء الوكالة بعقد تمثيل نشط.");
+          return;
+        }
+        if (interest.status !== "enquiry" || !getTransferWindow(currentDate,interest.clubId).active) {
+          toast("نافذة النادي مغلقة حاليًا؛ تقدر تتابع الاهتمام لحد موعد النافذة التالية.");
+          return;
+        }
+        const existingOffer = state.save.world.transfers.offers.find((offer) =>
+          offer.playerId === interest.playerId && offer.toClubId === interest.clubId &&
+          ["pending","countered","agreed"].includes(offer.status)
+        );
+        if (existingOffer) {
+          toast("فيه بالفعل تفاوض مفتوح على اللاعب مع النادي ده.");
+          return;
+        }
+        state.marketDraft = { playerId: interest.playerId, destinationClubId: interest.clubId };
+        state.view = "market";
+        render({ focusMain: true });
+      },
       createTransferProposal,
       evaluateTransferOffer,
       submitTransferCounterOffer,
@@ -4200,7 +4619,63 @@ export function mountApp(root) {
         if (saveCareer()) { render(); toast("تم تحديث نتيجة التفاوض."); } else state.save = previousSave;
       },
       rejectRepresentationOffer,
-      terminateRepresentationContract
+      terminateRepresentationContract,
+      hireAgencyEmployee: (roleId) => {
+        if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم يتم التعيين."); return; }
+        const previousSave = state.save;
+        const result = hireAgencyEmployeeInEngine(state.save, roleId);
+        if (!result.changed) { toast(result.error); return; }
+        state.save = result.save;
+        if (saveCareer()) { render(); toast("تم تعيين " + result.employee.name + " في الوكالة."); }
+        else state.save = previousSave;
+      },
+      dismissAgencyEmployee: (employeeId) => {
+        if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم يتغير الفريق."); return; }
+        const previousSave = state.save;
+        const result = dismissAgencyEmployeeInEngine(state.save, employeeId);
+        if (!result.changed) { toast(result.error); return; }
+        state.save = result.save;
+        if (saveCareer()) { render(); toast("تم إنهاء التعاقد وتحديث قائمة الفريق."); }
+        else state.save = previousSave;
+      },
+      openAgencyBranch: (locationId) => {
+        if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم يتم افتتاح الفرع."); return; }
+        const previousSave = state.save;
+        const result = openAgencyBranchInEngine(state.save, locationId);
+        if (!result.changed) { toast(result.error); return; }
+        state.save = result.save;
+        if (saveCareer()) { render(); toast("تم افتتاح فرع " + result.branch.name + "."); }
+        else state.save = previousSave;
+      },
+      takeAgencyCredit: (productId) => {
+        if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم يتم طلب التمويل."); return; }
+        const previousSave = state.save;
+        const result = takeAgencyCreditInEngine(state.save,productId);
+        if (!result.changed) { toast(result.error); return; }
+        state.save = result.save;
+        if (saveCareer()) {
+          render();
+          toast("تم صرف " + result.loan.name + "، وتم تسجيل الالتزام وجدول السداد.");
+        } else state.save = previousSave;
+      },
+      signAgencySponsorship: (packageId) => {
+        if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم يتم توقيع اتفاق الرعاية."); return; }
+        const previousSave = state.save;
+        const result = signAgencySponsorshipInEngine(state.save,packageId);
+        if (!result.changed) { toast(result.error); return; }
+        state.save = result.save;
+        if (saveCareer()) { render(); toast("تم توقيع اتفاق " + result.deal.name + " وإضافة مكافأة التوقيع."); }
+        else state.save = previousSave;
+      },
+      closeAgencyBranch: (branchId) => {
+        if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لم يتم إغلاق الفرع."); return; }
+        const previousSave = state.save;
+        const result = closeAgencyBranchInEngine(state.save, branchId);
+        if (!result.changed) { toast(result.error); return; }
+        state.save = result.save;
+        if (saveCareer()) { render(); toast("تم إغلاق الفرع وتوقفت تكلفته الأسبوعية القادمة."); }
+        else state.save = previousSave;
+      }
     };
     const views = {
       dashboard: renderDashboard,

@@ -1,3 +1,5 @@
+import { getAgencyStaffModifiers, getRivalClientIds } from "./agency-management.js";
+
 const CONTRACT_TERMS = Object.freeze([365, 730, 1095]);
 const OFFER_VALIDITY_DAYS = 30;
 const MAX_OFFERS = 50;
@@ -164,8 +166,9 @@ export function getRepresentationContractType(contract, currentDate) {
 function playerAcceptsTerms(offer, terms) {
   const preferences = getOfferPreferences(offer);
   const agencyReputation = Number.isInteger(offer.agencyReputation) ? offer.agencyReputation : 50;
+  const staffNegotiationBonus = Number.isInteger(offer.negotiationBonus) ? clamp(offer.negotiationBonus,0,6) : 0;
   const commissionAllowance = preferences.preferredCommissionRate -
-    (agencyReputation >= 80 ? 1 : 0) + (offer.round >= 2 ? 1 : 0);
+    (agencyReputation >= 80 ? 1 : 0) + (offer.round >= 2 ? 1 : 0) + Math.floor(staffNegotiationBonus / 3);
   const preferredRepresentationType = preferences.prefersExclusive === true || agencyReputation >= 90
     ? "exclusive"
     : "non-exclusive";
@@ -440,6 +443,7 @@ export function isValidRepresentationState(representation, currentDate, clients 
         (offer.playerPreferences !== undefined && !isValidPlayerPreferences(offer.playerPreferences)) ||
         (offer.representationType !== undefined && !isValidRepresentationType(offer.representationType)) ||
         (offer.agencyReputation !== undefined && (!Number.isInteger(offer.agencyReputation) || offer.agencyReputation < 0 || offer.agencyReputation > 100)) ||
+        (offer.negotiationBonus !== undefined && (!Number.isInteger(offer.negotiationBonus) || offer.negotiationBonus < 0 || offer.negotiationBonus > 6)) ||
         (offer.renewalContractId !== undefined && (typeof offer.renewalContractId !== "string" || !offer.renewalContractId.trim())) ||
         typeof offer.playerId !== "string" || !offer.playerId.trim() ||
         typeof offer.playerName !== "string" || !offer.playerName.trim() ||
@@ -703,6 +707,9 @@ export function createRepresentationOffer(save, player, terms, currentDate = sav
       (terms?.representationType !== undefined && !isValidRepresentationType(terms.representationType))) {
     return { changed: false, save, error: "اختر عمولة من 5% إلى 15% ومدة سنة أو سنتين أو ثلاث سنوات ونوع تمثيل صالح." };
   }
+  if (getRivalClientIds(save).has(player.id)) {
+    return { changed: false, save, error: "اللاعب مرتبط حاليًا بوكالة منافسة؛ تابع انتهاء عقده قبل تقديم عرض جديد." };
+  }
   if (save.agency.clients.includes(player.id) ||
       representation.contracts.some((contract) => contract.playerId === player.id && contract.status === "active")) {
     return { changed: false, save, error: "اللاعب عميل حالي بالفعل في وكالتك." };
@@ -719,6 +726,7 @@ export function createRepresentationOffer(save, player, terms, currentDate = sav
   }
 
   const playerPreferences = getPlayerRepresentationProfile(player);
+  const staffModifiers = getAgencyStaffModifiers(save);
   const representationType = normalizeRepresentationType(
     terms.representationType ?? (playerPreferences.prefersExclusive ? "exclusive" : "non-exclusive")
   );
@@ -735,6 +743,7 @@ export function createRepresentationOffer(save, player, terms, currentDate = sav
     playerPreferences,
     representationType,
     agencyReputation: currentAgencyReputation(representation),
+    negotiationBonus: staffModifiers.negotiationBonus,
     commissionRate: terms.commissionRate,
     termDays: terms.termDays,
     createdDate: currentDate,

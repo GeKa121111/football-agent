@@ -546,3 +546,22 @@ test("migrates v5 player progress into the expanded 432-player squad roster with
   assert.equal(isValidSave(result.save), true);
   assert.equal(storage.getItem(STORAGE_KEY), raw, "migration must not rewrite a save on read");
 });
+
+
+test("migrates legacy v7 saves to schema v8 with agency operations defaults", () => {
+  const legacy = createInitialSave("2026-07-01T00:00:00.000Z");
+  legacy.meta.version = 7;
+  delete legacy.agency.management;
+  const raw = JSON.stringify(legacy);
+  const storage = memoryStorage({ [STORAGE_KEY]: raw });
+
+  const result = readSave(storage);
+  assert.equal(result.status, "loaded");
+  assert.equal(result.migrated, true);
+  assert.equal(result.save.meta.version, SAVE_VERSION);
+  assert.equal(result.save.agency.balance, legacy.agency.balance);
+  assert.equal(result.save.agency.management.branches[0].isHeadquarters, true);
+  assert.equal(result.save.agency.management.staff.length, 0);
+  assert.equal(isValidSave(result.save), true);
+  assert.equal(storage.getItem(STORAGE_KEY), raw, "migration must not rewrite the file on read");
+});

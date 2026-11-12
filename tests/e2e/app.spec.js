@@ -149,7 +149,7 @@ test.describe("Desktop experience", () => {
     await expect(page.locator(".football-screen")).toHaveCount(0);
     await page.getByRole("button", { name: "حفظ المسيرة" }).click();
     const firstSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(firstSave.meta.version).toBe(7);
+    expect(firstSave.meta.version).toBe(8);
     expect(firstSave.world.football.fixtures.length).toBeGreaterThan(0);
 
     await navigateTo(page, "المباريات");
@@ -225,7 +225,7 @@ test.describe("Desktop experience", () => {
     await modal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
 
     let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(saved.meta.version).toBe(7);
+    expect(saved.meta.version).toBe(8);
     expect(saved.agency.representation.offers).toHaveLength(1);
     expect(saved.agency.representation.offers[0].status).toBe("pending");
     expect(saved.agency.clients).toHaveLength(0);
@@ -653,7 +653,7 @@ test.describe("Desktop experience", () => {
 
     await page.locator(".transfer-status-agreed").getByRole("button", { name: "تنفيذ الصفقة" }).click();
     saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(saved.meta.version).toBe(7);
+    expect(saved.meta.version).toBe(8);
     expect(saved.world.transfers.offers[0].status).toBe("completed");
     expect(saved.world.transfers.offers[0].agreedTerms.appearanceBonus).toEqual({ appearances: 1, amountEur: 25000 });
     expect(saved.world.transfers.offers[0].agreedTerms.registrationCompetition).toBe("continental");
@@ -915,7 +915,7 @@ test.describe("Mobile experience", () => {
     await page.getByRole("button", { name: "تأكيد إطلاق البعثة" }).click();
 
     const started = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(started.meta.version).toBe(7);
+    expect(started.meta.version).toBe(8);
     expect(started.agency.balance).toBe(95000);
     expect(started.world.scouting.activeMissions).toHaveLength(1);
     expect(started.world.scouting.activeMissions[0].sourceId).toBe("academy");
@@ -1166,7 +1166,7 @@ test.describe("Mobile experience", () => {
 
     await page.locator(".day-advance-button").click();
     let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(saved.meta.version).toBe(7);
+    expect(saved.meta.version).toBe(8);
     expect(saved.career.day).toBe(6);
     expect(saved.career.week).toBe(1);
     expect(saved.career.season).toBe(1);
@@ -1683,6 +1683,51 @@ test.describe("Advanced transfer clauses on mobile", () => {
     await recallable.check();
     await page.getByLabel("حصة الراتب على النادي المستعير").selectOption("50");
     await expect(page.locator(".transfer-finance-panel")).toBeVisible();
+    await hasNoHorizontalOverflow(page);
+  });
+});
+
+
+test.describe("Agency operations management", () => {
+  test("hires staff, opens a branch and signs a sponsor deal", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    const panel = page.locator(".agency-management-panel");
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText("إدارة وتوسّع الوكالة");
+    await expect(panel).toContainText("الوكالات المنافسة");
+
+    await panel.locator(".agency-hire-button").first().click();
+    let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.agency.management.staff).toHaveLength(1);
+    expect(saved.agency.management.staff[0].roleId).toBe("negotiator");
+    expect(saved.agency.balance).toBe(91000);
+
+    await panel.locator(".agency-open-branch-button").first().click();
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.agency.management.branches.filter((branch) => branch.status === "active")).toHaveLength(2);
+    expect(saved.agency.management.branches.some((branch) => branch.locationId === "alexandria")).toBe(true);
+    expect(saved.agency.balance).toBe(73000);
+
+    await panel.locator(".agency-sponsorship-sign-button").first().click();
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.agency.management.sponsorships).toHaveLength(1);
+    expect(saved.agency.balance).toBe(81000);
+    expect(saved.agency.management.ledger.some((entry) =>
+      entry.type === "sponsorship-income" && entry.incomeKind === "signing"
+    )).toBe(true);
+
+    await panel.locator(".agency-credit-request-button").first().click();
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.agency.management.creditFacilities).toHaveLength(1);
+    expect(saved.agency.balance).toBe(131000);
+    expect(saved.agency.management.creditFacilities[0].totalRepaymentEgp).toBe(56000);
+
+    await expect(panel).toContainText("إجمالي الإيرادات");
+    await expect(panel).toContainText("دخل الرعايات أسبوعيًا");
+    await expect(panel).toContainText("الدين القائم");
+    await expect(panel).toContainText("اهتمامات الأندية بعملائك");
+    await expect(panel).toContainText("سجل مصروفات الإدارة");
     await hasNoHorizontalOverflow(page);
   });
 });

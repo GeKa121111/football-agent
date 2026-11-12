@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createInitialSave, isValidSave } from "../src/core/storage.js";
+import { hireAgencyEmployee } from "../src/engines/agency-management.js";
 import { advanceCareerDay, advanceCareerDays } from "../src/engines/career-calendar.js";
 import { getWorldPlayerProfiles } from "../src/data/world-database.js";
 import {
@@ -563,3 +564,22 @@ test("enforces exact budget boundaries for local, regional and elite missions", 
     assert.equal(isValidSave(accepted.save), true);
   }
 });
+
+
+test("analyst staff improves scouting report accuracy without changing scout selection", () => {
+  const base = createInitialSave();
+  const options = {type:"local",countryId:"country-eg",role:"all"};
+  const standard = startScoutingMission(base,options,PLAYERS);
+  assert.equal(standard.changed,true,standard.error);
+  assert.equal(standard.mission.agencyAccuracyBonus,0);
+
+  const hired = hireAgencyEmployee(base,"analyst");
+  assert.equal(hired.changed,true,hired.error);
+  const assisted = startScoutingMission(hired.save,options,PLAYERS);
+  assert.equal(assisted.changed,true,assisted.error);
+  assert.equal(assisted.mission.scoutId,standard.mission.scoutId);
+  assert.equal(assisted.mission.agencyAccuracyBonus,0.04);
+  assert.equal(assisted.mission.accuracy,Math.min(0.97,standard.mission.accuracy+0.04));
+  assert.equal(isValidSave(assisted.save),true);
+});
+
