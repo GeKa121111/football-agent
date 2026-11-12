@@ -804,6 +804,78 @@ test("continues counting unearned appearance milestones after a loan purchase", 
 });
 
 
+test("stops an old permanent deal from counting performances after a later return transfer", () => {
+  const firstTerms = {
+    ...permanentTerms,
+    feeEur: 2_000_000,
+    appearanceBonus: { appearances: 2, amountEur: 25_000 }
+  };
+  const firstSent = send(makeSave(), "permanent", firstTerms);
+  const firstAgreed = agreeOffer(firstSent.save, firstSent.offer.id, "2026-07-01");
+  const firstMove = completeTransfer(firstAgreed.save, firstSent.offer.id, "2026-07-01", database);
+  assert.equal(firstMove.changed, true);
+
+  const firstMatch = {
+    date: "2026-07-02",
+    playerPerformances: [{
+      playerId: "player-1", playerName: "لاعب تجريبي", clubId: "club-target",
+      minutesPlayed: 90, goals: 0
+    }]
+  };
+  const firstSettlement = settleTransferPerformanceBonuses({
+    ...firstMove.save,
+    world: { ...firstMove.save.world, football: { results: [firstMatch] } }
+  }, "2026-07-02", database);
+  assert.equal(firstSettlement.save.world.transfers.moves
+    .find((move) => move.id === firstMove.move.id).performanceAppearances, 1);
+
+  const secondSent = createTransferOffer(
+    firstSettlement.save, "player-1", "club-other", "permanent",
+    { ...permanentTerms, feeEur: 2_000_000 }, "2026-07-03", database
+  );
+  assert.equal(secondSent.changed, true);
+  const secondAgreed = agreeOffer(secondSent.save, secondSent.offer.id, "2026-07-03");
+  const secondMove = completeTransfer(secondAgreed.save, secondSent.offer.id, "2026-07-03", database);
+  assert.equal(secondMove.changed, true);
+
+  const thirdSent = createTransferOffer(
+    secondMove.save, "player-1", "club-target", "permanent",
+    { ...permanentTerms, feeEur: 2_000_000 }, "2026-07-04", database
+  );
+  assert.equal(thirdSent.changed, true);
+  const thirdAgreed = agreeOffer(thirdSent.save, thirdSent.offer.id, "2026-07-04");
+  const thirdMove = completeTransfer(thirdAgreed.save, thirdSent.offer.id, "2026-07-04", database);
+  assert.equal(thirdMove.changed, true);
+
+  const returnMatch = {
+    date: "2026-07-05",
+    playerPerformances: [{
+      playerId: "player-1", playerName: "لاعب تجريبي", clubId: "club-target",
+      minutesPlayed: 90, goals: 0
+    }]
+  };
+  const settled = settleTransferPerformanceBonuses({
+    ...thirdMove.save,
+    world: {
+      ...thirdMove.save.world,
+      football: { results: [firstMatch, returnMatch] }
+    }
+  }, "2026-07-05", database);
+  const originalMove = settled.save.world.transfers.moves.find((move) => move.id === firstMove.move.id);
+  assert.equal(originalMove.performanceAppearances, 1);
+  assert.equal(settled.paidBonuses.length, 0);
+  assert.equal(settled.save.world.transfers.financeLedger
+    .filter((entry) => entry.type === "performance-bonus").length, 0);
+  assert.equal(isValidTransferState(
+    settled.save.world.transfers,
+    "2026-07-05",
+    settled.save.agency.clients,
+    settled.save.agency.representation,
+    database
+  ), true);
+});
+
+
 test("retries an earned but unfunded appearance bonus after a loan has returned", () => {
   const lowBudgetDatabase = {
     ...database,
