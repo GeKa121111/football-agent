@@ -534,10 +534,12 @@ export function getCompetitionStandings(state, competitionId, database = WORLD_D
       home.wins += 1;
       away.losses += 1;
       home.points += rules.points.win;
+      away.points += rules.points.loss;
     } else if (result.away.goals > result.home.goals) {
       away.wins += 1;
       home.losses += 1;
       away.points += rules.points.win;
+      home.points += rules.points.loss;
     } else {
       home.draws += 1;
       away.draws += 1;
