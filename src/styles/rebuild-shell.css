@@ -204,6 +204,9 @@
 .rebuild-shell .mobile-nav { display: none; }
 
 @media (max-width: 1050px) and (min-width: 761px) {
+  /* The compact tablet rail should scroll with the page; sticky positioning
+     can trap WebKit hit-testing after responsive viewport changes. */
+  .rebuild-sidebar { position: static; }
   .rebuild-layout { grid-template-columns: 84px minmax(0, 1fr); gap: 15px; }
   .rebuild-sidebar { padding-inline: 9px; }
   .rebuild-sidebar-heading { padding-inline: 3px; align-items: center; }
