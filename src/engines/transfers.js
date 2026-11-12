@@ -372,6 +372,9 @@ export function completeTransfer(save, offerId, currentDate = save?.world?.curre
     type: offer.type, fromClubId: offer.fromClubId, toClubId: offer.toClubId,
     effectiveDate: currentDate, status: "active",
     performanceTrackingStartDate: currentDate,
+    performanceAppearances: 0,
+    performanceGoals: 0,
+    performanceProcessedThroughDate: currentDate,
     feeEur: offer.type === "permanent" ? terms.feeEur : 0,
     loanFeeEur: offer.type === "loan" ? terms.loanFeeEur : 0,
     optionToBuyEur: offer.type === "loan" ? terms.optionToBuyEur : 0,
@@ -491,6 +494,10 @@ function completeLoanPurchase(save, loan, currentDate, database, mandatory = fal
     type: "permanent", fromClubId: loan.fromClubId, toClubId: loan.toClubId,
     effectiveDate: currentDate, status: "active", feeEur: purchaseFee,
     performanceTrackingStartDate: loan.performanceTrackingStartDate ?? loan.effectiveDate,
+    performanceAppearances: Number.isSafeInteger(loan.performanceAppearances) ? loan.performanceAppearances : 0,
+    performanceGoals: Number.isSafeInteger(loan.performanceGoals) ? loan.performanceGoals : 0,
+    ...(isTransferCalendarDate(loan.performanceProcessedThroughDate)
+      ? { performanceProcessedThroughDate: loan.performanceProcessedThroughDate } : {}),
     loanFeeEur: 0, optionToBuyEur: 0, weeklyWageEur: loan.weeklyWageEur,
     contractYears, contractEndDate: addMonths(currentDate, contractYears * 12), returnDate: null,
     mandatoryBuy: false, mandatoryBuyContractYears: null, recallable: false,
@@ -580,19 +587,57 @@ export function settleTransferPerformanceBonuses(
   if (!isRecord(state) || !isTransferCalendarDate(currentDate)) {
     return { save, paidBonuses: [] };
   }
-  const results = save?.world?.football?.results ?? [];
+  const results = Array.isArray(save?.world?.football?.results) ? save.world.football.results : [];
   let next = state;
   let financeSequence = next.nextFinanceSequence ?? 1;
   const paidBonuses = [];
+
   for (const move of state.moves) {
-    if (move.status !== "active" || currentDate < move.effectiveDate) continue;
+    // A loan converted to a permanent deal is superseded by its new move.
+    // Returned and expired moves still retry milestones earned before they ended.
+    if (!["active", "returned", "expired"].includes(move.status) ||
+        currentDate < move.effectiveDate ||
+        (!move.appearanceBonus && !move.goalBonus)) continue;
+
+    const trackingStartDate = move.performanceTrackingStartDate ?? move.effectiveDate;
+    const trackingEndDate = move.status === "returned"
+      ? addDays(move.returnedDate, -1)
+      : move.status === "expired"
+        ? addDays(move.expiredDate, -1)
+        : currentDate;
+    const processThroughDate = trackingEndDate < currentDate ? trackingEndDate : currentDate;
+    const lastProcessedDate = isTransferCalendarDate(move.performanceProcessedThroughDate)
+      ? move.performanceProcessedThroughDate
+      : addDays(trackingStartDate, -1);
+    const effectiveThroughDate = processThroughDate > lastProcessedDate
+      ? processThroughDate
+      : lastProcessedDate;
     const performances = results
-      .filter((result) => result.date >= (move.performanceTrackingStartDate ?? move.effectiveDate) && result.date <= currentDate)
+      .filter((result) => result.date > lastProcessedDate &&
+        result.date >= trackingStartDate && result.date <= effectiveThroughDate)
       .flatMap((result) => result.playerPerformances ?? [])
       .filter((item) => item.playerId === move.playerId && item.clubId === move.toClubId);
-    const appearances = performances.filter((item) => item.minutesPlayed > 0).length;
-    const goals = performances.reduce((sum, item) => sum + (Number.isSafeInteger(item.goals) ? item.goals : 0), 0);
+    const appearances = (Number.isSafeInteger(move.performanceAppearances) ? move.performanceAppearances : 0) +
+      performances.filter((item) => item.minutesPlayed > 0).length;
+    const goals = (Number.isSafeInteger(move.performanceGoals) ? move.performanceGoals : 0) +
+      performances.reduce((sum, item) => sum + (Number.isSafeInteger(item.goals) ? item.goals : 0), 0);
     const paid = new Set(move.paidPerformanceBonuses ?? []);
+
+    // Persist cumulative totals and the cursor even when no milestone is due.
+    // Match reports are retained with a fixed cap, so recalculating from the
+    // complete loan/contract history would eventually lose older appearances.
+    next = {
+      ...next,
+      moves: next.moves.map((candidate) => candidate.id === move.id
+        ? {
+            ...candidate,
+            performanceAppearances: appearances,
+            performanceGoals: goals,
+            performanceProcessedThroughDate: effectiveThroughDate
+          }
+        : candidate)
+    };
+
     const clauses = [
       { key: "appearance", clause: move.appearanceBonus, thresholdKey: "appearances", current: appearances },
       { key: "goal", clause: move.goalBonus, thresholdKey: "goals", current: goals }
@@ -609,6 +654,7 @@ export function settleTransferPerformanceBonuses(
         bonusKind: item.key, threshold: item.clause[item.thresholdKey], date: currentDate,
         currency: "EUR", amountEur: -item.clause.amountEur
       };
+      paid.add(item.key);
       next = {
         ...next,
         nextFinanceSequence: financeSequence,
@@ -871,7 +917,15 @@ export function isValidTransferState(state, currentDate, clients = [], represent
            move.performanceTrackingStartDate > move.effectiveDate)) ||
         !["active", "returned", "purchased", "expired"].includes(move.status) || !validMoney(move.feeEur) ||
         !validMoney(move.loanFeeEur) || !validMoney(move.optionToBuyEur) || !validMoney(move.weeklyWageEur)) return false;
-    if (move.type === "loan") {
+    if ((move.performanceAppearances !== undefined &&
+        (!Number.isSafeInteger(move.performanceAppearances) || move.performanceAppearances < 0 || move.performanceAppearances > 1000000)) ||
+       (move.performanceGoals !== undefined &&
+        (!Number.isSafeInteger(move.performanceGoals) || move.performanceGoals < 0 || move.performanceGoals > 1000000)) ||
+       (move.performanceProcessedThroughDate !== undefined &&
+        (!isTransferCalendarDate(move.performanceProcessedThroughDate) ||
+         move.performanceProcessedThroughDate < (move.performanceTrackingStartDate ?? move.effectiveDate) ||
+         move.performanceProcessedThroughDate > currentDate))) return false;
+     if (move.type === "loan") {
       const terms = offer.agreedTerms;
       const effectiveReturnDate = move.recallReturnDate ?? move.returnDate;
       const paidBonuses = move.paidPerformanceBonuses ?? [];
