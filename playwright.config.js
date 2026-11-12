@@ -8,7 +8,8 @@ export default defineConfig({
   workers: process.env.CI ? 3 : undefined,
   reporter: process.env.CI ? "line" : "list",
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:5173",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:4173",
+    reducedMotion: "reduce",
     trace: "retain-on-failure",
     screenshot: "only-on-failure"
   },
@@ -18,8 +19,8 @@ export default defineConfig({
     { name: "webkit", use: { ...devices["Desktop Safari"], browserName: "webkit" } }
   ],
   webServer: {
-    command: "npm run dev -- --host 127.0.0.1",
-    url: "http://127.0.0.1:5173",
+    command: "npm run preview -- --host 127.0.0.1 --port 4173 --strictPort",
+    url: "http://127.0.0.1:4173",
     reuseExistingServer: !process.env.CI,
     timeout: 30_000
   }
