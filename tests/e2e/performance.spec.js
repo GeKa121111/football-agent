@@ -1,10 +1,10 @@
 import { test, expect } from "@playwright/test";
 
-test("loads the mobile dashboard within a throttled 4G startup budget", async ({ page, browserName, browser }) => {
+test("loads the mobile dashboard within a throttled 4G startup budget", async ({ page, browserName }) => {
   test.skip(browserName !== "chromium", "CDP network and CPU throttling is Chromium-specific.");
   await page.setViewportSize({ width: 390, height: 844 });
 
-  const client = await browser.newBrowserCDPSession(page);
+  const client = await page.context().newCDPSession(page);
   await client.send("Network.enable");
   await client.send("Network.emulateNetworkConditions", {
     offline: false,
@@ -25,7 +25,6 @@ test("loads the mobile dashboard within a throttled 4G startup budget", async ({
     const resources = performance.getEntriesByType("resource");
     return {
       domContentLoadedMs: navigation?.domContentLoadedEventEnd ?? 0,
-      loadEventMs: navigation?.loadEventEnd ?? 0,
       transferBytes: resources.reduce((total, resource) => total + (resource.transferSize || 0), 0),
       viewportWidth: document.documentElement.clientWidth,
       documentWidth: document.documentElement.scrollWidth
