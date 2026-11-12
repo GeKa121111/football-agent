@@ -1689,26 +1689,35 @@ test.describe("Advanced transfer clauses on mobile", () => {
 
 
 test.describe("Agency operations management", () => {
-  test("hires staff and opens a branch with visible weekly operating costs", async ({ page }) => {
+  test("hires staff, opens a branch and signs a sponsor deal", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الوكالة");
     const panel = page.locator(".agency-management-panel");
     await expect(panel).toBeVisible();
     await expect(panel).toContainText("إدارة وتوسّع الوكالة");
-    await expect(panel).toContainText("رواتب الوظائف تُخصم أسبوعيًا يوم الاثنين");
+    await expect(panel).toContainText("الوكالات المنافسة");
 
-    await panel.getByRole("button", { name: "تعيين الموظف" }).first().click();
+    await panel.locator(".agency-hire-button").first().click();
     let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(saved.agency.management.staff).toHaveLength(1);
     expect(saved.agency.management.staff[0].roleId).toBe("negotiator");
     expect(saved.agency.balance).toBe(91000);
 
-    await panel.getByRole("button", { name: "افتتاح الفرع" }).first().click();
+    await panel.locator(".agency-open-branch-button").first().click();
     saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(saved.agency.management.branches.filter((branch) => branch.status === "active")).toHaveLength(2);
     expect(saved.agency.management.branches.some((branch) => branch.locationId === "alexandria")).toBe(true);
     expect(saved.agency.balance).toBe(73000);
-    await expect(panel).toContainText("التزامات أسبوعية");
+
+    await panel.locator(".agency-sponsorship-sign-button").first().click();
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.agency.management.sponsorships).toHaveLength(1);
+    expect(saved.agency.balance).toBe(81000);
+    expect(saved.agency.management.ledger.some((entry) =>
+      entry.type === "sponsorship-income" && entry.incomeKind === "signing"
+    )).toBe(true);
+    await expect(panel).toContainText("إجمالي الإيرادات");
+    await expect(panel).toContainText("دخل الرعايات أسبوعيًا");
     await expect(panel).toContainText("سجل مصروفات الإدارة");
     await hasNoHorizontalOverflow(page);
   });
