@@ -1,4 +1,6 @@
 import { WORLD_DATABASE, getWorldSquadPlayers } from "../data/world-database.js";
+import { buildCompetitionGroups, getCompetitionRules, validateCompetitionDefinition, COMPETITION_FORMATS } from "../data/competition-rules.js";
+import { buildKnockoutOpeningPairings, resolveKnockoutOutcome, advanceKnockoutRound } from "./knockout-tournament.js";
 import { simulateMatch } from "./match-simulation.js";
 import { getPlayerCurrentClubId } from "./transfers.js";
 import {
@@ -11,6 +13,7 @@ import {
 
 const MAX_RETAINED_MATCH_RESULTS = 1000;
 const MAX_RETAINED_FIXTURES = 2000;
+const MAX_RETAINED_COMPETITION_ARCHIVES = 100;
 const MIN_MATCH_REST_DAYS = 3;
 const ROLE_SLOTS = [
   "حراسة",
@@ -155,31 +158,64 @@ export function generateSeasonFixtures(season, startDate, database = WORLD_DATAB
     .sort((a, b) => compareText(a.id, b.id));
 
   for (const competition of competitions) {
-    const clubIds = [...competition.clubIds].sort(compareText);
-    const firstLegRounds = createRoundRobinRounds(clubIds);
-    const totalRounds = firstLegRounds.length;
-    firstLegRounds.forEach((roundMatches, roundIndex) => {
-      roundMatches.forEach((match) => {
+    const validation = validateCompetitionDefinition(competition, database);
+    if (!validation.valid) {
+      throw new TypeError("تعريف المسابقة " + competition.id + " غير صالح: " + validation.errors.join(" "));
+    }
+    const rules = getCompetitionRules(competition);
+    if (rules.format === COMPETITION_FORMATS.KNOCKOUT) {
+      for (const pairing of buildKnockoutOpeningPairings(competition, database)) {
         templates.push({
           competition,
-          round: roundIndex + 1,
+          groupId: null,
+          groupName: null,
+          round: 1,
           leg: 1,
-          ...match
+          ...pairing
         });
-        templates.push({
-          competition,
-          round: roundIndex + 1 + totalRounds,
-          leg: 2,
-          homeClubId: match.awayClubId,
-          awayClubId: match.homeClubId
+      }
+      continue;
+    }
+
+    const stages = rules.format === COMPETITION_FORMATS.GROUP_STAGE
+      ? buildCompetitionGroups(competition, database)
+      : [{ id: null, nameAr: null, clubIds: [...competition.clubIds] }];
+
+    for (const stage of stages) {
+      const clubIds = [...stage.clubIds].sort(compareText);
+      const firstLegRounds = createRoundRobinRounds(clubIds);
+      const totalRounds = firstLegRounds.length;
+
+      firstLegRounds.forEach((roundMatches, roundIndex) => {
+        roundMatches.forEach((match) => {
+          templates.push({
+            competition,
+            groupId: stage.id,
+            groupName: stage.nameAr,
+            round: roundIndex + 1,
+            leg: 1,
+            ...match
+          });
+          if (rules.legs === 2) {
+            templates.push({
+              competition,
+              groupId: stage.id,
+              groupName: stage.nameAr,
+              round: roundIndex + 1 + totalRounds,
+              leg: 2,
+              homeClubId: match.awayClubId,
+              awayClubId: match.homeClubId
+            });
+          }
         });
       });
-    });
+    }
   }
 
   templates.sort((a, b) =>
     a.round - b.round ||
     compareText(a.competition.id, b.competition.id) ||
+    compareText(a.groupId ?? "", b.groupId ?? "") ||
     compareText(a.homeClubId, b.homeClubId) ||
     compareText(a.awayClubId, b.awayClubId)
   );
@@ -200,6 +236,7 @@ export function generateSeasonFixtures(season, startDate, database = WORLD_DATAB
       "match",
       season,
       template.competition.id,
+      template.groupId ?? "main-stage",
       "round-" + template.round,
       "leg-" + template.leg,
       template.homeClubId,
@@ -211,6 +248,8 @@ export function generateSeasonFixtures(season, startDate, database = WORLD_DATAB
       season,
       competitionId: template.competition.id,
       competitionName: template.competition.nameAr,
+      groupId: template.groupId,
+      groupName: template.groupName,
       date: matchDate,
       round: template.round,
       leg: template.leg,
@@ -228,6 +267,139 @@ export function generateSeasonFixtures(season, startDate, database = WORLD_DATAB
   );
 }
 
+function buildCompetitionSeasonAwards(results, database = WORLD_DATABASE) {
+  const playerStats = new Map();
+  const clubById = new Map(database.clubs.map((club) => [club.id, club]));
+
+  for (const result of results) {
+    for (const performance of result.playerPerformances ?? []) {
+      if (performance.simulationOnly === true || performance.minutesPlayed <= 0 ||
+          typeof performance.playerId !== "string" || !performance.playerId.trim() ||
+          typeof performance.clubId !== "string" || !Number.isFinite(performance.rating)) continue;
+      const current = playerStats.get(performance.playerId) ?? {
+        playerId: performance.playerId,
+        playerName: performance.playerName,
+        clubId: performance.clubId,
+        appearances: 0,
+        minutesPlayed: 0,
+        goals: 0,
+        assists: 0,
+        ratingTotal: 0
+      };
+      current.appearances += 1;
+      current.minutesPlayed += performance.minutesPlayed;
+      current.goals += performance.goals ?? 0;
+      current.assists += performance.assists ?? 0;
+      current.ratingTotal += performance.rating;
+      playerStats.set(performance.playerId, current);
+    }
+  }
+
+  const candidates = [...playerStats.values()].map((player) => ({
+    ...player,
+    averageRating: Math.round(player.ratingTotal / player.appearances * 100) / 100,
+    clubName: clubById.get(player.clubId)?.nameAr ?? player.clubId
+  }));
+  const toAward = (player, value) => player ? ({
+    playerId: player.playerId,
+    playerName: player.playerName,
+    clubId: player.clubId,
+    clubName: player.clubName,
+    value,
+    appearances: player.appearances,
+    averageRating: player.averageRating
+  }) : null;
+
+  const goldenBoot = [...candidates]
+    .filter((player) => player.goals > 0)
+    .sort((a, b) => b.goals - a.goals || b.assists - a.assists ||
+      b.averageRating - a.averageRating || b.appearances - a.appearances ||
+      compareText(a.playerId, b.playerId))[0] ?? null;
+  const topAssists = [...candidates]
+    .filter((player) => player.assists > 0)
+    .sort((a, b) => b.assists - a.assists || b.goals - a.goals ||
+      b.averageRating - a.averageRating || b.appearances - a.appearances ||
+      compareText(a.playerId, b.playerId))[0] ?? null;
+  const playerOfSeason = [...candidates]
+    .filter((player) => player.appearances >= 3)
+    .sort((a, b) => b.averageRating - a.averageRating || b.goals - a.goals ||
+      b.assists - a.assists || b.appearances - a.appearances ||
+      compareText(a.playerId, b.playerId))[0] ?? null;
+
+  return {
+    playerOfSeason: toAward(playerOfSeason, playerOfSeason?.averageRating ?? null),
+    goldenBoot: toAward(goldenBoot, goldenBoot?.goals ?? null),
+    topAssists: toAward(topAssists, topAssists?.assists ?? null)
+  };
+}
+
+function buildCompetitionSeasonSummary(state, competition, season, database = WORLD_DATABASE) {
+  const fixtures = state.fixtures.filter((fixture) =>
+    fixture.competitionId === competition.id && fixture.season === season
+  );
+  if (fixtures.length === 0) return null;
+
+  const results = state.results.filter((result) =>
+    result.competitionId === competition.id && result.season === season
+  );
+  const scheduledFixtures = fixtures.filter((fixture) => fixture.status === "scheduled");
+  const playedFixtures = fixtures.length - scheduledFixtures.length;
+  const complete = scheduledFixtures.length === 0 && playedFixtures === results.length;
+  const rules = getCompetitionRules(competition);
+  const groups = rules.format === COMPETITION_FORMATS.GROUP_STAGE
+    ? buildCompetitionGroups(competition, database).map((group) => ({
+      groupId: group.id,
+      groupName: group.nameAr,
+      standings: getCompetitionStandings(state, competition.id, database, season, group.id)
+    }))
+    : [];
+  const standings = rules.format === COMPETITION_FORMATS.ROUND_ROBIN
+    ? getCompetitionStandings(state, competition.id, database, season)
+    : [];
+  let championClubId = complete && standings.length > 0
+    ? standings[0].clubId
+    : null;
+  if (complete && (rules.format === COMPETITION_FORMATS.KNOCKOUT ||
+      competition.knockoutAfterGroups === true)) {
+    const finalRound = Math.max(...fixtures.map((fixture) => fixture.round));
+    const finalFixtures = fixtures.filter((fixture) => fixture.round === finalRound);
+    if (finalFixtures.length === 1) {
+      championClubId = results.find((result) => result.id === finalFixtures[0].id)
+        ?.knockoutDecision?.winnerClubId ?? null;
+    }
+  }
+  const clubById = new Map(database.clubs.map((club) => [club.id, club]));
+
+  return {
+    id: "archive-" + season + "-" + competition.id,
+    season,
+    competitionId: competition.id,
+    competitionName: competition.nameAr,
+    format: rules.format,
+    matchesTotal: fixtures.length,
+    matchesPlayed: playedFixtures,
+    matchesScheduled: scheduledFixtures.length,
+    complete,
+    championClubId,
+    championName: championClubId ? clubById.get(championClubId)?.nameAr ?? championClubId : null,
+    standings,
+    groups,
+    awards: complete ? buildCompetitionSeasonAwards(results, database) : null
+  };
+}
+
+function createCompetitionSeasonArchives(state, season, closedOn, database = WORLD_DATABASE) {
+  const knownIds = new Set((state.archives ?? []).map((archive) => archive.id));
+  const additions = [];
+  for (const competition of database.competitions) {
+    const summary = buildCompetitionSeasonSummary(state, competition, season, database);
+    if (!summary || knownIds.has(summary.id)) continue;
+    additions.push({ ...summary, archivedOn: closedOn });
+  }
+  return [...(state.archives ?? []), ...additions]
+    .slice(-MAX_RETAINED_COMPETITION_ARCHIVES);
+}
+
 export function createInitialFootballState(season = 1, currentDate = "2026-07-01", database = WORLD_DATABASE) {
   if (!Number.isSafeInteger(season) || season < 1 || !dateValue(currentDate)) {
     throw new TypeError("بيانات بداية موسم كرة القدم غير صالحة.");
@@ -237,6 +409,7 @@ export function createInitialFootballState(season = 1, currentDate = "2026-07-01
     season,
     fixtures: generateSeasonFixtures(season, currentDate, database),
     results: [],
+    archives: [],
     playerDevelopment: createInitialPlayerDevelopmentState(getWorldSquadPlayers(database))
   };
 }
@@ -244,9 +417,23 @@ export function createInitialFootballState(season = 1, currentDate = "2026-07-01
 function createMatchEvent(result, fixture) {
   const score = result.home.goals + " - " + result.away.goals;
   const title = result.home.name + " " + score + " " + result.away.name;
+  const winnerName = result.knockoutDecision?.winnerClubId === fixture.homeClubId
+    ? result.home.name
+    : result.knockoutDecision?.winnerClubId === fixture.awayClubId
+      ? result.away.name
+      : null;
+  const knockoutNote = winnerName
+    ? " · تأهل " + winnerName + (
+      result.knockoutDecision.decidedBy === "penalties"
+        ? " بركلات الترجيح"
+        : result.knockoutDecision.decidedBy === "extra-time"
+          ? " بعد الوقت الإضافي"
+          : " في الوقت الأصلي"
+    )
+    : "";
   const description = fixture.competitionName + " · الجولة " + fixture.round +
     " · " + result.home.shotsOnTarget + " تسديدة على المرمى مقابل " +
-    result.away.shotsOnTarget + " للفريق الضيف.";
+    result.away.shotsOnTarget + " للفريق الضيف." + knockoutNote;
 
   const event = {
     id: "event-" + fixture.id,
@@ -254,7 +441,7 @@ function createMatchEvent(result, fixture) {
     type: "football-match-played",
     title,
     description,
-    priority: result.result === "draw" ? "normal" : "high"
+    priority: result.result === "draw" && !result.knockoutDecision ? "normal" : "high"
   };
   return {
     event,
@@ -269,6 +456,76 @@ function createMatchEvent(result, fixture) {
   };
 }
 
+function migrateLegacyCompetitionGroups(state, database = WORLD_DATABASE) {
+  const groupMap = new Map(database.competitions
+    .filter((competition) => getCompetitionRules(competition).format === COMPETITION_FORMATS.GROUP_STAGE)
+    .map((competition) => [
+      competition.id,
+      buildCompetitionGroups(competition, database)
+    ]));
+  const fixtures = state.fixtures.map((fixture) => {
+    if (fixture.groupId !== undefined && fixture.groupId !== null) return fixture;
+    const groups = groupMap.get(fixture.competitionId);
+    const group = groups?.find((candidate) =>
+      candidate.clubIds.includes(fixture.homeClubId) &&
+      candidate.clubIds.includes(fixture.awayClubId)
+    );
+    return group
+      ? { ...fixture, groupId: group.id, groupName: group.nameAr }
+      : groups
+        ? { ...fixture, legacyCompetitionMatch: true }
+        : fixture;
+  });
+  const groupByFixtureId = new Map(fixtures
+    .filter((fixture) => fixture.groupId)
+    .map((fixture) => [fixture.id, fixture]));
+  const results = state.results.map((result) => {
+    if (result.groupId !== undefined && result.groupId !== null) return result;
+    const fixture = groupByFixtureId.get(result.id);
+    return fixture
+      ? { ...result, groupId: fixture.groupId, groupName: fixture.groupName }
+      : result;
+  });
+
+  return fixtures === state.fixtures && results === state.results
+    ? state
+    : { ...state, fixtures, results };
+}
+
+function appendMissingCurrentSeasonCups(state, currentDate, season, database = WORLD_DATABASE) {
+  const activeCompetitionIds = new Set(state.fixtures
+    .filter((fixture) => fixture.season === season)
+    .map((fixture) => fixture.competitionId));
+  const missingCupIds = new Set(database.competitions
+    .filter((competition) => competition.type === "cup" && !activeCompetitionIds.has(competition.id))
+    .map((competition) => competition.id));
+  if (missingCupIds.size === 0) return state;
+
+  const generated = generateSeasonFixtures(season, currentDate, database)
+    .filter((fixture) => missingCupIds.has(fixture.competitionId));
+  const reserved = [...state.fixtures];
+  const additions = [];
+
+  for (const fixture of generated) {
+    let date = fixture.date;
+    while ([fixture.homeClubId, fixture.awayClubId].some((clubId) =>
+      reserved.some((existing) =>
+        [existing.homeClubId, existing.awayClubId].includes(clubId) &&
+        Math.abs(daysBetween(date, existing.date)) < MIN_MATCH_REST_DAYS
+      )
+    )) {
+      date = addDays(date, 1);
+    }
+    const placed = { ...fixture, date };
+    additions.push(placed);
+    reserved.push(placed);
+  }
+
+  return additions.length > 0
+    ? { ...state, fixtures: [...state.fixtures, ...additions] }
+    : state;
+}
+
 /**
  * Processes fixtures on the exact in-game date. A fixture is marked played
  * only after its result has been computed and is appended exactly once.
@@ -280,16 +537,20 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
     throw new TypeError("حالة موسم كرة القدم غير صالحة.");
   }
 
-  let nextState = state;
+  const migratedState = migrateLegacyCompetitionGroups(state, database);
+  let nextState = migratedState;
   if (season > state.season) {
     nextState = {
-      ...state,
+      ...migratedState,
       season,
+      archives: createCompetitionSeasonArchives(migratedState, state.season, currentDate, database),
       fixtures: [
-        ...state.fixtures,
+        ...migratedState.fixtures,
         ...generateSeasonFixtures(season, currentDate, database)
       ]
     };
+  } else {
+    nextState = appendMissingCurrentSeasonCups(migratedState, currentDate, season, database);
   }
 
   const injuredAtDayStart = nextState.playerDevelopment.players
@@ -325,6 +586,12 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
       round: fixture.round,
       leg: fixture.leg,
       competitionName: fixture.competitionName,
+      ...(fixture.groupId ? { groupId: fixture.groupId, groupName: fixture.groupName } : {}),
+      ...((database.competitions.find((item) => item.id === fixture.competitionId)?.type === "cup" ||
+        database.competitions.find((item) => item.id === fixture.competitionId)?.knockoutAfterGroups === true) &&
+        !fixture.groupId
+        ? { knockoutDecision: resolveKnockoutOutcome(simulated, fixture) }
+        : {}),
       rosterType: "fictional-mixed-with-simulation-only-fillers"
     };
     playerDevelopment = recordPlayerMatchPerformances(playerDevelopment, result, currentDate);
@@ -339,10 +606,25 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
   playerDevelopment = recoverPlayerInjuries(playerDevelopment, injuredAtDayStart);
 
   const resultMap = new Map(playedResults.map((result) => [result.id, result]));
-  const fixtures = nextState.fixtures.map((fixture) => resultMap.has(fixture.id)
+  const playedFixtures = nextState.fixtures.map((fixture) => resultMap.has(fixture.id)
     ? { ...fixture, status: "played", resultId: fixture.id }
     : fixture);
-  const results = [...nextState.results, ...playedResults].slice(-MAX_RETAINED_MATCH_RESULTS);
+  const allResults = [...nextState.results, ...playedResults];
+  const generatedKnockoutFixtures = [];
+  for (const competition of database.competitions.filter((item) =>
+    item.type === "cup" || item.knockoutAfterGroups === true
+  )) {
+    const progression = advanceKnockoutRound(
+      competition,
+      season,
+      [...playedFixtures, ...generatedKnockoutFixtures],
+      allResults,
+      database
+    );
+    generatedKnockoutFixtures.push(...progression.fixtures);
+  }
+  const fixtures = [...playedFixtures, ...generatedKnockoutFixtures];
+  const results = allResults.slice(-MAX_RETAINED_MATCH_RESULTS);
   const retainedResultIds = new Set(results.map((result) => result.id));
   const retainedFixtures = fixtures
     .filter((fixture) => fixture.status === "scheduled" || retainedResultIds.has(fixture.id))
@@ -361,9 +643,15 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
   };
 }
 
-function isValidMatchResult(result, fixture) {
-  if (!isRecord(result) || result.id !== fixture.id || result.date !== fixture.date ||
+function isValidMatchResult(result, fixture, competition) {
+  const validGroupReference = fixture.groupId
+    ? result?.groupId === fixture.groupId
+    : result?.groupId === undefined || result?.groupId === null;
+  if (!isRecord(result) || !validGroupReference ||
+      result.id !== fixture.id || result.date !== fixture.date ||
       result.status !== "played" || result.season !== fixture.season ||
+      result.competitionId !== fixture.competitionId ||
+      result.round !== fixture.round || result.leg !== fixture.leg ||
       !isRecord(result.home) || !isRecord(result.away) ||
       result.home.clubId !== fixture.homeClubId ||
       result.away.clubId !== fixture.awayClubId ||
@@ -372,6 +660,46 @@ function isValidMatchResult(result, fixture) {
       result.home.possession + result.away.possession !== 100 ||
       !Array.isArray(result.events) || !Array.isArray(result.playerPerformances) ||
       result.playerPerformances.length !== 22) return false;
+
+  const isKnockoutFixture = competition?.type === "cup" ||
+    (competition?.knockoutAfterGroups === true && !fixture.groupId &&
+      fixture.legacyCompetitionMatch !== true);
+  if (isKnockoutFixture) {
+    const decision = result.knockoutDecision;
+    if (!isRecord(decision) ||
+        !["regular-time", "extra-time", "penalties"].includes(decision.decidedBy) ||
+        ![fixture.homeClubId, fixture.awayClubId].includes(decision.winnerClubId)) return false;
+    if (result.result !== "draw") {
+      const expectedWinner = result.result === "home-win" ? fixture.homeClubId : fixture.awayClubId;
+      if (decision.decidedBy !== "regular-time" || decision.winnerClubId !== expectedWinner ||
+          decision.extraTime !== null || decision.penalties !== null) return false;
+    } else {
+      if (!isRecord(decision.extraTime) ||
+          ![decision.extraTime.homeGoals, decision.extraTime.awayGoals]
+            .every((value) => Number.isSafeInteger(value) && value >= 0)) return false;
+      if (decision.decidedBy === "extra-time") {
+        if (decision.extraTime.homeGoals === decision.extraTime.awayGoals ||
+            decision.penalties !== null ||
+            decision.winnerClubId !== (decision.extraTime.homeGoals > decision.extraTime.awayGoals
+              ? fixture.homeClubId : fixture.awayClubId)) return false;
+      } else if (decision.decidedBy === "penalties") {
+        const penalties = decision.penalties;
+        if (!isRecord(penalties) ||
+            !Array.isArray(penalties.homeKicks) || !Array.isArray(penalties.awayKicks) ||
+            !penalties.homeKicks.every((kick) => typeof kick === "boolean") ||
+            !penalties.awayKicks.every((kick) => typeof kick === "boolean") ||
+            !Number.isSafeInteger(penalties.home) || !Number.isSafeInteger(penalties.away) ||
+            penalties.home !== penalties.homeKicks.filter(Boolean).length ||
+            penalties.away !== penalties.awayKicks.filter(Boolean).length ||
+            penalties.home === penalties.away ||
+            decision.extraTime.homeGoals !== decision.extraTime.awayGoals ||
+            decision.winnerClubId !== (penalties.home > penalties.away
+              ? fixture.homeClubId : fixture.awayClubId)) return false;
+      } else return false;
+    }
+  } else if (result.knockoutDecision !== undefined) {
+    return false;
+  }
 
   const performanceIds = result.playerPerformances.map((player) => player?.playerId);
   if (performanceIds.some((id) => typeof id !== "string" || !id.trim()) ||
@@ -402,6 +730,34 @@ export function isValidFootballState(state, currentDate, season, database = WORL
       !dateValue(currentDate) ||
       !Array.isArray(state.fixtures) || state.fixtures.length > MAX_RETAINED_FIXTURES ||
       !Array.isArray(state.results) || state.results.length > MAX_RETAINED_MATCH_RESULTS ||
+      (state.archives !== undefined && (!Array.isArray(state.archives) ||
+        state.archives.length > MAX_RETAINED_COMPETITION_ARCHIVES ||
+        new Set(state.archives.map((archive) => archive?.id)).size !== state.archives.length ||
+        !state.archives.every((archive) => isRecord(archive) &&
+          typeof archive.id === "string" && archive.id.trim() &&
+          Number.isSafeInteger(archive.season) && archive.season >= 1 &&
+          typeof archive.competitionId === "string" && archive.competitionId.trim() &&
+          typeof archive.competitionName === "string" && archive.competitionName.trim() &&
+          typeof archive.complete === "boolean" &&
+          Number.isSafeInteger(archive.matchesTotal) && archive.matchesTotal >= 1 &&
+          Number.isSafeInteger(archive.matchesPlayed) && archive.matchesPlayed >= 0 &&
+          Number.isSafeInteger(archive.matchesScheduled) && archive.matchesScheduled >= 0 &&
+          archive.matchesPlayed + archive.matchesScheduled === archive.matchesTotal &&
+          Array.isArray(archive.standings) && Array.isArray(archive.groups) &&
+          (archive.awards === undefined || archive.awards === null ||
+            (isRecord(archive.awards) &&
+              ["playerOfSeason", "goldenBoot", "topAssists"].every((awardKey) => {
+                const award = archive.awards[awardKey];
+                return award === null || (isRecord(award) &&
+                  typeof award.playerId === "string" && award.playerId.trim() &&
+                  typeof award.playerName === "string" && award.playerName.trim() &&
+                  typeof award.clubId === "string" && award.clubId.trim() &&
+                  typeof award.clubName === "string" && award.clubName.trim() &&
+                  Number.isFinite(award.value) && award.value > 0 &&
+                  Number.isSafeInteger(award.appearances) && award.appearances >= 1 &&
+                  Number.isFinite(award.averageRating) && award.averageRating >= 4 && award.averageRating <= 10);
+              }))) &&
+          dateValue(archive.archivedOn) !== null))) ||
       !isValidPlayerDevelopmentState(state.playerDevelopment, state.season)) return false;
 
   const fixtureIds = state.fixtures.map((fixture) => fixture?.id);
@@ -416,16 +772,33 @@ export function isValidFootballState(state, currentDate, season, database = WORL
   if (!expectedPlayerIds.every((playerId) => savedPlayerIds.has(playerId))) return false;
 
   const clubIds = new Set(database.clubs.map((club) => club.id));
-  const competitionIds = new Set(database.competitions.map((competition) => competition.id));
+  const competitionById = new Map(database.competitions.map((competition) => [competition.id, competition]));
+  const competitionIds = new Set(competitionById.keys());
+  const participantIdsByCompetition = new Map([...competitionById].map(([competitionId, competition]) => [
+    competitionId,
+    new Set(competition.clubIds)
+  ]));
+  const groupIdsByCompetition = new Map([...competitionById].map(([competitionId, competition]) => [
+    competitionId,
+    new Map(buildCompetitionGroups(competition, database).map((group) => [group.id, new Set(group.clubIds)]))
+  ]));
   const fixtureById = new Map(state.fixtures.map((fixture) => [fixture.id, fixture]));
   if (!state.fixtures.every((fixture) =>
     isRecord(fixture) &&
     Number.isSafeInteger(fixture.season) && fixture.season >= 1 && fixture.season <= season &&
     competitionIds.has(fixture.competitionId) &&
+    participantIdsByCompetition.get(fixture.competitionId)?.has(fixture.homeClubId) &&
+    participantIdsByCompetition.get(fixture.competitionId)?.has(fixture.awayClubId) &&
+    (fixture.groupId === undefined || fixture.groupId === null ||
+      groupIdsByCompetition.get(fixture.competitionId)?.get(fixture.groupId)?.has(fixture.homeClubId) &&
+      groupIdsByCompetition.get(fixture.competitionId)?.get(fixture.groupId)?.has(fixture.awayClubId)) &&
+    (fixture.legacyCompetitionMatch === undefined || typeof fixture.legacyCompetitionMatch === "boolean") &&
     typeof fixture.competitionName === "string" && fixture.competitionName.trim() &&
     dateValue(fixture.date) !== null &&
     Number.isSafeInteger(fixture.round) && fixture.round >= 1 &&
     [1, 2].includes(fixture.leg) &&
+    (competitionById.get(fixture.competitionId)?.type !== "cup" ||
+      (fixture.leg === 1 && fixture.groupId === null)) &&
     clubIds.has(fixture.homeClubId) && clubIds.has(fixture.awayClubId) &&
     fixture.homeClubId !== fixture.awayClubId &&
     ((fixture.status === "scheduled" && fixture.resultId === null) ||
@@ -434,7 +807,8 @@ export function isValidFootballState(state, currentDate, season, database = WORL
 
   if (!state.results.every((result) => {
     const fixture = fixtureById.get(result.id);
-    return fixture?.status === "played" && isValidMatchResult(result, fixture);
+    const competition = fixture ? competitionById.get(fixture.competitionId) : null;
+    return fixture?.status === "played" && isValidMatchResult(result, fixture, competition);
   })) return false;
 
   return state.fixtures.every((fixture) =>
@@ -459,11 +833,17 @@ export function getRecentFootballResults(state, limit = 10) {
 }
 
 /** Builds a deterministic competition table from persisted match results. */
-export function getCompetitionStandings(state, competitionId, database = WORLD_DATABASE, season = state?.season) {
+export function getCompetitionStandings(state, competitionId, database = WORLD_DATABASE, season = state?.season, groupId = null) {
   const competition = database.competitions.find((item) => item.id === competitionId);
   if (!competition || !Array.isArray(state?.results)) return [];
+  const rules = getCompetitionRules(competition);
+  if (rules.format === COMPETITION_FORMATS.KNOCKOUT) return [];
+  const groups = buildCompetitionGroups(competition, database);
+  const selectedGroup = groupId ? groups.find((group) => group.id === groupId) : null;
+  if (groupId && !selectedGroup) return [];
+  const clubIds = selectedGroup?.clubIds ?? competition.clubIds;
   const clubById = new Map(database.clubs.map((club) => [club.id, club]));
-  const standings = new Map(competition.clubIds.map((clubId) => [clubId, {
+  const standings = new Map(clubIds.map((clubId) => [clubId, {
     clubId,
     clubName: clubById.get(clubId)?.nameAr ?? clubId,
     played: 0,
@@ -478,6 +858,7 @@ export function getCompetitionStandings(state, competitionId, database = WORLD_D
 
   for (const result of state.results) {
     if (result.competitionId !== competitionId) continue;
+    if (groupId && result.groupId !== groupId) continue;
     if (season !== undefined && result.season !== season) continue;
     const home = standings.get(result.home.clubId);
     const away = standings.get(result.away.clubId);
@@ -491,26 +872,66 @@ export function getCompetitionStandings(state, competitionId, database = WORLD_D
     if (result.home.goals > result.away.goals) {
       home.wins += 1;
       away.losses += 1;
-      home.points += 3;
+      home.points += rules.points.win;
+      away.points += rules.points.loss;
     } else if (result.away.goals > result.home.goals) {
       away.wins += 1;
       home.losses += 1;
-      away.points += 3;
+      away.points += rules.points.win;
+      home.points += rules.points.loss;
     } else {
       home.draws += 1;
       away.draws += 1;
-      home.points += 1;
-      away.points += 1;
+      home.points += rules.points.draw;
+      away.points += rules.points.draw;
     }
   }
 
   return [...standings.values()]
     .map((row) => ({ ...row, goalDifference: row.goalsFor - row.goalsAgainst }))
-    .sort((a, b) =>
-      b.points - a.points ||
-      b.goalDifference - a.goalDifference ||
-      b.goalsFor - a.goalsFor ||
-      compareText(a.clubId, b.clubId)
-    )
+    .sort((a, b) => {
+      for (const rule of rules.tieBreakers) {
+        const difference = rule === "points" ? b.points - a.points
+          : rule === "goalDifference" ? b.goalDifference - a.goalDifference
+            : rule === "goalsFor" ? b.goalsFor - a.goalsFor
+              : rule === "wins" ? b.wins - a.wins
+                : rule === "goalsAgainst" ? a.goalsAgainst - b.goalsAgainst
+                  : rule === "clubId" ? compareText(a.clubId, b.clubId)
+                    : 0;
+        if (difference !== 0) return difference;
+      }
+      return compareText(a.clubId, b.clubId);
+    })
     .map((row, index) => ({ ...row, position: index + 1 }));
+}
+
+/** Returns retained season archives plus a live snapshot for the current data. */
+/** Calculates end-of-season individual awards using real-player match performances. */
+export function getCompetitionSeasonAwards(state, competitionId, season = state?.season, database = WORLD_DATABASE) {
+  if (!Array.isArray(state?.results)) return { playerOfSeason: null, goldenBoot: null, topAssists: null };
+  const results = state.results.filter((result) =>
+    result.competitionId === competitionId && result.season === season
+  );
+  return buildCompetitionSeasonAwards(results, database);
+}
+
+export function getCompetitionSeasonHistory(state, competitionId, database = WORLD_DATABASE) {
+  if (!isRecord(state) || !Array.isArray(state.fixtures) || !Array.isArray(state.results)) return [];
+  const competition = database.competitions.find((item) => item.id === competitionId);
+  if (!competition) return [];
+
+  const archived = (state.archives ?? [])
+    .filter((archive) => archive.competitionId === competitionId)
+    .map((archive) => ({ ...archive }));
+  const archivedSeasons = new Set(archived.map((archive) => archive.season));
+  const liveSeasons = [...new Set(state.fixtures
+    .filter((fixture) => fixture.competitionId === competitionId)
+    .map((fixture) => fixture.season))]
+    .filter((season) => !archivedSeasons.has(season))
+    .sort((a, b) => b - a);
+  const live = liveSeasons
+    .map((season) => buildCompetitionSeasonSummary(state, competition, season, database))
+    .filter(Boolean);
+
+  return [...archived, ...live].sort((a, b) => b.season - a.season);
 }

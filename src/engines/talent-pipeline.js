@@ -70,6 +70,24 @@ function isValidActivityEvent(event, entry, currentDate) {
     return typeof event.taskId === "string" &&
       /^talent-follow-up-task-\d+$/.test(event.taskId);
   }
+  if (event.type === "match-performance") {
+    return typeof event.matchId === "string" && event.matchId.trim() &&
+      typeof event.competitionId === "string" && event.competitionId.trim() &&
+      typeof event.competitionName === "string" && event.competitionName.trim() &&
+      Number.isSafeInteger(event.season) && event.season >= 1 &&
+      Number.isSafeInteger(event.round) && event.round >= 1 &&
+      [1, 2].includes(event.leg) &&
+      (event.groupName === null || typeof event.groupName === "string") &&
+      typeof event.clubId === "string" && event.clubId.trim() &&
+      typeof event.clubName === "string" && event.clubName.trim() &&
+      typeof event.opponentClubId === "string" && event.opponentClubId.trim() &&
+      event.opponentClubId !== event.clubId &&
+      typeof event.opponentClubName === "string" && event.opponentClubName.trim() &&
+      Number.isSafeInteger(event.minutesPlayed) && event.minutesPlayed > 0 && event.minutesPlayed <= 130 &&
+      Number.isFinite(event.rating) && event.rating >= 4 && event.rating <= 10 &&
+      ["goals", "assists", "yellowCards"].every((field) =>
+        Number.isSafeInteger(event[field]) && event[field] >= 0);
+  }
   if (event.type === "assignment") {
     return (event.fromScoutId === null || VALID_SCOUT_IDS.has(event.fromScoutId)) &&
       (event.toScoutId === null || VALID_SCOUT_IDS.has(event.toScoutId)) &&
@@ -77,6 +95,124 @@ function isValidActivityEvent(event, entry, currentDate) {
       VALID_ASSIGNMENT_REASONS.has(event.reason);
   }
   return false;
+}
+
+function formatPerformanceNote(event) {
+  const contribution = [];
+  if (event.goals > 0) contribution.push(event.goals + " هدف");
+  if (event.assists > 0) contribution.push(event.assists + " صناعة");
+  const contributionText = contribution.length > 0 ? " · " + contribution.join(" · ") : "";
+  return "شارك " + event.minutesPlayed + " دقيقة مع " + event.clubName +
+    " أمام " + event.opponentClubName + ". التقييم " + event.rating.toFixed(1) +
+    contributionText + ".";
+}
+
+/**
+ * Adds real match appearances to existing prospect files only. Replaying the
+ * same result is idempotent, and anonymous simulation fillers are ignored.
+ */
+export function recordTalentProspectMatchPerformances(save, results, currentDate = save?.world?.currentDate) {
+  if (!save?.agency || !save?.world || !isCalendarDate(currentDate) || !Array.isArray(results)) {
+    return { changed: false, save, recordedCount: 0, error: "بيانات أداء المواجهات غير صالحة." };
+  }
+  const pipeline = save.agency.talentPipeline;
+  if (!pipeline) return { changed: false, save, recordedCount: 0 };
+  if (!isValidTalentPipelineState(pipeline, currentDate)) {
+    return { changed: false, save, recordedCount: 0, error: "سجل صندوق المواهب غير صالح." };
+  }
+
+  const entriesByPlayerId = new Map(pipeline.entries
+    .filter((entry) => entry.stage !== "archived")
+    .map((entry) => [entry.playerId, entry]));
+  if (entriesByPlayerId.size === 0 || results.length === 0) {
+    return { changed: false, save, recordedCount: 0 };
+  }
+
+  let recordedCount = 0;
+  const updatedEntries = new Map();
+  for (const result of results) {
+    if (!isRecord(result) || typeof result.id !== "string" || !result.id.trim() ||
+        !isCalendarDate(result.date) || result.date > currentDate ||
+        !Array.isArray(result.playerPerformances) || !isRecord(result.home) || !isRecord(result.away)) continue;
+
+    for (const performance of result.playerPerformances) {
+      if (!isRecord(performance) || performance.simulationOnly === true ||
+          typeof performance.playerId !== "string" || !performance.playerId.trim() ||
+          !Number.isSafeInteger(performance.minutesPlayed) || performance.minutesPlayed <= 0 ||
+          !Number.isFinite(performance.rating) || performance.rating < 4 || performance.rating > 10) continue;
+      const entry = updatedEntries.get(performance.playerId) ?? entriesByPlayerId.get(performance.playerId);
+      if (!entry || result.date < entry.addedOn) continue;
+      const club = result.home.clubId === performance.clubId ? result.home
+        : result.away.clubId === performance.clubId ? result.away
+          : null;
+      if (!club) continue;
+      const opponent = club === result.home ? result.away : result.home;
+      const activity = entry.activity ?? [];
+      if (activity.some((event) => event.type === "match-performance" && event.matchId === result.id)) continue;
+      const event = {
+        id: nextActivityId(activity),
+        type: "match-performance",
+        date: result.date,
+        matchId: result.id,
+        competitionId: result.competitionId ?? "unknown-competition",
+        competitionName: result.competitionName ?? result.competitionId ?? "منافسة",
+        season: result.season,
+        round: result.round,
+        leg: result.leg,
+        groupName: result.groupName ?? null,
+        clubId: club.clubId,
+        clubName: club.name,
+        opponentClubId: opponent.clubId,
+        opponentClubName: opponent.name,
+        minutesPlayed: performance.minutesPlayed,
+        rating: Math.round(performance.rating * 10) / 10,
+        goals: Number.isSafeInteger(performance.goals) ? performance.goals : 0,
+        assists: Number.isSafeInteger(performance.assists) ? performance.assists : 0,
+        yellowCards: Number.isSafeInteger(performance.yellowCards) ? performance.yellowCards : 0,
+        note: ""
+      };
+      event.note = formatPerformanceNote(event);
+      updatedEntries.set(performance.playerId, {
+        ...entry,
+        club: club.name,
+        updatedOn: currentDate,
+        activity: [...activity, event].slice(-MAX_ACTIVITY_EVENTS)
+      });
+      recordedCount += 1;
+    }
+  }
+
+  if (recordedCount === 0) return { changed: false, save, recordedCount: 0 };
+  const entries = pipeline.entries.map((entry) => updatedEntries.get(entry.playerId) ?? entry);
+  const nextSave = {
+    ...save,
+    agency: {
+      ...save.agency,
+      talentPipeline: { ...pipeline, entries }
+    }
+  };
+  return { changed: true, save: nextSave, recordedCount };
+}
+
+/** Aggregates match form from the retained activity trail without storing duplicate totals. */
+export function getTalentProspectPerformanceSummary(entry) {
+  const performances = (entry?.activity ?? []).filter((event) => event.type === "match-performance");
+  const recent = performances.slice(-5);
+  const total = (field) => performances.reduce((sum, event) => sum + event[field], 0);
+  const average = (items) => items.length > 0
+    ? Math.round(items.reduce((sum, event) => sum + event.rating, 0) / items.length * 100) / 100
+    : null;
+  return {
+    appearances: performances.length,
+    minutesPlayed: total("minutesPlayed"),
+    goals: total("goals"),
+    assists: total("assists"),
+    yellowCards: total("yellowCards"),
+    averageMatchRating: average(performances),
+    recentFormRating: average(recent),
+    lastAppearanceDate: performances.at(-1)?.date ?? null,
+    latestPerformance: performances.at(-1) ?? null
+  };
 }
 
 export function createInitialTalentPipelineState() {
