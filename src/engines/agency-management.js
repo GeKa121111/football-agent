@@ -162,6 +162,14 @@ export function isValidAgencyManagementState(state, currentDate) {
               (!Number.isFinite(interest.performanceSnapshot.averageMatchRating) ||
                interest.performanceSnapshot.averageMatchRating < 4 ||
                interest.performanceSnapshot.averageMatchRating > 10)) ||
+            !Array.isArray(interest.performanceSnapshot.awardLabels) ||
+            !interest.performanceSnapshot.awardLabels.every((award) =>
+              ["player-of-season", "golden-boot", "top-assists"].includes(award)) ||
+            !Number.isSafeInteger(interest.performanceSnapshot.awardCount) ||
+            interest.performanceSnapshot.awardCount !== interest.performanceSnapshot.awardLabels.length ||
+            !Number.isInteger(interest.performanceSnapshot.awardBonus) ||
+            interest.performanceSnapshot.awardBonus < 0 ||
+            interest.performanceSnapshot.awardBonus > 4 ||
             !Number.isInteger(interest.performanceSnapshot.performanceBonus) ||
             interest.performanceSnapshot.performanceBonus < 0 ||
             interest.performanceSnapshot.performanceBonus > 10)) ||
@@ -473,7 +481,7 @@ export function getAgencyClubInterestSummary(save) {
   };
 }
 
-function createPlayerPerformanceSnapshot(development) {
+function createPlayerPerformanceSnapshot(development, awardLabels = []) {
   const appearances = Number.isSafeInteger(development?.appearances) ? development.appearances : 0;
   const minutesPlayed = Number.isSafeInteger(development?.minutesPlayed) ? development.minutesPlayed : 0;
   const goals = Number.isSafeInteger(development?.goals) ? development.goals : 0;
@@ -481,18 +489,29 @@ function createPlayerPerformanceSnapshot(development) {
   const averageMatchRating = Number.isFinite(development?.averageMatchRating)
     ? Math.max(4, Math.min(10, development.averageMatchRating))
     : null;
+  const validAwards = [...new Set(awardLabels)].filter((award) =>
+    ["player-of-season", "golden-boot", "top-assists"].includes(award)
+  );
   const appearanceBonus = appearances >= 10 ? 3 : appearances >= 5 ? 2 : appearances >= 3 ? 1 : 0;
   const formBonus = appearances >= 3 && averageMatchRating !== null
     ? averageMatchRating >= 8 ? 5 : averageMatchRating >= 7.5 ? 3 : averageMatchRating >= 7 ? 1 : 0
     : 0;
   const contributionBonus = appearances >= 5 ? Math.min(2, Math.floor((goals + assists) / 4)) : 0;
+  const awardBonus = Math.min(4,
+    (validAwards.includes("player-of-season") ? 2 : 0) +
+    (validAwards.includes("golden-boot") ? 2 : 0) +
+    (validAwards.includes("top-assists") ? 1 : 0)
+  );
   return {
     appearances,
     minutesPlayed,
     goals,
     assists,
     averageMatchRating,
-    performanceBonus: Math.min(10, appearanceBonus + formBonus + contributionBonus)
+    awardLabels: validAwards,
+    awardCount: validAwards.length,
+    awardBonus,
+    performanceBonus: Math.min(10, appearanceBonus + formBonus + contributionBonus + awardBonus)
   };
 }
 
@@ -560,6 +579,20 @@ function advanceClubInterestAI(save,currentDate,players,state) {
   ).map((item) => item.playerId + "::" + item.clubId));
   const developmentById = new Map((save.world.football?.playerDevelopment?.players ?? [])
     .map((record) => [record.playerId, record]));
+  const currentSeason = save.world.football?.season ?? 1;
+  const awardsByPlayerId = new Map();
+  for (const archive of save.world.football?.archives ?? []) {
+    if (!archive.complete || archive.season >= currentSeason - 2) {
+      if (!archive.complete || archive.season >= currentSeason) continue;
+    }
+    for (const [awardType, award] of Object.entries(archive.awards ?? {})) {
+      if (!award?.playerId) continue;
+      const awards = awardsByPlayerId.get(award.playerId) ?? [];
+      awards.push(awardType === "playerOfSeason" ? "player-of-season"
+        : awardType === "goldenBoot" ? "golden-boot" : "top-assists");
+      awardsByPlayerId.set(award.playerId, awards);
+    }
+  }
   const candidates = [...activeClientIds]
     .map((playerId) => {
       const player = playerById.get(playerId);
@@ -573,7 +606,10 @@ function advanceClubInterestAI(save,currentDate,players,state) {
         rating: Math.round(development?.rating ?? player.rating),
         potential: Math.round(development?.potential ?? player.potential),
         clubId: currentClubId,
-        performanceSnapshot: createPlayerPerformanceSnapshot(development)
+        performanceSnapshot: createPlayerPerformanceSnapshot(
+          development,
+          awardsByPlayerId.get(playerId) ?? []
+        )
       };
     })
     .filter((player) => player && Number.isInteger(player.rating) && Number.isInteger(player.potential));
