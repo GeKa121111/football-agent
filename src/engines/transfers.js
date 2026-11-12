@@ -306,9 +306,11 @@ export function advanceTransferState(save, currentDate = save?.world?.currentDat
     const agreementMissedWindow = offer.status === "agreed" && (!agreedWindow || currentDate > agreedWindow.endDate);
     const offerWindow = getTransferWindow(offer.createdDate).window;
     const offerWindowClosed = !offerWindow || currentDate > offerWindow.endDate;
+    const mandateEnded = ["pending", "countered", "agreed"].includes(offer.status) &&
+      !getActiveRepresentationContract(nextSave, offer.playerId, currentDate);
     const staleOpenOffer = ["pending", "countered"].includes(offer.status) &&
       (currentDate > offer.expiresDate || offerWindowClosed);
-    if (agreementMissedWindow || staleOpenOffer) {
+    if (agreementMissedWindow || staleOpenOffer || mandateEnded) {
       const result = expireTransferOffer(nextSave, offer, currentDate);
       nextSave = result.save;
       expiredOffers.push(offer.id);
