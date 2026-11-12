@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createInitialSave, isValidSave } from "../src/core/storage.js";
+import { hireAgencyEmployee } from "../src/engines/agency-management.js";
 import { advanceCareerDay, advanceCareerDays } from "../src/engines/career-calendar.js";
 import { getWorldPlayerProfiles } from "../src/data/world-database.js";
 import {
@@ -572,7 +573,6 @@ test("analyst staff improves scouting report accuracy without changing scout sel
   assert.equal(standard.changed,true,standard.error);
   assert.equal(standard.mission.agencyAccuracyBonus,0);
 
-  const { hireAgencyEmployee } = awaitImportAgencyEngine();
   const hired = hireAgencyEmployee(base,"analyst");
   assert.equal(hired.changed,true,hired.error);
   const assisted = startScoutingMission(hired.save,options,PLAYERS);
@@ -583,32 +583,3 @@ test("analyst staff improves scouting report accuracy without changing scout sel
   assert.equal(isValidSave(assisted.save),true);
 });
 
-function awaitImportAgencyEngine() {
-  return {
-    hireAgencyEmployee: (save,roleId) => {
-      const management = save.agency.management;
-      const role = {id:roleId,name:"محلل أداء",hiringCostEgp:7500,weeklySalaryEgp:1450};
-      const employee = {
-        id:"agency-staff-"+management.nextStaffSequence,roleId,
-        name:role.name,hiredDate:save.world.currentDate,
-        hiringCostEgp:role.hiringCostEgp,weeklySalaryEgp:role.weeklySalaryEgp,
-        status:"active",terminatedDate:null
-      };
-      const ledger = {
-        id:"agency-ledger-"+management.nextLedgerSequence,
-        date:save.world.currentDate,type:"hiring",referenceId:employee.id,
-        amountEgp:role.hiringCostEgp,paidEgp:role.hiringCostEgp,
-        arrearsAfterEgp:management.arrearsEgp,note:"تكلفة تعيين "+role.name
-      };
-      const next = {
-        ...management,nextStaffSequence:management.nextStaffSequence+1,
-        nextLedgerSequence:management.nextLedgerSequence+1,
-        staff:[employee,...management.staff],ledger:[ledger,...management.ledger]
-      };
-      return {
-        changed:true,employee,
-        save:{...save,agency:{...save.agency,balance:save.agency.balance-role.hiringCostEgp,management:next}}
-      };
-    }
-  };
-}
