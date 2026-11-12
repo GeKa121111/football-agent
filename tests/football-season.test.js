@@ -403,6 +403,17 @@ test("archives competition tables once a new season starts and exposes retained 
   assert.equal(nextSeason.archives[0].complete, true);
   assert.ok(nextSeason.archives[0].championClubId);
   assert.equal(isValidFootballState(nextSeason, "2027-07-01", 2, database), true);
+  const corruptedAward = {
+    ...nextSeason,
+    archives: nextSeason.archives.map((archive) => ({
+      ...archive,
+      awards: {
+        ...archive.awards,
+        bestPlayer: { ...archive.awards.bestPlayer, playerId: "" }
+      }
+    }))
+  };
+  assert.equal(isValidFootballState(corruptedAward, "2027-07-01", 2, database), false);
 
   const history = getCompetitionSeasonHistory(nextSeason, competition.id, database);
   assert.equal(history.length, 2);
