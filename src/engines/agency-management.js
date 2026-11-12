@@ -477,6 +477,10 @@ function advanceClubInterestAI(save,currentDate,players,state) {
   if (!Array.isArray(players) || players.length === 0) return state;
   const playerById = new Map(players.map((player) => [player.id,player]));
   const clubs = WORLD_DATABASE.clubs;
+  const clubContextById = new Map(clubs.map((club) => [club.id,{
+    financials:getClubTransferFinancials(club.id,save.world.transfers,currentDate,WORLD_DATABASE),
+    window:getTransferWindowForClub(currentDate,club.id,WORLD_DATABASE)
+  }]));
   const activeClientIds = new Set(save.agency.clients ?? []);
   const contracts = save.agency.representation?.contracts ?? [];
   for (const contract of contracts) {
@@ -515,12 +519,9 @@ function advanceClubInterestAI(save,currentDate,players,state) {
     const fits = clubs.filter((club) => club.id !== playerClubId &&
       !reserved.has(player.id + "::" + club.id))
       .map((club) => {
-        const financials = getClubTransferFinancials(
-          club.id,save.world.transfers,currentDate,WORLD_DATABASE
-        );
-        const fit = calculateClubInterestFit(player,club,financials);
-        const window = getTransferWindowForClub(currentDate,club.id,WORLD_DATABASE);
-        return {club,...fit,window};
+        const clubContext = clubContextById.get(club.id);
+        const fit = calculateClubInterestFit(player,club,clubContext.financials);
+        return {club,...fit,window:clubContext.window};
       })
       .filter((item) => item.fitScore >= 69 && item.clubBudgetEur > 0)
       .sort((a,b) => b.fitScore-a.fitScore || b.clubBudgetEur-a.clubBudgetEur || a.club.id.localeCompare(b.club.id));
