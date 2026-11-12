@@ -561,6 +561,7 @@ export function settleTransferPerformanceBonuses(save, currentDate = save?.world
   }
   const results = save?.world?.football?.results ?? [];
   let next = state;
+  let financeSequence = next.nextFinanceSequence ?? 1;
   const paidBonuses = [];
   for (const move of state.moves) {
     if (move.status !== "active" || currentDate < move.effectiveDate) continue;
@@ -580,13 +581,14 @@ export function settleTransferPerformanceBonuses(save, currentDate = save?.world
       if (next.financeLedger.length >= MAX_CLUB_FINANCE_ENTRIES ||
           next.history.length >= MAX_TRANSFER_HISTORY) continue;
       const entry = {
-        id: "club-finance-" + next.nextFinanceSequence++, offerId: move.offerId, moveId: move.id,
+        id: "club-finance-" + financeSequence++, offerId: move.offerId, moveId: move.id,
         playerId: move.playerId, clubId: move.toClubId, type: "performance-bonus",
         bonusKind: item.key, threshold: item.clause[item.thresholdKey], date: currentDate,
         currency: "EUR", amountEur: -item.clause.amountEur
       };
       next = {
         ...next,
+        nextFinanceSequence: financeSequence,
         financeLedger: [entry, ...next.financeLedger],
         moves: next.moves.map((candidate) => candidate.id === move.id
           ? { ...candidate, paidPerformanceBonuses: [...(candidate.paidPerformanceBonuses ?? []), item.key] } : candidate)
@@ -601,13 +603,51 @@ export function settleTransferPerformanceBonuses(save, currentDate = save?.world
   return { save: next === state ? save : { ...save, world: { ...save.world, transfers: next } }, paidBonuses };
 }
 
+function settleClubSeasonFinances(state, currentDate, database) {
+  if (currentDate.slice(5) !== "06-30") return state;
+  const year = Number(currentDate.slice(0, 4));
+  const seasonStart = (year - 1) + "-07-01";
+  let next = {
+    ...state,
+    financeSeasons: Array.isArray(state.financeSeasons) ? state.financeSeasons : [],
+    nextSeasonSequence: state.nextSeasonSequence ?? 1
+  };
+  for (const club of database.clubs) {
+    if (next.financeSeasons.some((entry) => entry.clubId === club.id && entry.seasonStart === seasonStart)) continue;
+    if (next.financeSeasons.length >= MAX_RETAINED_FINANCE_SEASONS) break;
+    const snapshot = getClubTransferFinancials(club.id, next, currentDate, database);
+    const revenueEur = snapshot.projectedAnnualRevenueEur;
+    const wageCostEur = snapshot.projectedAnnualWageCostsEur;
+    const operatingCostEur = snapshot.projectedAnnualOperatingCostsEur;
+    const netEur = revenueEur - wageCostEur - operatingCostEur;
+    const entry = {
+      id: "club-season-finance-" + next.nextSeasonSequence,
+      clubId: club.id,
+      seasonStart,
+      settledDate: currentDate,
+      revenueEur,
+      wageCostEur,
+      operatingCostEur,
+      netEur
+    };
+    next = {
+      ...next,
+      nextSeasonSequence: next.nextSeasonSequence + 1,
+      financeSeasons: [entry, ...next.financeSeasons]
+    };
+  }
+  return next;
+}
+
 export function advanceTransferState(save, currentDate = save?.world?.currentDate, database = WORLD_DATABASE) {
   const state = save?.world?.transfers;
   if (!isRecord(state) || !isTransferCalendarDate(currentDate))
-    return { save, expiredOffers: [], returnedLoans: [], expiredContracts: [] };
+    return { save, expiredOffers: [], returnedLoans: [], expiredContracts: [], mandatoryPurchases: [], mandatoryBuyDefaults: [] };
   let nextSave = save;
   const expiredOffers = [];
   const returnedLoans = [];
+  const mandatoryPurchases = [];
+  const mandatoryBuyDefaults = [];
   for (const offer of state.offers) {
     const agreedWindow = offer.status === "agreed"
       ? getTransferWindow(offer.agreedDate, offer.toClubId, database).window : null;
@@ -626,17 +666,42 @@ export function advanceTransferState(save, currentDate = save?.world?.currentDat
     }
   }
 
-  let next = nextSave.world.transfers;
+  let next = {
+    ...nextSave.world.transfers,
+    financeSeasons: Array.isArray(nextSave.world.transfers.financeSeasons) ? nextSave.world.transfers.financeSeasons : [],
+    nextSeasonSequence: nextSave.world.transfers.nextSeasonSequence ?? 1
+  };
+  nextSave = { ...nextSave, world: { ...nextSave.world, transfers: next } };
+
+  // Mandatory purchase clauses settle automatically on their contractual due date.
+  for (const loan of [...next.moves]) {
+    if (loan.type !== "loan" || loan.status !== "active" || loan.mandatoryBuy !== true ||
+        currentDate < loan.returnDate) continue;
+    const result = completeLoanPurchase(nextSave, loan, currentDate, database, true);
+    if (result.changed) {
+      nextSave = result.save;
+      next = nextSave.world.transfers;
+      mandatoryPurchases.push(loan.id);
+    } else {
+      mandatoryBuyDefaults.push({ moveId: loan.id, reason: result.error });
+    }
+  }
+
   for (const move of [...next.moves]) {
-    if (move.type === "loan" && move.status === "active" && currentDate >= move.returnDate) {
+    const effectiveReturnDate = move.recallReturnDate ?? move.returnDate;
+    if (move.type === "loan" && move.status === "active" && currentDate >= effectiveReturnDate) {
       next = { ...next, moves: next.moves.map((item) =>
         item.id === move.id ? { ...item, status: "returned", returnedDate: currentDate } : item) };
-      next = { ...next, history: [{
-        id: "transfer-history-" + next.nextHistorySequence,
-        type: "loan-returned", offerId: move.offerId, moveId: move.id,
-        playerId: move.playerId, playerName: move.playerName, date: currentDate,
-        note: "انتهت مدة الإعارة وعاد اللاعب إلى ناديه الأصلي."
-      }, ...next.history].slice(0, MAX_TRANSFER_HISTORY), nextHistorySequence: next.nextHistorySequence + 1 };
+      const returned = { ...move, status: "returned", returnedDate: currentDate };
+      next = appendHistory(next, "loan-returned", next.offers.find((item) => item.id === move.offerId), currentDate,
+        move.recallReturnDate
+          ? "اكتملت مهلة الإشعار وعاد اللاعب بعد طلب الاستدعاء."
+          : "انتهت مدة الإعارة وعاد اللاعب إلى ناديه الأصلي.", { moveId: move.id });
+      const failedMandatoryBuy = mandatoryBuyDefaults.find((item) => item.moveId === move.id);
+      if (failedMandatoryBuy) {
+        next = appendHistory(next, "mandatory-buy-default", next.offers.find((item) => item.id === move.offerId),
+          currentDate, "تعذر تنفيذ الشراء الإلزامي: " + failedMandatoryBuy.reason, { moveId: move.id });
+      }
       returnedLoans.push(move.id);
     }
   }
@@ -667,7 +732,7 @@ export function advanceTransferState(save, currentDate = save?.world?.currentDat
     );
     const hasActiveLoan = next.moves.some((move) =>
       move.playerId === player.id && move.type === "loan" &&
-      move.status === "active" && currentDate < move.returnDate
+      move.status === "active" && currentDate < (move.recallReturnDate ?? move.returnDate)
     );
     if (!hasPermanentMove && !hasActiveLoan) {
       const previousClubId = player.clubId ?? FREE_AGENT_CLUB_ID;
@@ -677,9 +742,9 @@ export function advanceTransferState(save, currentDate = save?.world?.currentDat
     }
   }
 
-  if (next !== nextSave.world.transfers)
-    nextSave = { ...nextSave, world: { ...nextSave.world, transfers: next } };
-  return { save: nextSave, expiredOffers, returnedLoans, expiredContracts };
+  next = settleClubSeasonFinances(next, currentDate, database);
+  nextSave = { ...nextSave, world: { ...nextSave.world, transfers: next } };
+  return { save: nextSave, expiredOffers, returnedLoans, expiredContracts, mandatoryPurchases, mandatoryBuyDefaults };
 }
 
 export function isValidTransferState(state, currentDate, clients = [], representation = null, database = WORLD_DATABASE) {
