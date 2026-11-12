@@ -491,7 +491,12 @@ test("simulates three complete seasons without duplicate fixtures, lost results 
   const start = new Date("2026-07-01T00:00:00.000Z");
   const end = new Date("2029-07-01T00:00:00.000Z");
   let football = createInitialFootballState(1, "2026-07-01");
-  const expectedPerSeason = generateSeasonFixtures(1, "2026-07-01").length;
+  const openingFixturesPerSeason = generateSeasonFixtures(1, "2026-07-01").length;
+  const additionalKnockoutFixturesPerSeason = WORLD_DATABASE.competitions
+    .filter((competition) => competition.type === "cup")
+    .reduce((total, competition) => total +
+      competition.clubIds.length - 1 - competition.clubIds.length / 2, 0);
+  const expectedPerSeason = openingFixturesPerSeason + additionalKnockoutFixturesPerSeason;
   let dayIndex = 0;
 
   for (const cursor = new Date(start); cursor < end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
