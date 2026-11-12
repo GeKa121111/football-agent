@@ -15,7 +15,21 @@ export const AGENCY_BRANCH_LOCATIONS = Object.freeze([
   Object.freeze({ id:"alexandria", name:"الإسكندرية", setupCostEgp:18000, weeklyRentEgp:1200, region:"مصر" }),
   Object.freeze({ id:"madrid", name:"مدريد", setupCostEgp:45000, weeklyRentEgp:3400, region:"أوروبا" }),
   Object.freeze({ id:"london", name:"لندن", setupCostEgp:60000, weeklyRentEgp:4200, region:"أوروبا" })
+]);export const AGENCY_SPONSOR_PACKAGES = Object.freeze([
+  Object.freeze({ id:"local-media", name:"شريك إعلامي محلي", description:"رعاية أسبوعية للمحتوى والظهور الإعلامي للوكالة.", signingBonusEgp:8000, weeklyRevenueEgp:3000, termDays:365, minClients:0, minReputation:50 }),
+  Object.freeze({ id:"sportswear", name:"شريك ملابس رياضية", description:"شراكة متوسطة ترتبط بحجم قائمة اللاعبين وسمعة الوكالة.", signingBonusEgp:16000, weeklyRevenueEgp:6200, termDays:365, minClients:2, minReputation:58 }),
+  Object.freeze({ id:"global-brand", name:"شريك علامة عالمية", description:"اتفاق طويل المدى لوكالة ذات قاعدة عملاء وسمعة قوية.", signingBonusEgp:35000, weeklyRevenueEgp:12500, termDays:730, minClients:4, minReputation:72 })
 ]);
+
+const COMPETITOR_BLUEPRINTS = Object.freeze([
+  Object.freeze({ id:"rival-north-star", name:"North Star Sports", region:"أوروبا", focus:"المواهب الهجومية والوسط", focusKey:"attack", reputation:78, budgetEgp:320000, acquisitionCostEgp:9000, maxClients:24 }),
+  Object.freeze({ id:"rival-pioneer", name:"Pioneer Football Group", region:"شمال أفريقيا", focus:"المواهب الشابة والدفاع", focusKey:"youth-defense", reputation:62, budgetEgp:240000, acquisitionCostEgp:7000, maxClients:20 }),
+  Object.freeze({ id:"rival-atlas", name:"Atlas Player Partners", region:"عالمي", focus:"اللاعبون أصحاب التقييم المرتفع", focusKey:"elite", reputation:86, budgetEgp:420000, acquisitionCostEgp:14000, maxClients:30 })
+]);
+const MAX_SPONSORSHIPS = 20;
+const MAX_COMPETITIVE_HISTORY = 300;
+const MAX_RIVAL_CLIENTS = 100;
+
 
 function isRecord(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
 function validDate(value) {
@@ -24,6 +38,27 @@ function validDate(value) {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0,10) === value;
 }
 function validMoney(value) { return Number.isSafeInteger(value) && value >= 0 && value <= MAX_MONEY_EGP; }
+function addDays(value, days) {
+  const date = new Date(value + "T00:00:00.000Z");
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+function nextMondayAfter(value) {
+  let date = addDays(value, 1);
+  for (let index = 0; index < 7 && new Date(date + "T00:00:00.000Z").getUTCDay() !== 1; index += 1) {
+    date = addDays(date, 1);
+  }
+  return date;
+}
+function stablePositionBonus(player, focusKey) {
+  const position = String(player?.position ?? "").toLocaleLowerCase("en");
+  const role = String(player?.role ?? "").toLocaleLowerCase("en");
+  const combined = position + " " + role;
+  if (focusKey === "attack") return /st|cf|fw|lw|rw|مهاجم|هجوم/.test(combined) ? 4 : 0;
+  if (focusKey === "youth-defense") return (Number(player?.age) <= 21 ? 4 : 0) + (/cb|lb|rb|def|مدافع|دفاع/.test(combined) ? 3 : 0);
+  if (focusKey === "elite") return Number(player?.rating) >= 78 ? 5 : 0;
+  return 0;
+}
 function sequenceOf(id, prefix) {
   const match = new RegExp("^" + prefix + "-(\\d+)$").exec(id);
   return match ? Number(match[1]) : 0;
@@ -44,14 +79,19 @@ function resolveManagement(save, currentDate) {
 
 export function createInitialAgencyManagementState() {
   return {
-    schemaVersion:1, nextStaffSequence:1, nextBranchSequence:1, nextLedgerSequence:1,
+    schemaVersion:1, nextStaffSequence:1, nextBranchSequence:1, nextLedgerSequence:1, nextSponsorshipSequence:1, nextCompetitiveSequence:1,
     lastPayrollDate:null, arrearsEgp:0, staff:[],
     branches:[{
       id:"agency-branch-hq", locationId:"headquarters", name:"المقر الرئيسي", region:"المقر الرئيسي",
       openedDate:"2026-07-01", setupCostEgp:0, weeklyRentEgp:0, isHeadquarters:true,
       status:"active", closedDate:null
     }],
-    ledger:[]
+    ledger:[],
+    sponsorships:[],
+    competitors:COMPETITOR_BLUEPRINTS.map((profile) => ({
+      ...profile, clients:[], pendingOffers:[], lastActionDate:null
+    })),
+    competitiveHistory:[]
   };
 }
 
