@@ -37,7 +37,7 @@ export function getCompetitionRules(competition) {
   const isLeague = format === COMPETITION_FORMATS.ROUND_ROBIN;
   return {
     format,
-    legs: isLeague ? (competition.legs ?? 2) : 1,
+    legs: competition.legs ?? 2,
     groupCount: format === COMPETITION_FORMATS.GROUP_STAGE
       ? (competition.groupCount ?? 2)
       : null,
@@ -108,6 +108,9 @@ export function validateCompetitionDefinition(competition, database) {
   }
 
   if (rules.format === COMPETITION_FORMATS.GROUP_STAGE) {
+    if (![1, 2].includes(rules.legs)) {
+      errors.push("عدد مباريات المجموعة يجب أن يكون ذهابًا فقط أو ذهابًا وإيابًا: " + competition.id);
+    }
     if (!Number.isSafeInteger(rules.groupCount) ||
         rules.groupCount < 2 ||
         rules.groupCount > Math.floor(competition.clubIds.length / 2)) {
