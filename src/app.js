@@ -1523,8 +1523,19 @@ function renderMarket(context) {
       if (submitButton) submitButton.disabled = openClubs.length === 0;
     };
     const refreshTerms = () => {
+      const player = representedPlayers.find((item) => item.player.id === playerSelect.value)?.player;
+      const currentClubId = player
+        ? getPlayerCurrentClubId(player.id, player.clubId, transferState, currentDate)
+        : null;
+      const isFreeAgent = !currentClubId;
+      const loanOption = Array.from(typeSelect.options).find((option) => option.value === "loan");
+      if (loanOption) loanOption.disabled = isFreeAgent;
+      if (isFreeAgent && typeSelect.value === "loan") typeSelect.value = "permanent";
       const isLoan = typeSelect.value === "loan";
-      amountLabel.textContent = isLoan ? "رسوم الإعارة باليورو" : "قيمة الانتقال باليورو";
+      amountLabel.textContent = isLoan
+        ? "رسوم الإعارة باليورو"
+        : isFreeAgent ? "رسوم التعاقد للاعب حر (يورو)" : "قيمة الانتقال باليورو";
+      amountInput.readOnly = isFreeAgent && !isLoan;
       periodLabel.textContent = isLoan ? "مدة الإعارة" : "مدة العقد الجديد";
       periodSelect.replaceChildren();
       (isLoan ? [3, 6, 9, 12, 18, 24] : [1, 2, 3, 4, 5]).forEach((value) => {
@@ -1539,9 +1550,8 @@ function renderMarket(context) {
       recallNoticeField.hidden = !isLoan;
       wageShareField.hidden = !isLoan;
       refreshLoanClauseAvailability();
-      const player = representedPlayers.find((item) => item.player.id === playerSelect.value)?.player;
       const marketValue = player?.marketValueEur ?? 0;
-      amountInput.value = String(isLoan ? Math.round(marketValue * 0.02) : marketValue);
+      amountInput.value = String(isLoan ? Math.round(marketValue * 0.02) : isFreeAgent ? 0 : marketValue);
     };
     playerSelect.addEventListener("change", () => {
       refreshDestinationClubs();
