@@ -260,3 +260,55 @@ test("retains a new competitor offer after the rival history reaches its rolling
   assert.ok(["accepted","rejected"].includes(savedOffer.status));
   assert.equal(isValidSave(resolved.save),true);
 });
+
+
+test("keeps agency finance, sponsorship, rivals and club interest valid across three seasons", () => {
+  let save = createInitialSave();
+  const employee = hireAgencyEmployee(save,"operations");
+  assert.equal(employee.changed,true,employee.error);
+  save = employee.save;
+
+  const sponsor = signAgencySponsorship(save,"local-media");
+  assert.equal(sponsor.changed,true,sponsor.error);
+  save = sponsor.save;
+
+  const credit = takeAgencyCredit(save,"working-capital");
+  assert.equal(credit.changed,true,credit.error);
+  save = credit.save;
+
+  save = {
+    ...save,
+    agency:{...save.agency,clients:[PLAYERS[0].id]}
+  };
+  assert.equal(isValidAgencyManagementState(save.agency.management,save.world.currentDate),true);
+
+  let currentDate = "2026-07-06";
+  const addDays = (value,days) => {
+    const date = new Date(value + "T00:00:00.000Z");
+    date.setUTCDate(date.getUTCDate()+days);
+    return date.toISOString().slice(0,10);
+  };
+
+  for (let week=0;week<156;week+=1) {
+    save = {...save,world:{...save.world,currentDate}};
+    const result = advanceAgencyManagementDay(save,currentDate,PLAYERS);
+    assert.equal(result.error,undefined,"agency tick must remain valid at " + currentDate);
+    save = result.save;
+    assert.equal(isValidAgencyManagementState(save.agency.management,currentDate),true,
+      "management schema must remain valid at " + currentDate);
+    assert.ok(save.agency.balance >= 0);
+    assert.ok(save.agency.management.ledger.length <= 1000);
+    assert.ok(save.agency.management.competitiveHistory.length <= 300);
+    assert.ok(save.agency.management.clubInterests.length <= 200);
+    currentDate = addDays(currentDate,7);
+  }
+
+  const management = save.agency.management;
+  assert.equal(management.creditFacilities[0].status,"repaid");
+  assert.equal(management.sponsorships[0].status,"expired");
+  assert.ok(management.competitors.some((rival) => rival.clients.length > 0));
+  assert.ok(management.clubInterests.length > 0);
+  assert.ok(management.arrearsEgp > 0,"prolonged payroll deficits remain visible as arrears");
+  assert.equal(management.ledger.some((entry) => entry.type === "credit-drawdown" && entry.direction === "financing"),true);
+  assert.equal(management.ledger.some((entry) => entry.type === "credit-repayment"),true);
+});
