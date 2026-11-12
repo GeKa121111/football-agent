@@ -428,7 +428,7 @@ export function startScoutingMission(save, options, players) {
     dueDate: addDays(save.world.currentDate, config.durationDays),
     durationDays: config.durationDays,
     cost: config.cost,
-    accuracy: fit.accuracy,
+    accuracy: fit.accuracy + agencyAccuracyBonus,
     targetCount: targets.length
   };
 
