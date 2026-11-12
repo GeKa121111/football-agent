@@ -1,4 +1,5 @@
 import { advanceCareerDay } from "./career-calendar.js";
+import { settleTransferPerformanceBonuses } from "./transfers.js";
 import { advanceScoutingMissions } from "./scouting.js";
 import { advanceRepresentationState } from "./representation.js";
 
@@ -16,14 +17,16 @@ export function advanceCareerSimulationDay(save, players) {
 
   const calendarSave = advanceCareerDay(save);
   const currentDate = calendarSave.world.currentDate;
-  const scouting = advanceScoutingMissions(calendarSave, players, currentDate);
+  const bonusSettlement = settleTransferPerformanceBonuses(calendarSave, currentDate);
+  const scouting = advanceScoutingMissions(bonusSettlement.save, players, currentDate);
   const representation = advanceRepresentationState(scouting.save, currentDate);
 
   return {
     save: representation.save,
     completedReports: scouting.completedReports,
     expiredOffers: representation.expiredOffers,
-    expiredContracts: representation.expiredContracts
+    expiredContracts: representation.expiredContracts,
+    paidPerformanceBonuses: bonusSettlement.paidBonuses
   };
 }
 
