@@ -84,12 +84,15 @@ export function buildSimulationTeam(clubId, database = WORLD_DATABASE, playerDev
   const club = database.clubs.find((item) => item.id === clubId);
   if (!club) throw new TypeError("النادي غير موجود في قاعدة العالم: " + clubId);
 
+  const developmentById = new Map((playerDevelopment?.players ?? [])
+    .map((player) => [player.playerId, player]));
   const injuredPlayerIds = new Set((playerDevelopment?.players ?? [])
     .filter((player) => player.injuryDays > 0)
     .map((player) => player.playerId));
+  const matchdayRating = (player) => developmentById.get(player.id)?.rating ?? player.rating;
   const realPlayers = getWorldSquadPlayers(database)
     .filter((player) => getPlayerCurrentClubId(player.id, player.clubId, transferState, currentDate, database) === clubId && !injuredPlayerIds.has(player.id))
-    .sort((a, b) => b.rating - a.rating || compareText(a.id, b.id));
+    .sort((a, b) => matchdayRating(b) - matchdayRating(a) || compareText(a.id, b.id));
   const unused = new Set(realPlayers.map((player) => player.id));
   const lineup = ROLE_SLOTS.map((role, slotIndex) => {
     const realPlayer = realPlayers.find((player) =>
@@ -101,8 +104,8 @@ export function buildSimulationTeam(clubId, database = WORLD_DATABASE, playerDev
         id: realPlayer.id,
         name: realPlayer.name,
         role: realPlayer.role,
-        rating: realPlayer.rating,
-        potential: realPlayer.potential,
+        rating: matchdayRating(realPlayer),
+        potential: developmentById.get(realPlayer.id)?.potential ?? realPlayer.potential,
         simulationOnly: false
       };
     }
@@ -127,8 +130,8 @@ export function buildSimulationTeam(clubId, database = WORLD_DATABASE, playerDev
     id: player.id,
     name: player.name,
     role: player.role,
-    rating: player.rating,
-    potential: player.potential,
+    rating: matchdayRating(player),
+    potential: developmentById.get(player.id)?.potential ?? player.potential,
     simulationOnly: false
   });
   return {
