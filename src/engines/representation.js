@@ -1027,6 +1027,9 @@ export function createRepresentationInteraction(save, contractId, kind, meetingD
     if (interactions.some((item) => item.contractId === contract.id && item.kind === "meeting" && item.status === "scheduled")) {
       return { changed: false, save, error: "يوجد اجتماع مجدول بالفعل لهذا اللاعب." };
     }
+    if (meetingDate >= getRepresentationContractExpiry(contract)) {
+      return { changed: false, save, error: "يجب تحديد الاجتماع قبل تاريخ انتهاء عقد التمثيل." };
+    }
     dueDate = meetingDate;
     status = "scheduled";
   } else {
