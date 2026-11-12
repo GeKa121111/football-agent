@@ -259,6 +259,22 @@ test("rejects impossible transfer timelines and inconsistent permanent/loan move
     "a loan past its return date must be advanced and marked returned");
 });
 
+test("safely rejects malformed representation contract collections", () => {
+  const noContracts = makeSave();
+  noContracts.agency.representation.contracts = {};
+  const failedOffer = createTransferOffer(noContracts, "player-1", "club-target",
+    "permanent", permanentTerms, "2026-07-01", database);
+  assert.equal(failedOffer.changed, false);
+
+  const sent = send();
+  const countered = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
+  const agreed = acceptTransferCounterOffer(countered.save, sent.offer.id, "2026-07-02");
+  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-02");
+  const malformed = { ...completed.save.agency.representation, contracts: {} };
+  assert.equal(isValidTransferState(completed.save.world.transfers, "2026-07-02",
+    completed.save.agency.clients, malformed), false);
+});
+
 test("rejects malformed, duplicated or financially inconsistent transfer state", () => {
   const sent = send();
   const duplicate = structuredClone(sent.save.world.transfers);
