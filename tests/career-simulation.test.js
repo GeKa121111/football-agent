@@ -45,12 +45,13 @@ test("one career day advances the shared clock without mutating the source save"
   }, PLAYERS);
   assert.equal(mission.changed, true, mission.error);
 
+  const transferStateBefore = structuredClone(mission.save.world.transfers);
   const advanced = advanceCareerSimulationDay(mission.save, PLAYERS);
   const savedInteraction = advanced.save.agency.representation.interactions
     .find((item) => item.id === interaction.interaction.id);
   assert.equal(advanced.save.world.currentDate, "2026-07-02");
   assert.equal(advanced.save.career.day, 2);
-  assert.equal(advanced.save.world.transfers, mission.save.world.transfers);
+  assert.deepEqual(mission.save.world.transfers, transferStateBefore);
   assert.equal(savedInteraction.status, "pending_response");
   assert.equal(advanced.save.world.scouting.activeMissions.length, 1);
   assert.equal(mission.save.career.day, 1);
