@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { WORLD_DATABASE, getWorldSummary, getWorldSquadPlayers, validateWorldDatabase } from "../src/data/world-database.js";
+import { createInitialPlayerDevelopmentState } from "../src/engines/player-development.js";
 import {
   buildSimulationTeam,
   generateSeasonFixtures,
@@ -26,6 +27,31 @@ test("builds complete 18-player fictional squads and starting XIs without emerge
   assert.equal(new Set(team.lineup.map((player) => player.id)).size, 11);
   assert.ok(team.lineup.every((player) => player.simulationOnly === false));
   assert.equal(new Set(team.squad.map((player) => player.id)).size, 18);
+});
+
+test("uses saved player development ratings when selecting matchday squads and team strength", () => {
+  const club = WORLD_DATABASE.clubs[0];
+  const baseline = buildSimulationTeam(club.id);
+  const developedPlayer = baseline.lineup.find((player) => player.simulationOnly !== true);
+  assert.ok(developedPlayer, "the baseline XI must include a real world player");
+
+  const development = createInitialPlayerDevelopmentState(getWorldSquadPlayers());
+  const updatedDevelopment = {
+    ...development,
+    players: development.players.map((player) => player.playerId === developedPlayer.id
+      ? { ...player, rating: 99, potential: 99 }
+      : player)
+  };
+  const developedTeam = buildSimulationTeam(
+    club.id, WORLD_DATABASE, updatedDevelopment
+  );
+  const updatedStarter = developedTeam.lineup.find((player) => player.id === developedPlayer.id);
+  const updatedSquadPlayer = developedTeam.squad.find((player) => player.id === developedPlayer.id);
+
+  assert.equal(updatedStarter.rating, 99);
+  assert.equal(updatedStarter.potential, 99);
+  assert.equal(updatedSquadPlayer.rating, 99);
+  assert.ok(developedTeam.strength > baseline.strength);
 });
 
 test("moves permanent and loaned players between matchday squads using saved transfer records", () => {
