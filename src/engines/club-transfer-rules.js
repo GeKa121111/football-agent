@@ -112,7 +112,7 @@ export function getPlayerCurrentClubIdFromState(playerId, fallbackClubId, transf
       (move.status === "active" || (move.status === "purchased" && currentDate < move.purchasedDate)))
     .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate) ||
       Number(a.id.split("-").pop()) - Number(b.id.split("-").pop()));
-  if (freeAgent && !moves.some((move) => move.type === "permanent" && move.effectiveDate > freeAgent.sinceDate)) return null;
+  if (freeAgent && !moves.some((move) => move.type === "permanent" && move.effectiveDate >= freeAgent.sinceDate)) return null;
   const player = getWorldSquadPlayers(database).find((item) => item.id === playerId);
   const hasPermanentMove = (transferState?.moves ?? []).some((move) =>
     move.playerId === playerId && move.type === "permanent" && move.effectiveDate <= currentDate
@@ -169,7 +169,6 @@ export function getClubTransferFinancials(clubId, transferState, currentDate, da
   const baseBudgetEur = Math.round(profile * profile * 10000);
   const financeEntries = (transferState?.financeLedger ?? []).filter((entry) => entry.clubId === clubId);
   const budgetEur = baseBudgetEur + financeEntries.reduce((sum, entry) => sum + entry.amountEur, 0);
-  const wageBudgetWeeklyEur = profile * 8000;
   const roster = getWorldSquadPlayers(database).filter((player) =>
     getPlayerCurrentClubIdFromState(player.id, player.clubId, transferState, currentDate, database) === clubId
   );
@@ -181,6 +180,9 @@ export function getClubTransferFinancials(clubId, transferState, currentDate, da
         Number(b.id.split("-").pop()) - Number(a.id.split("-").pop()))[0];
     return sum + (latestMove ? latestMove.weeklyWageEur : estimateWeeklyWage(player));
   }, 0);
+  // The roster's estimated payroll is the baseline; the profile-based margin
+  // is the additional weekly room available for new contracts.
+  const wageBudgetWeeklyEur = committedWagesWeeklyEur + profile * 650;
   return {
     clubId,
     budgetEur,
