@@ -4,12 +4,14 @@ import { createInitialSave, isValidSave } from "../src/core/storage.js";
 import { getWorldPlayerProfiles } from "../src/data/world-database.js";
 import {
   getAgencyCompetitorSummary,
+  getAgencyCreditOffers,
   getAgencyManagementSummary,
   getAgencySponsorshipOffers,
   getAgencyStaffModifiers,
   getRivalClientIds,
   hireAgencyEmployee,
   signAgencySponsorship,
+  takeAgencyCredit,
   advanceAgencyManagementDay
 } from "../src/engines/agency-management.js";
 import {
@@ -126,4 +128,49 @@ test("legacy v8 agency state without sponsorship and competitor fields remains r
   assert.equal(isValidSave(advanced.save), true);
   assert.ok(Array.isArray(advanced.save.agency.management.sponsorships));
   assert.equal(advanced.save.agency.management.competitors.length, 3);
+});
+
+
+test("credit facilities are financing, not revenue, and repay on the shared Monday tick", () => {
+  const initial = createInitialSave();
+  const offer = getAgencyCreditOffers(initial).find((item) => item.id === "working-capital");
+  assert.equal(offer.eligible, true);
+  assert.equal(offer.totalRepaymentEgp, 56000);
+
+  const drawn = takeAgencyCredit(initial, "working-capital");
+  assert.equal(drawn.changed, true, drawn.error);
+  assert.equal(drawn.save.agency.balance, initial.agency.balance + 50000);
+  assert.equal(getAgencyManagementSummary(drawn.save).totalRevenueEgp, 0);
+  assert.equal(getAgencyManagementSummary(drawn.save).totalDebtEgp, 56000);
+  assert.equal(isValidSave(drawn.save), true);
+
+  const duplicate = takeAgencyCredit(drawn.save, "working-capital");
+  assert.equal(duplicate.changed, false);
+  assert.equal(duplicate.save, drawn.save);
+
+  const monday = advanceCareerSimulationDays(drawn.save, 5, PLAYERS);
+  const loan = monday.save.agency.management.creditFacilities[0];
+  assert.equal(monday.save.world.currentDate, "2026-07-06");
+  assert.equal(loan.paidEgp, loan.weeklyInstallmentEgp);
+  assert.equal(loan.remainingEgp, loan.totalRepaymentEgp - loan.weeklyInstallmentEgp);
+  assert.equal(loan.lastPaymentDate, "2026-07-06");
+  assert.equal(getAgencyManagementSummary(monday.save).totalDebtEgp, loan.remainingEgp);
+  assert.equal(isValidSave(monday.save), true);
+});
+
+test("credit repayment remains bounded by available cash and records missed installments", () => {
+  let save = createInitialSave();
+  const drawn = takeAgencyCredit(save, "working-capital");
+  save = {
+    ...drawn.save,
+    agency:{...drawn.save.agency,balance:100}
+  };
+  const monday = advanceCareerSimulationDays(save, 5, PLAYERS);
+  const loan = monday.save.agency.management.creditFacilities[0];
+  const entry = monday.save.agency.management.ledger.find((item) => item.type === "credit-repayment");
+  assert.equal(entry.paidEgp, 100);
+  assert.equal(loan.lateWeeks, 1);
+  assert.equal(monday.save.agency.balance, 0);
+  assert.ok(loan.remainingEgp > 0);
+  assert.equal(isValidSave(monday.save), true);
 });
