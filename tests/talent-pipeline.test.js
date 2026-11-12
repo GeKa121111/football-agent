@@ -4,6 +4,8 @@ import { createInitialSave, isValidSave } from "../src/core/storage.js";
 import {
   createInitialTalentPipelineState,
   getTalentProspect,
+  getTalentProspectPerformanceSummary,
+  recordTalentProspectMatchPerformances,
   isValidTalentPipelineState,
   upsertTalentProspect,
   recordTalentProspectContact,
@@ -127,6 +129,120 @@ test("rejects invalid player details, stages, sources, dates, and malformed save
   assert.equal(upsertTalentProspect(save, player(), {
     nextFollowUpDate: "2026-06-30"
   }).changed, false);
+});
+
+test("records real match performances in a prospect activity trail and ignores replays and fillers", () => {
+  const save = createInitialSave();
+  const tracked = upsertTalentProspect(save, player(), { sourceId: "scouting" });
+  const result = {
+    id: "match-prospect-performance-1",
+    date: "2026-07-04",
+    season: 1,
+    competitionId: "competition-eg-premier",
+    competitionName: "الدوري المصري الممتاز",
+    round: 1,
+    leg: 1,
+    groupId: null,
+    groupName: null,
+    home: { clubId: "club-al-ahly", name: "الأهلي" },
+    away: { clubId: "club-zamalek", name: "الزمالك" },
+    playerPerformances: [
+      {
+        playerId: player().id,
+        playerName: player().name,
+        clubId: "club-al-ahly",
+        minutesPlayed: 90,
+        rating: 8.4,
+        goals: 1,
+        assists: 1,
+        yellowCards: 0,
+        simulationOnly: false
+      },
+      {
+        playerId: "simulation-only-player",
+        playerName: "لاعب محاكاة",
+        clubId: "club-al-ahly",
+        minutesPlayed: 90,
+        rating: 9.1,
+        goals: 2,
+        assists: 0,
+        yellowCards: 0,
+        simulationOnly: true
+      }
+    ]
+  };
+
+  const recorded = recordTalentProspectMatchPerformances(
+    tracked.save,
+    [result],
+    "2026-07-04"
+  );
+  assert.equal(recorded.changed, true);
+  assert.equal(recorded.recordedCount, 1);
+  assert.equal(isValidSave(recorded.save), true);
+
+  const entry = getTalentProspect(recorded.save.agency.talentPipeline, player().id);
+  const event = entry.activity.find((item) => item.type === "match-performance");
+  assert.equal(event.matchId, result.id);
+  assert.equal(event.opponentClubId, "club-zamalek");
+  assert.equal(event.minutesPlayed, 90);
+  assert.equal(event.rating, 8.4);
+  assert.match(event.note, /1 هدف/);
+  assert.match(event.note, /1 صناعة/);
+
+  const summary = getTalentProspectPerformanceSummary(entry);
+  assert.equal(summary.appearances, 1);
+  assert.equal(summary.minutesPlayed, 90);
+  assert.equal(summary.goals, 1);
+  assert.equal(summary.assists, 1);
+  assert.equal(summary.averageMatchRating, 8.4);
+  assert.equal(summary.recentFormRating, 8.4);
+  assert.equal(summary.lastAppearanceDate, "2026-07-04");
+
+  const replay = recordTalentProspectMatchPerformances(
+    recorded.save,
+    [result],
+    "2026-07-04"
+  );
+  assert.equal(replay.changed, false);
+  assert.equal(replay.recordedCount, 0);
+  assert.equal(replay.save, recorded.save);
+});
+
+test("does not backfill matches played before prospect discovery or alter archived prospects", () => {
+  const save = createInitialSave();
+  const discovered = upsertTalentProspect(save, player(), { sourceId: "manual" });
+  const archived = upsertTalentProspect(discovered.save, player(), { stage: "archived" });
+  const result = {
+    id: "match-before-prospect",
+    date: "2026-06-30",
+    season: 1,
+    competitionId: "competition-eg-premier",
+    competitionName: "الدوري المصري الممتاز",
+    round: 1,
+    leg: 1,
+    groupName: null,
+    home: { clubId: "club-al-ahly", name: "الأهلي" },
+    away: { clubId: "club-zamalek", name: "الزمالك" },
+    playerPerformances: [{
+      playerId: player().id,
+      clubId: "club-al-ahly",
+      minutesPlayed: 90,
+      rating: 7,
+      goals: 0,
+      assists: 0,
+      yellowCards: 0,
+      simulationOnly: false
+    }]
+  };
+  const ignored = recordTalentProspectMatchPerformances(
+    archived.save,
+    [result],
+    "2026-07-01"
+  );
+  assert.equal(ignored.changed, false);
+  assert.equal(getTalentProspect(ignored.save.agency.talentPipeline, player().id).activity.length, 2);
+  assert.equal(isValidSave(ignored.save), true);
 });
 
 test("keeps older v4 saves valid when they do not yet contain a talent pipeline", () => {
