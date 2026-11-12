@@ -735,6 +735,32 @@ export function advanceTransferState(save, currentDate = save?.world?.currentDat
         !isTransferCalendarDate(move.contractEndDate) || currentDate < move.contractEndDate) continue;
     next = { ...next, moves: next.moves.map((item) =>
       item.id === move.id ? { ...item, status: "expired", expiredDate: currentDate } : item) };
+  }
+
+  // Only the player's latest permanent contract can release them as a free
+  // agent. Older contracts may expire after a later transfer has already
+  // moved the player to another club. An active loan also delays free agency
+  // until the player returns to the parent club.
+  const isLaterMove = (candidate, move) =>
+    candidate.effectiveDate > move.effectiveDate ||
+    (candidate.effectiveDate === move.effectiveDate &&
+      sequenceOf(candidate.id, "transfer-move") > sequenceOf(move.id, "transfer-move"));
+  for (const move of next.moves) {
+    if (move.type !== "permanent" || move.status !== "expired" ||
+        !isTransferCalendarDate(move.contractEndDate) || currentDate < move.contractEndDate ||
+        next.freeAgents.some((item) => item.playerId === move.playerId)) continue;
+    const hasLaterPermanentMove = next.moves.some((candidate) =>
+      candidate.playerId === move.playerId && candidate.type === "permanent" &&
+      isLaterMove(candidate, move)
+    );
+    if (hasLaterPermanentMove) continue;
+    const hasLaterActiveLoan = next.moves.some((candidate) =>
+      candidate.playerId === move.playerId && candidate.type === "loan" &&
+      candidate.status === "active" && isLaterMove(candidate, move) &&
+      currentDate < (candidate.recallReturnDate ?? candidate.returnDate)
+    );
+    if (hasLaterActiveLoan) continue;
+
     const before = next.freeAgents.length;
     next = appendFreeAgent(next, move.playerId, move.contractEndDate, move.toClubId, move.id);
     if (next.freeAgents.length > before) {
@@ -742,7 +768,7 @@ export function advanceTransferState(save, currentDate = save?.world?.currentDat
       const originalOffer = next.offers.find((item) => item.id === move.offerId);
       if (originalOffer && next.history.length < MAX_TRANSFER_HISTORY)
         next = appendHistory(next, "contract-expired", originalOffer, currentDate,
-          "انتهى العقد الاحترافي وأصبح اللاعب حرًا.", { moveId: move.id });
+          "انتهى آخر عقد احترافي للاعب وأصبح حرًا بعد عودته من الإعارة إن وجدت.", { moveId: move.id });
     }
   }
 
