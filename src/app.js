@@ -1346,6 +1346,7 @@ function renderScouting(context) {
 
 function renderMarket(context) {
   const page = node("div", "page-content rebuild-screen market-screen");
+  const marketDraft = context.marketDraft ?? null;
   const currentDate = context.save.world.currentDate;
   const transferState = context.transferState;
   const destinationWindows = WORLD_DATABASE.clubs.map((club) => ({
@@ -1440,6 +1441,9 @@ function renderMarket(context) {
       option.value = player.id;
       playerSelect.append(option);
     });
+    if (marketDraft?.playerId && representedPlayers.some((item) => item.player.id === marketDraft.playerId)) {
+      playerSelect.value = marketDraft.playerId;
+    }
 
     const clubSelect = node("select", "search-input transfer-club-select");
     clubSelect.setAttribute("aria-label", "النادي المستهدف");
@@ -1547,6 +1551,9 @@ function renderMarket(context) {
         option.value = club.id;
         clubSelect.append(option);
       });
+      if (marketDraft?.destinationClubId && openClubs.some((club) => club.id === marketDraft.destinationClubId)) {
+        clubSelect.value = marketDraft.destinationClubId;
+      }
       destinationHint.textContent = openClubs.length > 0
         ? "الوجهات المعروضة هي الأندية التي تسمح نافذتها بإرسال عرض في التاريخ الحالي."
         : "لا يوجد نادٍ آخر بنافذة انتقالات مفتوحة لهذا اللاعب حاليًا.";
@@ -1594,6 +1601,17 @@ function renderMarket(context) {
     competitionSelect.addEventListener("change", refreshDestinationClubs);
     refreshDestinationClubs();
     refreshTerms();
+    if (marketDraft) {
+      const draftPlayer = representedPlayers.find((item) => item.player.id === marketDraft.playerId)?.player;
+      const draftClub = WORLD_DATABASE.clubs.find((club) => club.id === marketDraft.destinationClubId);
+      if (draftPlayer && draftClub && clubSelect.value === marketDraft.destinationClubId) {
+        destinationHint.textContent = "تم تجهيز عرض " + draftPlayer.name + " إلى " + draftClub.nameAr +
+          " بناءً على اهتمام النادي. راجع القيمة والراتب وبنود العقد قبل الإرسال.";
+      } else if (draftPlayer && draftClub) {
+        destinationHint.textContent = "اهتمام " + draftClub.nameAr + " محفوظ، لكن الوجهة غير مؤهلة حاليًا وفق نافذة الانتقالات أو قواعد التسجيل.";
+      }
+      context.clearMarketDraft?.();
+    }
 
     proposalForm.append(
       field("اللاعب العميل", playerSelect),
@@ -2450,8 +2468,20 @@ function renderAgencyManagementPanel(context) {
           ? "النافذة مفتوحة حتى " + formatHomeDate(interest.transferWindowEndDate)
           : "متابعة مستقبلية · ينتهي الاهتمام " + formatHomeDate(interest.expiresDate))
       );
-      row.append(copy,
-        node("span", "representation-count", interest.status === "enquiry" ? "استفسار" : "متابعة")
+      const existingOffer = context.transferState.offers.find((offer) =>
+        offer.playerId === interest.playerId && offer.toClubId === interest.clubId &&
+        ["pending","countered","agreed"].includes(offer.status)
+      );
+      const startNegotiation = actionButton(
+        existingOffer ? "تفاوض قائم" : interest.status === "enquiry" ? "ابدأ التفاوض" : "انتظر فتح النافذة",
+        "button-outline agency-club-interest-action",
+        () => context.openMarketForInterest(interest)
+      );
+      startNegotiation.disabled = Boolean(existingOffer) || interest.status !== "enquiry";
+      row.append(
+        copy,
+        node("span", "representation-count", interest.status === "enquiry" ? "استفسار" : "متابعة"),
+        startNegotiation
       );
       interestList.append(row);
     });
@@ -2861,6 +2891,7 @@ export function mountApp(root) {
   const state = {
     view: "dashboard",
     save,
+    marketDraft: null,
     isSaved: loaded.status === "loaded" && !loaded.migrated,
     canWrite: loaded.status === "new" || loaded.status === "loaded",
     watchlist: new Set(loadedWatchlist.ids),
@@ -4529,6 +4560,35 @@ export function mountApp(root) {
       addToWatchlist,
       players: currentPlayers,
       transferState: state.save.world.transfers,
+      marketDraft: state.marketDraft,
+      clearMarketDraft: () => { state.marketDraft = null; },
+      openMarketForInterest: (interest) => {
+        if (!state.canWrite) { toast("ملف الحفظ غير قابل للتعديل؛ لا يمكن فتح تفاوض جديد."); return; }
+        const currentDate = state.save.world.currentDate;
+        const activeMandate = state.save.agency.representation.contracts.some((contract) =>
+          contract.playerId === interest.playerId && contract.status === "active" &&
+          getRepresentationContractExpiry(contract) > currentDate
+        );
+        if (!activeMandate || !state.save.agency.clients.includes(interest.playerId)) {
+          toast("اللاعب لم يعد ضمن عملاء الوكالة بعقد تمثيل نشط.");
+          return;
+        }
+        if (interest.status !== "enquiry" || !getTransferWindow(currentDate,interest.clubId).active) {
+          toast("نافذة النادي مغلقة حاليًا؛ تقدر تتابع الاهتمام لحد موعد النافذة التالية.");
+          return;
+        }
+        const existingOffer = state.save.world.transfers.offers.find((offer) =>
+          offer.playerId === interest.playerId && offer.toClubId === interest.clubId &&
+          ["pending","countered","agreed"].includes(offer.status)
+        );
+        if (existingOffer) {
+          toast("فيه بالفعل تفاوض مفتوح على اللاعب مع النادي ده.");
+          return;
+        }
+        state.marketDraft = { playerId: interest.playerId, destinationClubId: interest.clubId };
+        state.view = "market";
+        render({ focusMain: true });
+      },
       createTransferProposal,
       evaluateTransferOffer,
       submitTransferCounterOffer,
