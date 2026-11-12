@@ -391,6 +391,12 @@ test("archives competition tables once a new season starts and exposes retained 
   assert.equal(currentHistory[0].complete, true);
   assert.equal(currentHistory[0].matchesPlayed, currentHistory[0].matchesTotal);
   assert.equal(currentHistory[0].standings.length, 2);
+  assert.ok(currentHistory[0].awards.bestPlayer?.playerId);
+  assert.ok(currentHistory[0].awards.bestPlayer.appearances >= 1);
+  assert.ok(currentHistory[0].awards.bestPlayer.value >= 4);
+  if (currentHistory[0].awards.topScorer) {
+    assert.ok(currentHistory[0].awards.topScorer.value > 0);
+  }
 
   const nextSeason = advanceFootballSeasonDay(football, "2027-07-01", 2, database).football;
   assert.equal(nextSeason.archives.length, 1);
