@@ -120,7 +120,7 @@ test("staff modifiers affect negotiation and protect player mandates from rival 
 
 test("legal staff reduces the probability that a rival agency poaches a target", () => {
   const target = {
-    id:"legal-protection-target",playerId:"legal-protection-target",
+    id:"rival-offer-legal-protection-target",playerId:"legal-protection-target",
     playerName:"Legal Protection Target",position:"وسط",
     rating:57,potential:57,commissionRate:10,
     offeredDate:"2026-07-01",dueDate:"2026-07-04",
