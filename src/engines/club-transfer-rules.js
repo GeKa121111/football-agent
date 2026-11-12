@@ -193,10 +193,10 @@ export function getClubRegistrationStatus(
   const nonAssociation = foreign;
   const year = Number(currentDate.slice(0, 4));
   const seasonStart = currentDate >= year + "-07-01" ? year + "-07-01" : (year - 1) + "-07-01";
+  // A returned loan still consumed a registration during this season.
   const midSeasonRegistrations = (transferState?.moves ?? []).filter((move) =>
-    move.toClubId === clubId && move.playerId !== playerId && move.effectiveDate >= seasonStart &&
-    move.effectiveDate <= currentDate &&
-    (move.type !== "loan" || (move.status === "active" && currentDate < (move.recallReturnDate ?? move.returnDate)))
+    move.toClubId === clubId && move.playerId !== playerId &&
+    move.effectiveDate >= seasonStart && move.effectiveDate <= currentDate
   ).length + 1;
   if (total > rules.maxRegisteredPlayers) return { eligible: false, reason: "قائمة النادي وصلت للحد الأقصى للتسجيل (" + rules.maxRegisteredPlayers + " لاعبًا).", total, senior, foreign, rules };
   if (senior > rules.maxSeniorPlayers) return { eligible: false, reason: "تجاوز النادي الحد الأقصى للاعبين فوق " + (rules.u21ExemptionAge - 1) + " سنة (" + rules.maxSeniorPlayers + ").", total, senior, foreign, rules };
