@@ -541,8 +541,8 @@ export function getCompetitionStandings(state, competitionId, database = WORLD_D
     } else {
       home.draws += 1;
       away.draws += 1;
-      home.points += 1;
-      away.points += 1;
+      home.points += rules.points.draw;
+      away.points += rules.points.draw;
     }
   }
 
