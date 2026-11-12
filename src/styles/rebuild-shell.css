@@ -204,6 +204,9 @@
 .rebuild-shell .mobile-nav { display: none; }
 
 @media (max-width: 1050px) and (min-width: 761px) {
+  /* The compact tablet rail should scroll with the page; sticky positioning
+     can trap WebKit hit-testing after responsive viewport changes. */
+  .rebuild-sidebar { position: static; }
   .rebuild-layout { grid-template-columns: 84px minmax(0, 1fr); gap: 15px; }
   .rebuild-sidebar { padding-inline: 9px; }
   .rebuild-sidebar-heading { padding-inline: 3px; align-items: center; }
@@ -266,5 +269,16 @@
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
+  }
+}
+
+/* WebKit can stall pointer hit-testing on sticky rails and blurred fixed
+   navigation surfaces. Keep the rail in normal flow and the mobile nav opaque. */
+@supports (-webkit-backdrop-filter: blur(1px)) {
+  .rebuild-shell .rebuild-sidebar { position: static; }
+  .rebuild-shell .rebuild-mobile-nav {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: rgba(10, 15, 25, .98);
   }
 }

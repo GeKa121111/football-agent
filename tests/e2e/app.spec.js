@@ -5,10 +5,12 @@ import { advanceRepresentationState } from "../../src/engines/representation.js"
 import { WORLD_DATABASE } from "../../src/data/world-database.js";
 
 async function navigateTo(page, view) {
-  const mobileNav = page.locator(".mobile-nav");
-  const desktopNav = page.locator(".sidebar");
-  const nav = await mobileNav.isVisible() ? mobileNav : desktopNav;
-  await nav.getByRole("button", { name: view, exact: true }).click();
+  const viewport = page.viewportSize();
+  const nav = page.locator(viewport && viewport.width <= 760 ? ".mobile-nav" : ".sidebar");
+  await expect(nav).toBeVisible();
+  const button = nav.getByRole("button", { name: view, exact: true });
+  await button.click();
+  await expect(button).toHaveAttribute("aria-current", "page");
 }
 
 async function hasNoHorizontalOverflow(page) {
@@ -432,7 +434,7 @@ test.describe("Desktop experience", () => {
     await expect(dossier.locator(".representation-dossier-hero h3")).toHaveText(contract.playerName);
     await expect(dossier.getByRole("heading", { name: "العلاقة والثقة" })).toBeVisible();
     await expect(dossier.getByRole("heading", { name: "العقد الحالي" })).toBeVisible();
-    await expect(dossier.locator(".representation-dossier-stat")).toHaveCount(6);
+    await expect(dossier.locator(".representation-dossier-stat")).toHaveCount(7);
     await expect(dossier.getByText(/تمثيل حصري|تمثيل غير حصري/).first()).toBeVisible();
     await expect(dossier.getByRole("heading", { name: "الرسائل والاجتماعات" })).toBeVisible();
     await expect(dossier.getByText("بانتظار الرد").first()).toBeVisible();
@@ -470,6 +472,7 @@ test.describe("Desktop experience", () => {
   });
 
   test("renders distinct SVG player portraits and reuses them in player details", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.goto("/");
     await navigateTo(page, "اللاعبون");
 
@@ -740,6 +743,7 @@ test.describe("Desktop experience", () => {
 });
 
 test.describe("Mobile experience", () => {
+  test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright mobile-device emulation.");
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
   test("keeps the representation offer form usable on mobile", async ({ page }) => {
@@ -1240,6 +1244,7 @@ test.describe("Mobile experience", () => {
 
 
 test.describe("Career operations follow-up", () => {
+  test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright mobile-device emulation.");
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
   test("marks a task overdue, keeps it actionable and persists late completion", async ({ page }) => {
@@ -1343,6 +1348,7 @@ test.describe("Career operations follow-up", () => {
 
 
 test.describe("Task history archive", () => {
+  test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright mobile-device emulation.");
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
   test("searches and filters open, overdue and completed tasks on mobile", async ({ page }) => {
@@ -1417,6 +1423,7 @@ test.describe("Task history archive", () => {
 
 
 test.describe("Annual career calendar", () => {
+  test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright mobile-device emulation.");
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
   test("starts a new career with season-opening information", async ({ page }) => {
@@ -1452,6 +1459,7 @@ test.describe("Annual career calendar", () => {
 
 
 test.describe("Inbox archive", () => {
+  test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright mobile-device emulation.");
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
   test("searches all retained messages, filters read state and marks a message without closing the archive", async ({ page }) => {
@@ -1550,6 +1558,7 @@ test.describe("Inbox archive", () => {
 
 
 test.describe("Scouting discovery channels and observation history", () => {
+  test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright mobile-device emulation.");
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
   test("filters by a discovery channel and persists repeat observations across reloads", async ({ page }) => {
@@ -1625,6 +1634,7 @@ test.describe("Scouting recruitment contracts", () => {
 });
 
 test.describe("Scouting recruitment contracts on mobile", () => {
+  test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright mobile-device emulation.");
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
   test("keeps annual scout recruitment usable and persisted on a phone viewport", async ({ page }) => {
@@ -1655,6 +1665,7 @@ test.describe("Scouting recruitment contracts on mobile", () => {
 
 
 test.describe("Advanced transfer clauses on mobile", () => {
+  test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright mobile-device emulation.");
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
   test("shows and toggles advanced loan clauses on a phone viewport", async ({ page }) => {
@@ -1730,4 +1741,42 @@ test.describe("Agency operations management", () => {
     await expect(panel).toContainText("سجل مصروفات الإدارة");
     await hasNoHorizontalOverflow(page);
   });
+});
+
+test("negotiates a signing bonus and displays it without charging the agency", async ({ page }) => {
+  await page.goto("/");
+  await navigateTo(page, "الوكالة");
+  await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+
+  const offerModal = page.locator(".modal-overlay");
+  await offerModal.getByLabel("نسبة العمولة").selectOption("15");
+  await offerModal.getByLabel("مدة العقد").selectOption("1095");
+  await offerModal.getByLabel("مكافأة التوقيع").selectOption("100000");
+  await offerModal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+
+  await page.locator(".representation-evaluate-button").click();
+  await page.locator(".representation-counter-button").click();
+
+  const savedAfterPlayerCounter = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+  const offer = savedAfterPlayerCounter.agency.representation.offers[0];
+  const counterModal = page.locator(".modal-overlay");
+  await counterModal.getByLabel("نسبة العمولة في العرض المضاد").selectOption(String(offer.playerPreferences.preferredCommissionRate));
+  await counterModal.getByLabel("مدة العرض المضاد").selectOption(String(offer.playerPreferences.preferredTermDays));
+  await counterModal.getByLabel("نوع التمثيل في العرض المضاد").selectOption(
+    offer.playerPreferences.prefersExclusive ? "exclusive" : "non-exclusive"
+  );
+  await counterModal.getByLabel("مكافأة التوقيع في العرض المضاد").selectOption("250000");
+  await counterModal.getByRole("button", { name: "إرسال العرض المضاد" }).click();
+
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+  const contract = saved.agency.representation.contracts[0];
+  expect(contract.signingBonus).toBe(250000);
+  expect(saved.agency.balance).toBe(100000);
+  expect(isValidSave(saved)).toBe(true);
+
+  await page.locator(".representation-client-dossier-button").first().click();
+  const dossier = page.locator(".representation-client-dossier");
+  await expect(dossier).toContainText(new Intl.NumberFormat("ar-EG").format(250000));
+  await expect(dossier).toContainText("ليست مبلغًا مدفوعًا");
+  await hasNoHorizontalOverflow(page);
 });

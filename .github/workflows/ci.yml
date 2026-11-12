@@ -23,17 +23,41 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install dependencies
-        run: npm install
-      # ubuntu-latest already provides the native Chromium libraries used by this project.
-      # Install only the browser binary so CI does not depend on apt mirror availability.
-      - name: Install Chromium for browser tests
-        run: npx playwright install chromium
+      - name: Install dependencies from the committed lockfile
+        run: npm ci
+      - name: Install Chromium, Firefox and WebKit
+        run: npx playwright install --with-deps chromium firefox webkit
       - name: Run unit tests
         run: npm test
-      - name: Run desktop and mobile browser tests
+      - name: Run desktop, mobile, accessibility and performance browser tests
         run: npm run test:e2e
       - name: Check JavaScript syntax
         run: npm run check
       - name: Build
         run: npm run build
+
+  live-smoke:
+    name: Smoke test the currently published GitHub Pages site
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Resolve the configured GitHub Pages URL
+        id: pages
+        uses: actions/configure-pages@v5
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Test published site
+        env:
+          FOOTBALL_AGENT_LIVE_URL: ${{ steps.pages.outputs.base_url }}
+        run: npm run test:live

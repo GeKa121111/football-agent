@@ -858,7 +858,7 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 .event-history-priority {
   align-self:flex-start; padding:3px 7px; border:1px solid rgba(143,163,197,.2);
   border-radius:999px; color:#b9c7dc !important; background:rgba(143,163,197,.08);
-  font-size: 10px; font-weight:800;
+  font-size:10px; font-weight:800;
 }
 .event-history-priority.priority-high {
   border-color:rgba(232,111,111,.3); color:#f29b9b !important; background:rgba(126,39,52,.12);
@@ -884,7 +884,7 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 .season-calendar-content { min-width:0; }
 .season-calendar-list { display:flex; flex-direction:column; gap:7px; max-height:58vh; overflow-y:auto; padding-right:2px; }
 .season-calendar-date {
-  flex:0 0 112px; color:#c8b7ff; font-size: 10px; font-weight:900; line-height:1.6;
+  flex:0 0 112px; color:#c8b7ff; font-size:10px; font-weight:900; line-height:1.6;
 }
 .season-calendar-row { align-items:center; }
 @media (max-width:760px) {
@@ -902,7 +902,7 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 .task-history-status {
   flex:0 0 auto; padding:5px 8px; border:1px solid rgba(143,163,197,.2);
   border-radius:999px; color:#b9c7dc; background:rgba(143,163,197,.08);
-  font-size: 10px; font-weight:900; white-space:nowrap;
+  font-size:10px; font-weight:900; white-space:nowrap;
 }
 .task-history-status.status-overdue {
   border-color:rgba(232,111,111,.3); color:#f29b9b; background:rgba(126,39,52,.12);
