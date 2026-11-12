@@ -1086,8 +1086,13 @@ export function completeRepresentationMeeting(save, interactionId, outcome, curr
     return { changed: false, save, error: "يمكن تسجيل نتيجة الاجتماع من موعده وحتى سبعة أيام بعده." };
   }
   const contract = representation.contracts.find((item) => item.id === interaction.contractId);
-  if (!contract || contract.status !== "active") {
-    return { changed: false, save, error: "عقد التمثيل لم يعد نشطًا." };
+  const contractExpiry = contract ? getRepresentationContractExpiry(contract) : null;
+  const wasScheduledDuringMandate = Boolean(contract) &&
+    interaction.createdDate < contractExpiry &&
+    interaction.dueDate < contractExpiry;
+  if (!contract || !["active", "expired"].includes(contract.status) ||
+      !wasScheduledDuringMandate) {
+    return { changed: false, save, error: "لا يمكن تسجيل الاجتماع بعد إنهاء العقد أو إذا لم يكن مجدولًا أثناء سريانه." };
   }
   const relationshipDelta = outcome === "positive" ? 7 : outcome === "neutral" ? 3 : -6;
   const reputationDelta = outcome === "positive" ? 2 : outcome === "neutral" ? 0 : -2;
