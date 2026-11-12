@@ -495,6 +495,26 @@ test("migrates v6 saves to transfer schema v7 without rewriting on read", () => 
   assert.equal(storage.getItem(STORAGE_KEY), raw, "migration must not rewrite a save on read");
 });
 
+test("migrates a v6 football save missing player progress using its stored season", () => {
+  const legacy = createInitialSave("2026-07-01T00:00:00.000Z");
+  legacy.meta.version = 6;
+  legacy.career.day = 15;
+  legacy.career.week = 3;
+  legacy.career.season = 3;
+  legacy.world.football.season = 3;
+  delete legacy.world.football.playerDevelopment;
+  const raw = JSON.stringify(legacy);
+  const storage = memoryStorage({ [STORAGE_KEY]: raw });
+
+  const result = readSave(storage);
+  assert.equal(result.status, "loaded");
+  assert.equal(result.migrated, true);
+  assert.equal(result.save.world.football.playerDevelopment.season, 3);
+  assert.equal(result.save.world.football.playerDevelopment.players.length, 432);
+  assert.equal(isValidSave(result.save), true);
+  assert.equal(storage.getItem(STORAGE_KEY), raw, "migration must not rewrite a save on read");
+});
+
 test("migrates v5 player progress into the expanded 432-player squad roster without rewriting on read", () => {
   const legacy = createInitialSave("2026-07-01T00:00:00.000Z");
   legacy.meta.version = 5;
