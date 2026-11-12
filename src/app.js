@@ -960,7 +960,7 @@ function renderFootball(context) {
       competitionSelect.value,
       WORLD_DATABASE,
       football.season,
-      groupSelect.value || null
+      groups.length > 0 ? groupSelect.value : null
     );
     const header = node("div", "football-standings-row is-header");
     ["#", "النادي", "لعب", "ف", "ت", "خ", "له", "عليه", "النقاط"].forEach((label) => {
