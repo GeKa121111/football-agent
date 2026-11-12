@@ -440,7 +440,16 @@ test("simulates scouting contracts and paid missions across two season boundarie
   let completedReportCount = 0; const completedReports = []; let lowestObservedBalance = save.agency.balance;
   assert.equal(PLAYERS.length, 48, "long-run balance test must use the expanded 48-player pool");
   for (let day = 0; day < 732; day += 1) {
-    if (day === 340) { const renewal = renewScoutingContract(save, "scout-iberian-network"); assert.equal(renewal.changed, true); assert.equal(renewal.fee, 8000); save = renewal.save; }
+    if (day === 340) {
+      const renewal = renewScoutingContract(save, "scout-iberian-network");
+      assert.equal(renewal.changed, true);
+      assert.equal(renewal.fee, 8000);
+      assert.equal(renewal.contractExpiresOn, "2028-06-30");
+      const renewedRecord = renewal.save.world.scouting.scouts
+        .find((item) => item.id === "scout-iberian-network");
+      assert.equal(renewedRecord.contractStartedOn, "2027-07-01");
+      save = renewal.save;
+    }
     const missionType = schedule.get(day);
     if (missionType) { const started = startScoutingMission(save, { type: missionType, countryId: "all", role: "all", scoutId: "scout-iberian-network" }, PLAYERS); assert.equal(started.changed, true, started.error); save = started.save; lowestObservedBalance = Math.min(lowestObservedBalance, save.agency.balance); }
     save = advanceCareerDay(save); const result = advanceScoutingMissions(save, PLAYERS); save = result.save;

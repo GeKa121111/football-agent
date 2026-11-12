@@ -4,6 +4,7 @@ import { getPlayerCurrentClubId } from "./transfers.js";
 import {
   createInitialPlayerDevelopmentState,
   advancePlayerDevelopmentDay,
+  recoverPlayerInjuries,
   recordPlayerMatchPerformances,
   isValidPlayerDevelopmentState
 } from "./player-development.js";
@@ -84,12 +85,15 @@ export function buildSimulationTeam(clubId, database = WORLD_DATABASE, playerDev
   const club = database.clubs.find((item) => item.id === clubId);
   if (!club) throw new TypeError("النادي غير موجود في قاعدة العالم: " + clubId);
 
+  const developmentById = new Map((playerDevelopment?.players ?? [])
+    .map((player) => [player.playerId, player]));
   const injuredPlayerIds = new Set((playerDevelopment?.players ?? [])
     .filter((player) => player.injuryDays > 0)
     .map((player) => player.playerId));
+  const matchdayRating = (player) => developmentById.get(player.id)?.rating ?? player.rating;
   const realPlayers = getWorldSquadPlayers(database)
     .filter((player) => getPlayerCurrentClubId(player.id, player.clubId, transferState, currentDate, database) === clubId && !injuredPlayerIds.has(player.id))
-    .sort((a, b) => b.rating - a.rating || compareText(a.id, b.id));
+    .sort((a, b) => matchdayRating(b) - matchdayRating(a) || compareText(a.id, b.id));
   const unused = new Set(realPlayers.map((player) => player.id));
   const lineup = ROLE_SLOTS.map((role, slotIndex) => {
     const realPlayer = realPlayers.find((player) =>
@@ -101,8 +105,8 @@ export function buildSimulationTeam(clubId, database = WORLD_DATABASE, playerDev
         id: realPlayer.id,
         name: realPlayer.name,
         role: realPlayer.role,
-        rating: realPlayer.rating,
-        potential: realPlayer.potential,
+        rating: matchdayRating(realPlayer),
+        potential: developmentById.get(realPlayer.id)?.potential ?? realPlayer.potential,
         simulationOnly: false
       };
     }
@@ -127,8 +131,8 @@ export function buildSimulationTeam(clubId, database = WORLD_DATABASE, playerDev
     id: player.id,
     name: player.name,
     role: player.role,
-    rating: player.rating,
-    potential: player.potential,
+    rating: matchdayRating(player),
+    potential: developmentById.get(player.id)?.potential ?? player.potential,
     simulationOnly: false
   });
   return {
@@ -288,10 +292,14 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
     };
   }
 
+  const injuredAtDayStart = nextState.playerDevelopment.players
+    .filter((player) => player.injuryDays > 0)
+    .map((player) => player.playerId);
   let playerDevelopment = advancePlayerDevelopmentDay(
     nextState.playerDevelopment,
     currentDate,
-    season
+    season,
+    { deferInjuryRecovery: true }
   );
   const todayFixtures = nextState.fixtures.filter((fixture) =>
     fixture.status === "scheduled" && fixture.date === currentDate
@@ -325,6 +333,10 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
     matchEvents.push(records.event);
     matchMessages.push(records.message);
   }
+
+  // Injuries that existed before this date expire only after the player has
+  // missed the whole day. Match- or training-day injuries are not decremented.
+  playerDevelopment = recoverPlayerInjuries(playerDevelopment, injuredAtDayStart);
 
   const resultMap = new Map(playedResults.map((result) => [result.id, result]));
   const fixtures = nextState.fixtures.map((fixture) => resultMap.has(fixture.id)

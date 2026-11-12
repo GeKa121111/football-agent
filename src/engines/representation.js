@@ -769,6 +769,9 @@ export function evaluateRepresentationOffer(save, offerId, currentDate = save?.w
     return { changed: false, save, error: "لا يوجد عرض مفتوح يمكن تقييمه." };
   }
   if (!isCalendarDate(currentDate)) return { changed: false, save, error: "تاريخ المسيرة غير صالح." };
+  if (currentDate < offer.createdDate) {
+    return { changed: false, save, error: "لا يمكن تقييم العرض قبل تاريخ إرساله." };
+  }
   if (currentDate > offer.expiresDate) {
     const advanced = advanceRepresentationState(save, currentDate);
     return { changed: true, status: "expired", save: advanced.save, error: "انتهت صلاحية عرض التمثيل." };
@@ -815,8 +818,8 @@ export function submitRepresentationCounterOffer(save, offerId, terms, currentDa
   if (!offer || offer.status !== "countered") {
     return { changed: false, save, error: "لا يوجد عرض مضاد مفتوح للرد عليه." };
   }
-  if (!isCalendarDate(currentDate) || currentDate > offer.expiresDate) {
-    return { changed: false, save, error: "انتهت صلاحية العرض قبل إرسال الرد." };
+  if (!isCalendarDate(currentDate) || currentDate < offer.createdDate || currentDate > offer.expiresDate) {
+    return { changed: false, save, error: "تاريخ الرد يجب أن يكون بعد إرسال العرض وداخل مدة صلاحيته." };
   }
   if (!validTerms(terms?.commissionRate, terms?.termDays)) {
     return { changed: false, save, error: "شروط العرض المضاد غير صالحة." };
@@ -893,8 +896,8 @@ export function acceptRepresentationCounterOffer(save, offerId, currentDate = sa
   if (!offer || offer.status !== "countered" || !isRecord(offer.counterOffer)) {
     return { changed: false, save, error: "لا يوجد عرض مضاد صالح لقبوله." };
   }
-  if (!isCalendarDate(currentDate) || currentDate > offer.expiresDate) {
-    return { changed: false, save, error: "انتهت صلاحية العرض المضاد." };
+  if (!isCalendarDate(currentDate) || currentDate < offer.createdDate || currentDate > offer.expiresDate) {
+    return { changed: false, save, error: "تاريخ قبول العرض المضاد يجب أن يكون بعد إرساله وداخل مدة صلاحيته." };
   }
   if (representation.history.length > MAX_HISTORY - 2 ||
       (offer.kind !== "renewal" && representation.contracts.length >= MAX_CONTRACTS)) {
@@ -920,7 +923,9 @@ export function createRepresentationRenewalOffer(save, contractId, terms, curren
   if (!contract || contract.status !== "active") {
     return { changed: false, save, error: "لا يوجد عقد نشط يمكن تجديده." };
   }
-  if (!isCalendarDate(currentDate)) return { changed: false, save, error: "تاريخ المسيرة غير صالح." };
+  if (!isCalendarDate(currentDate) || currentDate < contract.signedOn) {
+    return { changed: false, save, error: "لا يمكن بدء التجديد قبل توقيع عقد التمثيل." };
+  }
   const expiresOn = getRepresentationContractExpiry(contract);
   const remainingDays = Math.round((Date.parse(expiresOn + "T00:00:00.000Z") - Date.parse(currentDate + "T00:00:00.000Z")) / 86400000);
   if (remainingDays < 1 || remainingDays > 90) {
@@ -997,8 +1002,9 @@ export function createRepresentationInteraction(save, contractId, kind, meetingD
   if (!contract || contract.status !== "active") {
     return { changed: false, save, error: "لا يوجد عقد نشط لهذا اللاعب." };
   }
-  if (!isCalendarDate(currentDate) || !INTERACTION_KINDS.has(kind)) {
-    return { changed: false, save, error: "نوع التواصل أو تاريخ المسيرة غير صالح." };
+  if (!isCalendarDate(currentDate) || currentDate < contract.signedOn ||
+      currentDate >= getRepresentationContractExpiry(contract) || !INTERACTION_KINDS.has(kind)) {
+    return { changed: false, save, error: "نوع التواصل أو تاريخ المسيرة غير صالح، أو أن العقد لم يبدأ/انتهى." };
   }
   const interactions = interactionList(representation);
   if (interactions.length >= MAX_INTERACTIONS ||
@@ -1020,6 +1026,9 @@ export function createRepresentationInteraction(save, contractId, kind, meetingD
     }
     if (interactions.some((item) => item.contractId === contract.id && item.kind === "meeting" && item.status === "scheduled")) {
       return { changed: false, save, error: "يوجد اجتماع مجدول بالفعل لهذا اللاعب." };
+    }
+    if (meetingDate >= getRepresentationContractExpiry(contract)) {
+      return { changed: false, save, error: "يجب تحديد الاجتماع قبل تاريخ انتهاء عقد التمثيل." };
     }
     dueDate = meetingDate;
     status = "scheduled";
@@ -1077,8 +1086,13 @@ export function completeRepresentationMeeting(save, interactionId, outcome, curr
     return { changed: false, save, error: "يمكن تسجيل نتيجة الاجتماع من موعده وحتى سبعة أيام بعده." };
   }
   const contract = representation.contracts.find((item) => item.id === interaction.contractId);
-  if (!contract || contract.status !== "active") {
-    return { changed: false, save, error: "عقد التمثيل لم يعد نشطًا." };
+  const contractExpiry = contract ? getRepresentationContractExpiry(contract) : null;
+  const wasScheduledDuringMandate = Boolean(contract) &&
+    interaction.createdDate < contractExpiry &&
+    interaction.dueDate < contractExpiry;
+  if (!contract || !["active", "expired"].includes(contract.status) ||
+      !wasScheduledDuringMandate) {
+    return { changed: false, save, error: "لا يمكن تسجيل الاجتماع بعد إنهاء العقد أو إذا لم يكن مجدولًا أثناء سريانه." };
   }
   const relationshipDelta = outcome === "positive" ? 7 : outcome === "neutral" ? 3 : -6;
   const reputationDelta = outcome === "positive" ? 2 : outcome === "neutral" ? 0 : -2;
@@ -1113,8 +1127,8 @@ export function rejectRepresentationOffer(save, offerId, currentDate = save?.wor
   if (!offer || !["pending", "countered"].includes(offer.status)) {
     return { changed: false, save, error: "لا يوجد عرض مفتوح لرفضه." };
   }
-  if (!isCalendarDate(currentDate) || currentDate > offer.expiresDate) {
-    return { changed: false, save, error: "انتهت صلاحية العرض." };
+  if (!isCalendarDate(currentDate) || currentDate < offer.createdDate || currentDate > offer.expiresDate) {
+    return { changed: false, save, error: "تاريخ رفض العرض يجب أن يكون بعد إرساله وداخل مدة صلاحيته." };
   }
   let updated = replaceOffer(representation, offer.id, { status: "rejected", counterOffer: undefined });
   updated = nextHistory(updated, "offer-rejected", offer, currentDate,

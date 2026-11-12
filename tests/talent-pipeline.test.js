@@ -61,6 +61,19 @@ test("tracks one player by stable ID and merges scouting and watchlist sources",
   assert.equal(isValidSave(second.save), true);
 });
 
+test("normalizes fractional development ratings when saving a talent prospect", () => {
+  const save = createInitialSave();
+  const result = upsertTalentProspect(save, player({
+    rating: 70.4,
+    potential: 88.7
+  }), { sourceId: "scouting" });
+
+  assert.equal(result.changed, true);
+  assert.equal(result.entry.rating, 70);
+  assert.equal(result.entry.potential, 89);
+  assert.equal(isValidSave(result.save), true);
+});
+
 test("stores follow-up stage, note, and a future date without changing client or offer state", () => {
   const save = createInitialSave();
   const result = upsertTalentProspect(save, player(), {

@@ -219,8 +219,8 @@ export function upsertTalentProspect(save, player, options = {}) {
       typeof player.club !== "string" || !player.club.trim() ||
       typeof player.position !== "string" || !player.position.trim() ||
       !Number.isInteger(player.age) || player.age < 15 || player.age > 45 ||
-      !Number.isInteger(player.rating) || player.rating < 1 || player.rating > 99 ||
-      !Number.isInteger(player.potential) || player.potential < player.rating || player.potential > 99) {
+      !Number.isFinite(player.rating) || player.rating < 1 || player.rating > 99 ||
+      !Number.isFinite(player.potential) || player.potential < player.rating || player.potential > 99) {
     return { changed: false, save, error: "ملف اللاعب غير مكتمل ولا يمكن إضافته لصندوق المواهب." };
   }
 
@@ -259,8 +259,10 @@ export function upsertTalentProspect(save, player, options = {}) {
     club: player.club,
     position: player.position,
     age: player.age,
-    rating: player.rating,
-    potential: player.potential,
+    // Player development keeps fractional OVR internally; prospect records use
+    // the integer rating contract shared by validation and presentation.
+    rating: Math.round(player.rating),
+    potential: Math.round(player.potential),
     sourceIds,
     stage,
     addedOn: existing?.addedOn ?? currentDate,

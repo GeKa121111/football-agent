@@ -224,8 +224,13 @@ export function renewScoutingContract(save, scoutId) {
   const remaining = Math.max(0, dayDifference(save.world.currentDate, record.contractExpiresOn));
   if (save.world.currentDate <= record.contractExpiresOn && remaining > 30) return { changed: false, save, error: "يتاح تجديد العقد خلال آخر 30 يومًا فقط." };
   if (!Number.isFinite(save.agency.balance) || save.agency.balance < profile.renewalCost) return { changed: false, save, error: "رصيد الوكالة لا يكفي لتجديد العقد." };
-  const contractExpiresOn = addDays(save.world.currentDate, profile.contractDays);
-  const scouting = { ...current, scouts: progress.map((item) => item.id === scoutId ? { ...item, contractStartedOn: save.world.currentDate, contractExpiresOn, contractCost: profile.renewalCost, contractRenewals: (item.contractRenewals ?? 0) + 1 } : item) };
+  // Renewals signed before expiry start after the existing paid term, so
+  // remaining contract days are never discarded. Late renewals start today.
+  const contractStartedOn = save.world.currentDate < record.contractExpiresOn
+    ? record.contractExpiresOn
+    : save.world.currentDate;
+  const contractExpiresOn = addDays(contractStartedOn, profile.contractDays);
+  const scouting = { ...current, scouts: progress.map((item) => item.id === scoutId ? { ...item, contractStartedOn, contractExpiresOn, contractCost: profile.renewalCost, contractRenewals: (item.contractRenewals ?? 0) + 1 } : item) };
   return { changed: true, scoutId, fee: profile.renewalCost, contractExpiresOn, save: { ...save, agency: { ...save.agency, balance: save.agency.balance - profile.renewalCost }, world: { ...save.world, scouting } } };
 }
 
@@ -274,8 +279,14 @@ function createFinding(player, mission) {
   const errorRadius = Math.max(1, Math.round((1 - mission.accuracy) * 9));
   const ratingError = deterministicOffset(mission.id + ":" + player.id + ":rating", errorRadius);
   const potentialError = deterministicOffset(mission.id + ":" + player.id + ":potential", errorRadius + 1);
-  const estimatedRating = clamp(player.rating + ratingError, 1, 99);
-  const estimatedPotential = clamp(Math.max(estimatedRating, player.potential + potentialError), estimatedRating, 99);
+  // Player development stores fractional ratings internally; scouting reports
+  // persist integer estimates, so normalize before applying deterministic error.
+  const estimatedRating = clamp(Math.round(player.rating) + ratingError, 1, 99);
+  const estimatedPotential = clamp(
+    Math.max(estimatedRating, Math.round(player.potential) + potentialError),
+    estimatedRating,
+    99
+  );
   const confidence = clamp(
     Math.round(mission.accuracy * 100) + deterministicOffset(mission.id + ":" + player.id + ":confidence", 5),
     40,

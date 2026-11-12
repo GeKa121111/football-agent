@@ -66,10 +66,15 @@ import {
   rejectTransferOffer as rejectTransferOfferInEngine,
   completeTransfer as completeTransferInEngine,
   exerciseLoanOption as exerciseLoanOptionInEngine,
+  recallLoan as recallLoanInEngine,
   advanceTransferState,
   getTransferWindow,
   getPlayerCurrentClubId
 } from "./engines/transfers.js";
+import {
+  getClubRegistrationStatus,
+  getClubTransferFinancials
+} from "./engines/club-transfer-rules.js";
 import {
   completeCareerTask as completeTaskInEngine,
   markCareerMessageRead,
@@ -87,6 +92,53 @@ import {
 
 const WORLD_PLAYERS = getWorldPlayerProfiles();
 const WORLD_COUNTS = getWorldSummary();
+
+function getCurrentWorldPlayers(save) {
+  const currentDate = save?.world?.currentDate;
+  const transferState = save?.world?.transfers;
+  const developmentById = new Map(
+    (save?.world?.football?.playerDevelopment?.players ?? [])
+      .map((record) => [record.playerId, record])
+  );
+  const clubsById = new Map(WORLD_DATABASE.clubs.map((club) => [club.id, club]));
+  const leaguesById = new Map(WORLD_DATABASE.leagues.map((league) => [league.id, league]));
+  const latestPermanentMoveByPlayer = new Map();
+
+  for (const move of transferState?.moves ?? []) {
+    if (move.type !== "permanent" || move.effectiveDate > currentDate) continue;
+    const previous = latestPermanentMoveByPlayer.get(move.playerId);
+    const moveSequence = Number(move.id.split("-").at(-1));
+    const previousSequence = previous ? Number(previous.id.split("-").at(-1)) : 0;
+    if (!previous || move.effectiveDate > previous.effectiveDate ||
+        (move.effectiveDate === previous.effectiveDate && moveSequence > previousSequence)) {
+      latestPermanentMoveByPlayer.set(move.playerId, move);
+    }
+  }
+
+  return WORLD_PLAYERS.map((player) => {
+    const clubId = getPlayerCurrentClubId(
+      player.id, player.clubId, transferState, currentDate
+    );
+    const club = clubId ? clubsById.get(clubId) : null;
+    const league = club ? leaguesById.get(club.leagueId) : null;
+    const latestPermanentMove = latestPermanentMoveByPlayer.get(player.id);
+    const development = developmentById.get(player.id);
+    return {
+      ...player,
+      rating: Math.round(development?.rating ?? player.rating),
+      potential: Math.round(development?.potential ?? player.potential),
+      age: development?.age ?? player.age,
+      clubId: club?.id ?? null,
+      club: club?.nameAr ?? "لاعب حر",
+      clubShortName: club?.shortName ?? "حر",
+      clubColor: club?.primaryColor ?? null,
+      leagueId: league?.id ?? null,
+      league: league?.nameAr ?? "بدون دوري",
+      contractUntil: latestPermanentMove?.contractEndDate ?? player.contractUntil,
+      status: club ? player.status : "لاعب حر"
+    };
+  });
+}
 
 import { NAV_ITEMS } from "./ui/layout/navigation.js";
 import { createAppShell } from "./ui/layout/app-shell.js";
@@ -601,6 +653,7 @@ function emptyResults(title, description, actionLabel, callback) {
 }
 
 function renderPlayers(context) {
+  const availablePlayers = context.players ?? WORLD_PLAYERS;
   const page = node("div", "page-content rebuild-screen players-screen");
   page.append(
     node("p", "eyebrow rebuild-page-kicker", "إدارة المواهب"),
@@ -644,7 +697,7 @@ function renderPlayers(context) {
   const allCountries = node("option", "", "كل الجنسيات");
   allCountries.value = "all";
   country.append(allCountries);
-  [...new Map(WORLD_PLAYERS.map((player) => [player.country, player.country])).keys()]
+  [...new Map(availablePlayers.map((player) => [player.country, player.country])).keys()]
     .sort((a, b) => a.localeCompare(b, "ar"))
     .forEach((name) => {
       const option = node("option", "", name);
@@ -657,7 +710,7 @@ function renderPlayers(context) {
   const allLeagues = node("option", "", "كل الدوريات");
   allLeagues.value = "all";
   league.append(allLeagues);
-  [...new Map(WORLD_PLAYERS.map((player) => [player.leagueId, player.league])).entries()]
+  [...new Map(availablePlayers.map((player) => [player.leagueId, player.league])).entries()]
     .sort((a, b) => a[1].localeCompare(b[1], "ar"))
     .forEach(([id, name]) => {
       const option = node("option", "", name);
@@ -687,7 +740,7 @@ function renderPlayers(context) {
     const selectedRole = role.value;
     const selectedCountry = country.value;
     const selectedLeague = league.value;
-    const filtered = WORLD_PLAYERS.filter((player) => {
+    const filtered = availablePlayers.filter((player) => {
       const matchesText = [player.name, player.club, player.position, player.country, player.league]
         .some((value) => String(value ?? "").toLocaleLowerCase("ar").includes(query));
       const matchesRole = selectedRole === "all" || player.role === selectedRole;
@@ -702,7 +755,7 @@ function renderPlayers(context) {
       if (sort.value === "value") return b.marketValueEur - a.marketValueEur || b.rating - a.rating;
       return b.potential - a.potential || b.rating - a.rating;
     });
-    count.textContent = formatHomeNumber(sorted.length) + " من " + formatHomeNumber(WORLD_PLAYERS.length) + " لاعب";
+    count.textContent = formatHomeNumber(sorted.length) + " من " + formatHomeNumber(availablePlayers.length) + " لاعب";
     if (sorted.length === 0) {
       grid.replaceChildren(emptyResults(
         "مفيش لاعبين مطابقين للبحث",
@@ -929,7 +982,17 @@ function renderFootball(context) {
   playerSelect.setAttribute("aria-label", "لاعب خطة التدريب");
   developmentPlayers.forEach((player) => {
     const worldProfile = WORLD_PLAYERS.find((item) => item.id === player.playerId);
-    const option = node("option", "", player.playerName + " · " + (worldProfile?.club ?? player.clubId));
+    const fallbackClubId = worldProfile?.clubId ?? player.clubId;
+    const currentClubId = getPlayerCurrentClubId(
+      player.playerId,
+      fallbackClubId,
+      context.save.world.transfers,
+      context.save.world.currentDate
+    );
+    const currentClubName = currentClubId
+      ? clubById.get(currentClubId)?.nameAr ?? worldProfile?.club ?? currentClubId
+      : "لاعب حر";
+    const option = node("option", "", player.playerName + " · " + currentClubName);
     option.value = player.playerId;
     playerSelect.append(option);
   });
@@ -1201,7 +1264,8 @@ function renderScouting(context) {
     option.value = value;
     position.append(option);
   });
-  const count = node("span", "result-count", WORLD_PLAYERS.length + " نتائج");
+  const availablePlayers = context.players ?? WORLD_PLAYERS;
+  const count = node("span", "result-count", availablePlayers.length + " نتائج");
   count.setAttribute("aria-live", "polite");
   toolbar.append(search, position, count);
 
@@ -1209,7 +1273,7 @@ function renderScouting(context) {
   const refresh = () => {
     const query = search.value.trim().toLocaleLowerCase("ar");
     const role = position.value;
-    const filtered = WORLD_PLAYERS.filter((player) => {
+    const filtered = availablePlayers.filter((player) => {
       const matchesText = [player.name, player.club, player.position, player.country].some((value) =>
         value.toLocaleLowerCase("ar").includes(query)
       );
@@ -1267,7 +1331,25 @@ function renderMarket(context) {
   const page = node("div", "page-content rebuild-screen market-screen");
   const currentDate = context.save.world.currentDate;
   const transferState = context.transferState;
-  const windowInfo = getTransferWindow(currentDate);
+  const destinationWindows = WORLD_DATABASE.clubs.map((club) => ({
+    club,
+    ...getTransferWindow(currentDate, club.id)
+  }));
+  const activeDestinationWindows = destinationWindows.filter((item) => item.active && item.window);
+  const nextDestinationWindow = destinationWindows
+    .map((item) => item.nextWindow)
+    .filter(Boolean)
+    .sort((left, right) => left.startDate.localeCompare(right.startDate))[0] ?? null;
+  const windowInfo = {
+    active: activeDestinationWindows.length > 0,
+    openClubCount: activeDestinationWindows.length,
+    openLeagueCount: new Set(activeDestinationWindows.map((item) => item.leagueId).filter(Boolean)).size,
+    openWindowTypes: [...new Set(activeDestinationWindows.map((item) => item.window.type))],
+    earliestClosingDate: activeDestinationWindows
+      .map((item) => item.window.endDate)
+      .sort()[0] ?? null,
+    nextWindow: nextDestinationWindow
+  };
   const activeContracts = context.save.agency.representation.contracts.filter((contract) =>
     contract.status === "active" && getRepresentationContractExpiry(contract) > currentDate
   );
@@ -1286,22 +1368,29 @@ function renderMarket(context) {
 
   const windowCard = node("section", "transfer-window-card" + (windowInfo.active ? " is-open" : " is-closed"));
   const windowCopy = node("div", "transfer-window-copy");
+  const openWindowLabels = windowInfo.openWindowTypes.map((type) =>
+    type === "summer" ? "الصيفية" : "الشتوية"
+  );
   const windowTitle = windowInfo.active
-    ? (windowInfo.window.type === "summer" ? "النافذة الصيفية مفتوحة" : "النافذة الشتوية مفتوحة")
-    : "نافذة الانتقالات مغلقة";
+    ? openWindowLabels.length === 1
+      ? "النافذة " + openWindowLabels[0] + " مفتوحة"
+      : "نوافذ " + openWindowLabels.join(" و") + " مفتوحة"
+    : "كل نوافذ الانتقالات مغلقة";
   windowCopy.append(
     node("span", "transfer-window-kicker", "حالة السوق · " + formatHomeDate(currentDate)),
     node("h2", "", windowTitle),
     node("p", "", windowInfo.active
-      ? "متبقي " + windowInfo.window.daysRemaining + " يومًا على إغلاق النافذة."
-      : "النافذة القادمة تبدأ في " + formatHomeDate(windowInfo.nextWindow.startDate) + ".")
+      ? "متاحة في " + windowInfo.openLeagueCount + " دوريات و" + windowInfo.openClubCount +
+        " أندية. أقرب إغلاق في " + formatHomeDate(windowInfo.earliestClosingDate) + "."
+      : "أقرب نافذة تفتح في " + formatHomeDate(windowInfo.nextWindow?.startDate ?? currentDate) + ".")
   );
   windowCard.append(node("span", "transfer-window-icon", "⇄"), windowCopy);
   windowCard.append(node("span", "transfer-window-status", windowInfo.active ? "OPEN" : "CLOSED"));
 
   const summary = node("div", "market-summary transfer-summary");
   summary.append(
-    metricCard("نافذة السوق", windowInfo.active ? "مفتوحة" : "مغلقة", windowInfo.active ? windowInfo.window.type === "summer" ? "صيفية" : "شتوية" : "تبدأ " + formatHomeDate(windowInfo.nextWindow.startDate), "⇄", "purple"),
+    metricCard("نافذة السوق", windowInfo.active ? "مفتوحة" : "مغلقة",
+      windowInfo.active ? windowInfo.openClubCount + " أندية متاحة" : "تبدأ " + formatHomeDate(windowInfo.nextWindow?.startDate ?? currentDate), "⇄", "purple"),
     metricCard("تفاوض نشط", formatHomeNumber(openOffers.length), "عروض تنتظر قرارًا", "◷", "cyan"),
     metricCard("عمولات مكتسبة", formatEuroMoney(transferState.earnedCommissionEur), "إجمالي مسجل باليورو", "€", "gold")
   );
@@ -1374,23 +1463,92 @@ function renderMarket(context) {
     const periodField = field("مدة العقد / الإعارة", periodSelect);
     const amountLabel = amountField.querySelector("span");
     const periodLabel = periodField.querySelector("span");
-    const optionField = field("بند أحقية الشراء باليورو", optionInput);
+    const optionField = field("بند أحقية الشراء / الشراء الإلزامي (€)", optionInput);
 
+    const competitionSelect = node("select", "search-input");
+    [["league", "قائمة الدوري"], ["continental", "القائمة القارية"], ["domestic-cup", "قائمة الكأس المحلية"]].forEach(([value, label]) => {
+      const option = node("option", "", label); option.value = value; competitionSelect.append(option);
+    });
+    const appearanceThreshold = node("input", "search-input");
+    appearanceThreshold.type = "number"; appearanceThreshold.min = "0"; appearanceThreshold.max = "1000"; appearanceThreshold.step = "1"; appearanceThreshold.value = "0";
+    const appearanceAmount = node("input", "search-input");
+    appearanceAmount.type = "number"; appearanceAmount.min = "0"; appearanceAmount.step = "1000"; appearanceAmount.value = "0";
+    const goalThreshold = node("input", "search-input");
+    goalThreshold.type = "number"; goalThreshold.min = "0"; goalThreshold.max = "1000"; goalThreshold.step = "1"; goalThreshold.value = "0";
+    const goalAmount = node("input", "search-input");
+    goalAmount.type = "number"; goalAmount.min = "0"; goalAmount.step = "1000"; goalAmount.value = "0";
+    const mandatoryBuy = node("input", "search-input"); mandatoryBuy.type = "checkbox";
+    const recallable = node("input", "search-input"); recallable.type = "checkbox";
+    const recallNotice = node("select", "search-input");
+    [[7, "7 أيام"], [14, "14 يومًا"], [30, "30 يومًا"]].forEach(([value, label]) => {
+      const option = node("option", "", label); option.value = String(value); if (value === 14) option.selected = true; recallNotice.append(option);
+    });
+    const wageShare = node("select", "search-input");
+    [[100, "100% على النادي المستعير"], [75, "75% على النادي المستعير"], [50, "50% على كل نادٍ"], [25, "25% على النادي المستعير"]].forEach(([value, label]) => {
+      const option = node("option", "", label); option.value = String(value); wageShare.append(option);
+    });
+    const mandatoryField = field("شراء إلزامي عند نهاية الإعارة", mandatoryBuy);
+    const recallField = field("السماح بالاستدعاء المبكر", recallable);
+    const recallNoticeField = field("مهلة إشعار الاستدعاء", recallNotice);
+    const wageShareField = field("حصة الراتب على النادي المستعير", wageShare);
+    const appearanceThresholdField = field("مكافأة بعد عدد المشاركات", appearanceThreshold);
+    const appearanceAmountField = field("قيمة مكافأة المشاركات (€)", appearanceAmount);
+    const goalThresholdField = field("مكافأة بعد عدد الأهداف", goalThreshold);
+    const goalAmountField = field("قيمة مكافأة الأهداف (€)", goalAmount);
+    const competitionField = field("قائمة التسجيل المطلوبة", competitionSelect);
+    const refreshLoanClauseAvailability = () => {
+      const hasMandatoryBuy = mandatoryBuy.checked;
+      if (hasMandatoryBuy) recallable.checked = false;
+      recallable.disabled = hasMandatoryBuy;
+      recallNotice.disabled = hasMandatoryBuy;
+    };
+    mandatoryBuy.addEventListener("change", refreshLoanClauseAvailability);
+
+    const destinationHint = node("small", "transfer-window-hint");
+    let submitButton = null;
     const refreshDestinationClubs = () => {
       const selectedPlayer = representedPlayers.find((item) => item.player.id === playerSelect.value)?.player;
       const fromClubId = selectedPlayer
         ? getPlayerCurrentClubId(selectedPlayer.id, selectedPlayer.clubId, transferState, currentDate)
         : null;
+      const openClubs = WORLD_DATABASE.clubs.filter((club) =>
+        club.id !== fromClubId &&
+        getTransferWindow(currentDate, club.id).active &&
+        getClubRegistrationStatus(
+          club.id,
+          selectedPlayer.id,
+          transferState,
+          currentDate,
+          WORLD_DATABASE,
+          typeSelect.value,
+          competitionSelect.value
+        ).eligible
+      );
       clubSelect.replaceChildren();
-      WORLD_DATABASE.clubs.filter((club) => club.id !== fromClubId).forEach((club) => {
+      openClubs.forEach((club) => {
         const option = node("option", "", club.nameAr);
         option.value = club.id;
         clubSelect.append(option);
       });
+      destinationHint.textContent = openClubs.length > 0
+        ? "الوجهات المعروضة هي الأندية التي تسمح نافذتها بإرسال عرض في التاريخ الحالي."
+        : "لا يوجد نادٍ آخر بنافذة انتقالات مفتوحة لهذا اللاعب حاليًا.";
+      if (submitButton) submitButton.disabled = openClubs.length === 0;
     };
     const refreshTerms = () => {
+      const player = representedPlayers.find((item) => item.player.id === playerSelect.value)?.player;
+      const currentClubId = player
+        ? getPlayerCurrentClubId(player.id, player.clubId, transferState, currentDate)
+        : null;
+      const isFreeAgent = !currentClubId;
+      const loanOption = Array.from(typeSelect.options).find((option) => option.value === "loan");
+      if (loanOption) loanOption.disabled = isFreeAgent;
+      if (isFreeAgent && typeSelect.value === "loan") typeSelect.value = "permanent";
       const isLoan = typeSelect.value === "loan";
-      amountLabel.textContent = isLoan ? "رسوم الإعارة باليورو" : "قيمة الانتقال باليورو";
+      amountLabel.textContent = isLoan
+        ? "رسوم الإعارة باليورو"
+        : isFreeAgent ? "رسوم التعاقد للاعب حر (يورو)" : "قيمة الانتقال باليورو";
+      amountInput.readOnly = isFreeAgent && !isLoan;
       periodLabel.textContent = isLoan ? "مدة الإعارة" : "مدة العقد الجديد";
       periodSelect.replaceChildren();
       (isLoan ? [3, 6, 9, 12, 18, 24] : [1, 2, 3, 4, 5]).forEach((value) => {
@@ -1400,37 +1558,73 @@ function renderMarket(context) {
         periodSelect.append(option);
       });
       optionField.hidden = !isLoan;
-      const player = representedPlayers.find((item) => item.player.id === playerSelect.value)?.player;
+      mandatoryField.hidden = !isLoan;
+      recallField.hidden = !isLoan;
+      recallNoticeField.hidden = !isLoan;
+      wageShareField.hidden = !isLoan;
+      refreshLoanClauseAvailability();
       const marketValue = player?.marketValueEur ?? 0;
-      amountInput.value = String(isLoan ? Math.round(marketValue * 0.02) : marketValue);
+      amountInput.value = String(isLoan ? Math.round(marketValue * 0.02) : isFreeAgent ? 0 : marketValue);
     };
     playerSelect.addEventListener("change", () => {
-      refreshDestinationClubs();
       refreshTerms();
+      refreshDestinationClubs();
     });
-    typeSelect.addEventListener("change", refreshTerms);
+    typeSelect.addEventListener("change", () => {
+      refreshTerms();
+      refreshDestinationClubs();
+    });
+    competitionSelect.addEventListener("change", refreshDestinationClubs);
     refreshDestinationClubs();
     refreshTerms();
 
     proposalForm.append(
       field("اللاعب العميل", playerSelect),
       field("النادي المستهدف", clubSelect),
+      destinationHint,
       field("نوع الصفقة", typeSelect),
       amountField,
       field("الراتب الأسبوعي باليورو", wageInput),
       field("مكافأة التوقيع باليورو", bonusInput),
       periodField,
-      optionField
+      optionField,
+      mandatoryField,
+      recallField,
+      recallNoticeField,
+      wageShareField,
+      appearanceThresholdField,
+      appearanceAmountField,
+      goalThresholdField,
+      goalAmountField,
+      competitionField
     );
-    const submit = actionButton("إرسال العرض للنادي", "button-primary transfer-submit-button", () => {});
-    submit.type = "submit";
-    proposalForm.append(submit);
+    submitButton = actionButton("إرسال العرض للنادي", "button-primary transfer-submit-button", () => {});
+    submitButton.type = "submit";
+    submitButton.disabled = clubSelect.options.length === 0;
+    proposalForm.append(submitButton);
     proposalForm.addEventListener("submit", (event) => {
       event.preventDefault();
       const type = typeSelect.value;
-      const common = { weeklyWageEur: Number(wageInput.value), signingBonusEur: Number(bonusInput.value) };
+      const appearanceBonus = Number(appearanceThreshold.value) > 0 && Number(appearanceAmount.value) > 0
+        ? { appearances: Number(appearanceThreshold.value), amountEur: Number(appearanceAmount.value) } : null;
+      const goalBonus = Number(goalThreshold.value) > 0 && Number(goalAmount.value) > 0
+        ? { goals: Number(goalThreshold.value), amountEur: Number(goalAmount.value) } : null;
+      const common = {
+        weeklyWageEur: Number(wageInput.value), signingBonusEur: Number(bonusInput.value),
+        appearanceBonus, goalBonus, registrationCompetition: competitionSelect.value
+      };
       const terms = type === "loan"
-        ? { ...common, loanFeeEur: Number(amountInput.value), loanMonths: Number(periodSelect.value), optionToBuyEur: Number(optionInput.value) }
+        ? {
+            ...common,
+            loanFeeEur: Number(amountInput.value),
+            loanMonths: Number(periodSelect.value),
+            optionToBuyEur: Number(optionInput.value),
+            mandatoryBuy: mandatoryBuy.checked,
+            mandatoryBuyContractYears: 3,
+            recallable: recallable.checked,
+            recallNoticeDays: Number(recallNotice.value),
+            wageSharePercent: Number(wageShare.value)
+          }
         : { ...common, feeEur: Number(amountInput.value), contractYears: Number(periodSelect.value) };
       context.createTransferProposal(playerSelect.value, clubSelect.value, type, terms);
     });
@@ -1451,13 +1645,19 @@ function renderMarket(context) {
         rejected: "مرفوض / ملغي", expired: "انتهت الصلاحية" };
       const terms = ["agreed", "completed"].includes(offer.status) ? offer.agreedTerms : offer.terms;
       const price = offer.type === "loan"
-        ? "رسوم الإعارة " + formatEuroMoney(terms.loanFeeEur) + " · خيار الشراء " + formatEuroMoney(terms.optionToBuyEur)
+        ? "رسوم الإعارة " + formatEuroMoney(terms.loanFeeEur) + " · " +
+          (terms.mandatoryBuy ? "شراء إلزامي " : "خيار شراء ") + formatEuroMoney(terms.optionToBuyEur)
         : "قيمة الانتقال " + formatEuroMoney(terms.feeEur);
       details.append(
         node("div", "transfer-deal-title", offer.playerName + " · " + (offer.type === "loan" ? "إعارة" : "انتقال نهائي")),
         node("p", "", offer.fromClubId + " ← " + offer.toClubName),
         node("p", "", price + " · راتب أسبوعي " + formatEuroMoney(terms.weeklyWageEur)),
-        node("small", "", "الجولة " + offer.round + " من 4 · أُرسل " + formatHomeDate(offer.createdDate)),
+        node("small", "", [
+          terms.appearanceBonus ? "مكافأة " + terms.appearanceBonus.appearances + " مشاركة" : "",
+          terms.goalBonus ? "مكافأة " + terms.goalBonus.goals + " هدف" : "",
+          "قائمة " + (terms.registrationCompetition === "continental" ? "قارية" : terms.registrationCompetition === "domestic-cup" ? "كأس" : "دوري"),
+          "الجولة " + offer.round + " من 4 · أُرسل " + formatHomeDate(offer.createdDate)
+        ].filter(Boolean).join(" · ")),
         node("span", "transfer-deal-status", labels[offer.status] ?? offer.status)
       );
       card.append(details);
@@ -1504,9 +1704,23 @@ function renderMarket(context) {
         counterForm.addEventListener("submit", (event) => {
           event.preventDefault();
           const common = { weeklyWageEur: Number(counterWage.value), signingBonusEur: Number(counterBonus.value) };
+          const retainedClauses = {
+            appearanceBonus: offer.terms.appearanceBonus ?? null,
+            goalBonus: offer.terms.goalBonus ?? null,
+            registrationCompetition: offer.terms.registrationCompetition ?? "league"
+          };
           const counterTerms = offer.type === "loan"
-            ? { ...common, loanFeeEur: Number(counterAmount.value), loanMonths: Number(counterPeriod.value), optionToBuyEur: Number(counterOption.value) }
-            : { ...common, feeEur: Number(counterAmount.value), contractYears: Number(counterPeriod.value) };
+            ? {
+                ...common, ...retainedClauses,
+                loanFeeEur: Number(counterAmount.value), loanMonths: Number(counterPeriod.value),
+                optionToBuyEur: Number(counterOption.value),
+                mandatoryBuy: offer.terms.mandatoryBuy === true,
+                mandatoryBuyContractYears: offer.terms.mandatoryBuyContractYears ?? 3,
+                recallable: offer.terms.recallable === true,
+                recallNoticeDays: offer.terms.recallNoticeDays ?? 14,
+                wageSharePercent: offer.terms.wageSharePercent ?? 100
+              }
+            : { ...common, ...retainedClauses, feeEur: Number(counterAmount.value), contractYears: Number(counterPeriod.value) };
           context.submitTransferCounterOffer(offer.id, counterTerms);
         });
         card.append(counterForm, actionButton("رفض التفاوض", "button-outline", () => context.rejectTransferOffer(offer.id)));
@@ -1535,16 +1749,44 @@ function renderMarket(context) {
           (move.type === "loan" ? " · عودة " + formatHomeDate(move.returnDate) + (move.status === "returned" ? " · عاد" : " · نشطة") : "")),
         node("small", "", move.type === "loan" ? "رسوم الإعارة " + formatEuroMoney(move.loanFeeEur) : "رسوم الانتقال " + formatEuroMoney(move.feeEur))
       );
-      if (move.type === "loan" && move.status === "active" && move.optionToBuyEur > 0) {
+      if (move.type === "loan" && move.status === "active" && move.optionToBuyEur > 0 && move.mandatoryBuy !== true) {
         row.append(actionButton("تفعيل خيار الشراء · " + formatEuroMoney(move.optionToBuyEur), "button-primary", () => context.exerciseLoanOption(move.id)));
+      }
+      if (move.type === "loan" && move.status === "active" && move.mandatoryBuy === true) {
+        row.append(node("small", "", "شراء إلزامي عند " + formatHomeDate(move.returnDate)));
+      }
+      if (move.type === "loan" && move.status === "active" && move.recallable === true && !move.recallReturnDate) {
+        row.append(actionButton("طلب استدعاء اللاعب", "button-outline", () => context.recallLoan(move.id)));
+      }
+      if (move.type === "loan") {
+        row.append(node("small", "", "النادي المستعير يتحمل " + (move.wageSharePercent ?? 100) + "% من الراتب الأسبوعي."));
       }
       moveList.append(row);
     });
     movesPanel.append(moveList);
   }
 
-  page.append(windowCard, summary, proposalPanel, listPanel, movesPanel,
-    node("p", "transfer-market-disclaimer", "مواعيد النوافذ الصيفية والشتوية هنا قواعد موحدة للمحاكاة داخل اللعبة؛ تختلف النوافذ الفعلية بين الاتحادات والدوريات. القيم والميزانيات افتراضية وليست عروضًا رسمية."));
+  const financePanel = node("section", "surface-card transfer-finance-panel");
+  financePanel.append(sectionHeading("المراجعة المالية للأندية", "إيرادات سنوية متوقعة، تكلفة الرواتب والتشغيل، وصافي الموسم ورصيد الانتقالات. الأرقام افتراضية داخل المحاكاة."));
+  const financeRows = WORLD_DATABASE.clubs.map((club) => ({
+    club, finance: getClubTransferFinancials(club.id, transferState, currentDate)
+  })).sort((a, b) => b.finance.projectedAnnualNetEur - a.finance.projectedAnnualNetEur);
+  financeRows.forEach(({ club, finance }) => {
+    const row = node("article", "club-finance-row");
+    row.append(
+      node("strong", "", club.nameAr),
+      node("small", "", "الميزانية " + formatEuroMoney(finance.budgetEur) +
+        " · الرواتب سنويًا " + formatEuroMoney(finance.projectedAnnualWageCostsEur)),
+      node("small", "", "إيراد متوقع " + formatEuroMoney(finance.projectedAnnualRevenueEur) +
+        " · تشغيل " + formatEuroMoney(finance.projectedAnnualOperatingCostsEur)),
+      node("small", "", "صافي سنوي متوقع " + formatEuroMoney(finance.projectedAnnualNetEur) +
+        " · رصيد المواسم " + formatEuroMoney(finance.seasonBalanceEur))
+    );
+    financePanel.append(row);
+  });
+
+  page.append(windowCard, summary, proposalPanel, listPanel, movesPanel, financePanel,
+    node("p", "transfer-market-disclaimer", "قواعد التسجيل والنوافذ والمال هنا نماذج محاكاة مبسطة، وليست نقلًا حرفيًا للوائح الاتحادات أو بيانات مالية رسمية."));
   return page;
 }
 
@@ -3104,7 +3346,8 @@ export function mountApp(root) {
     let confirm = null;
     const refreshPreview = () => {
       const config = SCOUTING_MISSION_TYPES[typeSelect.value];
-      const targets = getScoutingCandidates(WORLD_PLAYERS, {
+      const currentWorldPlayers = getCurrentWorldPlayers(state.save);
+      const targets = getScoutingCandidates(currentWorldPlayers, {
         countryId: countrySelect.value,
         role: roleSelect.value,
         sourceId: sourceSelect.value
@@ -3154,7 +3397,7 @@ export function mountApp(root) {
         role: roleSelect.value,
         sourceId: sourceSelect.value,
         scoutId: scoutSelect.value
-      }, WORLD_PLAYERS);
+      }, getCurrentWorldPlayers(state.save));
       if (!result.changed) {
         toast(result.error);
         return;
@@ -3256,7 +3499,8 @@ export function mountApp(root) {
           statMini("الثقة", finding.confidence + "%")
         );
         const history = getPlayerScoutingHistory(state.save.world.scouting, finding.playerId);
-        const player = WORLD_PLAYERS.find((candidate) => candidate.id === finding.playerId);
+        const player = getCurrentWorldPlayers(state.save)
+          .find((candidate) => candidate.id === finding.playerId);
         const representation = state.save.agency.representation;
         const isClient = state.save.agency.clients.includes(finding.playerId) ||
           representation.contracts.some((contract) => contract.playerId === finding.playerId && contract.status === "active");
@@ -3334,7 +3578,7 @@ export function mountApp(root) {
 
     const previousSave = state.save;
     try {
-      const simulationResult = advanceCareerSimulationDay(state.save, WORLD_PLAYERS);
+      const simulationResult = advanceCareerSimulationDay(state.save, getCurrentWorldPlayers);
       state.save = simulationResult.save;
       if (saveCareer()) {
         render();
@@ -3359,7 +3603,7 @@ export function mountApp(root) {
 
     const previousSave = state.save;
     try {
-      const simulationResult = advanceCareerSimulationDays(state.save, 7, WORLD_PLAYERS);
+      const simulationResult = advanceCareerSimulationDays(state.save, 7, getCurrentWorldPlayers);
       state.save = simulationResult.save;
       if (saveCareer()) {
         render();
@@ -3419,6 +3663,13 @@ export function mountApp(root) {
   }
   function exerciseLoanOption(moveId) {
     commitTransferResult(exerciseLoanOptionInEngine(state.save, moveId), "تم تفعيل خيار الشراء وتحولت الإعارة إلى انتقال نهائي.");
+  }
+  function recallLoan(moveId) {
+    const result = recallLoanInEngine(state.save, moveId);
+    const message = result.changed
+      ? "تم تسجيل طلب الاستدعاء؛ عودة اللاعب في " + formatHomeDate(result.recallReturnDate) + "."
+      : result.error ?? "تعذر استدعاء اللاعب.";
+    commitTransferResult(result, message);
   }
 
   function completeTask(taskId) {
@@ -3893,11 +4144,7 @@ export function mountApp(root) {
   }
 
   function render({ focusMain = false } = {}) {
-    const currentPlayers = WORLD_PLAYERS.map((player) => {
-      const clubId = getPlayerCurrentClubId(player.id, player.clubId, state.save.world.transfers, state.save.world.currentDate);
-      const club = WORLD_DATABASE.clubs.find((item) => item.id === clubId);
-      return club ? { ...player, clubId, club: club.nameAr, clubShortName: club.shortName, clubColor: club.primaryColor } : player;
-    });
+    const currentPlayers = getCurrentWorldPlayers(state.save);
     const context = {
       save: state.save,
       navigate,
@@ -3930,6 +4177,7 @@ export function mountApp(root) {
       rejectTransferOffer,
       completeTransfer,
       exerciseLoanOption,
+      recallLoan,
       updatePlayerTrainingPlan,
       openRepresentationOffer,
       manageTalentProspect,

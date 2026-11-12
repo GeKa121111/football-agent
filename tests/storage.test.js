@@ -50,6 +50,20 @@ test("writes and reads a save without losing the agency data", () => {
   assert.equal(loaded.save.agency.name, "GeKa Agency");
 });
 
+test("rejects an invalid updatedAt timestamp without touching stored save data", () => {
+  const storage = memoryStorage();
+  const original = createInitialSave("2026-07-01T00:00:00.000Z");
+  writeSave(original, storage, "2026-07-01T01:00:00.000Z");
+  const before = storage.getItem(STORAGE_KEY);
+
+  assert.throws(
+    () => writeSave(original, storage, "not-a-timestamp"),
+    /تاريخ تحديث الحفظ غير صالح/
+  );
+  assert.equal(storage.getItem(STORAGE_KEY), before);
+  assert.equal(readSave(storage).status, "loaded");
+});
+
 test("does not accept an invalid save structure", () => {
   assert.equal(isValidSave({ meta: { version: SAVE_VERSION } }), false);
   assert.throws(() => writeSave({ bad: true }, memoryStorage()), TypeError);
@@ -477,6 +491,26 @@ test("migrates v6 saves to transfer schema v7 without rewriting on read", () => 
   assert.equal(result.save.meta.version, SAVE_VERSION);
   assert.equal(result.save.world.transfers.nextOfferSequence, 1);
   assert.deepEqual(result.save.world.transfers.offers, []);
+  assert.equal(isValidSave(result.save), true);
+  assert.equal(storage.getItem(STORAGE_KEY), raw, "migration must not rewrite a save on read");
+});
+
+test("migrates a v6 football save missing player progress using its stored season", () => {
+  const legacy = createInitialSave("2026-07-01T00:00:00.000Z");
+  legacy.meta.version = 6;
+  legacy.career.day = 15;
+  legacy.career.week = 3;
+  legacy.career.season = 3;
+  legacy.world.football.season = 3;
+  delete legacy.world.football.playerDevelopment;
+  const raw = JSON.stringify(legacy);
+  const storage = memoryStorage({ [STORAGE_KEY]: raw });
+
+  const result = readSave(storage);
+  assert.equal(result.status, "loaded");
+  assert.equal(result.migrated, true);
+  assert.equal(result.save.world.football.playerDevelopment.season, 3);
+  assert.equal(result.save.world.football.playerDevelopment.players.length, 432);
   assert.equal(isValidSave(result.save), true);
   assert.equal(storage.getItem(STORAGE_KEY), raw, "migration must not rewrite a save on read");
 });

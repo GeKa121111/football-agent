@@ -143,6 +143,63 @@ test("player accepts an offer that fits the player's commission and term limits"
   assert.equal(isValidSave(response.save), true);
 });
 
+test("rejects retroactive representation replies and interactions dated before a mandate", () => {
+  const save = createInitialSave();
+  const sent = sendOffer(save);
+  const beforeOfferDate = "2026-06-30";
+
+  const retroactiveEvaluation = evaluateRepresentationOffer(
+    sent.save, sent.offer.id, beforeOfferDate
+  );
+  assert.equal(retroactiveEvaluation.changed, false);
+  assert.equal(retroactiveEvaluation.save, sent.save);
+
+  const counter = evaluateRepresentationOffer(sent.save, sent.offer.id);
+  assert.equal(counter.status, "countered");
+  const agencyReply = submitRepresentationCounterOffer(
+    counter.save,
+    sent.offer.id,
+    { commissionRate: 8, termDays: 365 },
+    beforeOfferDate
+  );
+  assert.equal(agencyReply.changed, false);
+  assert.equal(agencyReply.save, counter.save);
+
+  const retroactiveAcceptance = acceptRepresentationCounterOffer(
+    counter.save, sent.offer.id, beforeOfferDate
+  );
+  assert.equal(retroactiveAcceptance.changed, false);
+  assert.equal(retroactiveAcceptance.save, counter.save);
+
+  const retroactiveRejection = rejectRepresentationOffer(
+    counter.save, sent.offer.id, beforeOfferDate
+  );
+  assert.equal(retroactiveRejection.changed, false);
+  assert.equal(retroactiveRejection.save, counter.save);
+
+  const profile = player({
+    id: "retroactive-interaction-player",
+    age: 22,
+    rating: 68,
+    potential: 80
+  });
+  const preferences = getPlayerRepresentationProfile(profile);
+  const compatibleOffer = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays
+  });
+  const signed = evaluateRepresentationOffer(compatibleOffer.save, compatibleOffer.offer.id);
+  assert.equal(signed.status, "signed");
+
+  const retroactiveMessage = createRepresentationInteraction(
+    signed.save, signed.contract.id, "message", null, beforeOfferDate
+  );
+  assert.equal(retroactiveMessage.changed, false);
+  assert.equal(retroactiveMessage.save, signed.save);
+  assert.equal(isValidSave(signed.save), true);
+});
+
+
 test("agency can decline a counteroffer without creating a client", () => {
   const sent = sendOffer(createInitialSave());
   const counter = evaluateRepresentationOffer(sent.save, sent.offer.id);
@@ -488,6 +545,64 @@ test("schedules and completes a client meeting, improving trust and agency reput
   assert.equal(getRepresentationRelationshipLabel(completed.contract.relationshipScore), "جيدة");
   assert.equal(isValidSave(completed.save), true);
 });
+
+test("rejects meetings scheduled on or after the representation contract expiry", () => {
+  const profile = player({
+    id: "meeting-contract-expiry-player",
+    age: 22,
+    rating: 68,
+    potential: 80
+  });
+  const preferences = getPlayerRepresentationProfile(profile);
+  const sent = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays
+  });
+  const signed = evaluateRepresentationOffer(sent.save, sent.offer.id);
+  assert.equal(signed.status, "signed");
+
+  const expiry = getRepresentationContractExpiry(signed.contract);
+  const dayBeforeExpiry = new Date(Date.parse(expiry + "T00:00:00.000Z") - 86400000)
+    .toISOString().slice(0, 10);
+  const twoDaysBeforeExpiry = new Date(Date.parse(expiry + "T00:00:00.000Z") - 2 * 86400000)
+    .toISOString().slice(0, 10);
+  const nearExpiry = advanceToDate(signed.save, twoDaysBeforeExpiry);
+
+  const atExpiry = createRepresentationInteraction(
+    nearExpiry, signed.contract.id, "meeting", expiry
+  );
+  assert.equal(atExpiry.changed, false);
+  assert.equal(atExpiry.save, nearExpiry);
+
+  const validMeeting = createRepresentationInteraction(
+    nearExpiry, signed.contract.id, "meeting", dayBeforeExpiry
+  );
+  assert.equal(validMeeting.changed, true);
+  assert.equal(validMeeting.interaction.dueDate, dayBeforeExpiry);
+  assert.equal(isValidSave(validMeeting.save), true);
+
+  // The meeting was scheduled while the mandate was active. Its seven-day
+  // completion grace period remains valid after natural contract expiry.
+  const afterNaturalExpiryCalendar = advanceToDate(validMeeting.save, expiry);
+  const afterNaturalExpiry = advanceRepresentationState(
+    afterNaturalExpiryCalendar, expiry
+  ).save;
+  assert.equal(
+    afterNaturalExpiry.agency.representation.contracts
+      .find((item) => item.id === signed.contract.id).status,
+    "expired"
+  );
+  const completedDuringGrace = completeRepresentationMeeting(
+    afterNaturalExpiry,
+    validMeeting.interaction.id,
+    "positive"
+  );
+  assert.equal(completedDuringGrace.changed, true);
+  assert.equal(completedDuringGrace.interaction.status, "resolved");
+  assert.equal(completedDuringGrace.interaction.resolvedDate, expiry);
+  assert.equal(isValidSave(completedDuringGrace.save), true);
+});
+
 
 test("missed client meetings reduce relationship and agency reputation after the grace period", () => {
   const profile = player({ id: "relationship-missed-player", age: 22, rating: 68, potential: 80 });
