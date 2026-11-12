@@ -11,7 +11,8 @@ import {
   isValidFootballState,
   getUpcomingFootballFixtures,
   getRecentFootballResults,
-  getCompetitionStandings
+  getCompetitionStandings,
+  getCompetitionSeasonHistory
 } from "../src/engines/football-season.js";
 
 function dateDistance(left, right) {
@@ -255,6 +256,39 @@ test("creates a new scheduled season without deleting historical results", () =>
   assert.ok(nextSeason.football.fixtures.some((fixture) => fixture.season === 2));
   assert.equal(nextSeason.football.results.length, played.football.results.length);
   assert.equal(isValidFootballState(nextSeason.football, "2027-07-01", 2), true);
+});
+
+test("archives competition tables once a new season starts and exposes retained season history", () => {
+  const competition = WORLD_DATABASE.competitions.find((item) => item.id === "competition-eg-premier");
+  const database = {
+    ...WORLD_DATABASE,
+    competitions: [competition]
+  };
+  let football = createInitialFootballState(1, "2026-07-01", database);
+  const scheduledDates = [...new Set(football.fixtures.map((fixture) => fixture.date))].sort();
+  for (const currentDate of scheduledDates) {
+    football = advanceFootballSeasonDay(football, currentDate, 1, database).football;
+  }
+
+  const currentHistory = getCompetitionSeasonHistory(football, competition.id, database);
+  assert.equal(currentHistory.length, 1);
+  assert.equal(currentHistory[0].complete, true);
+  assert.equal(currentHistory[0].matchesPlayed, currentHistory[0].matchesTotal);
+  assert.equal(currentHistory[0].standings.length, 2);
+
+  const nextSeason = advanceFootballSeasonDay(football, "2027-07-01", 2, database).football;
+  assert.equal(nextSeason.archives.length, 1);
+  assert.equal(nextSeason.archives[0].complete, true);
+  assert.ok(nextSeason.archives[0].championClubId);
+  assert.equal(isValidFootballState(nextSeason, "2027-07-01", 2, database), true);
+
+  const history = getCompetitionSeasonHistory(nextSeason, competition.id, database);
+  assert.equal(history.length, 2);
+  assert.equal(history[0].season, 1);
+  assert.equal(history[0].complete, true);
+  assert.equal(history[1].season, 2);
+  assert.equal(history[1].matchesPlayed, 0);
+  assert.equal(history[1].matchesScheduled, 2);
 });
 
 test("rejects corrupted football schedules and dangling results", () => {
