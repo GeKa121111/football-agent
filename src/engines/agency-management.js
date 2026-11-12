@@ -107,6 +107,105 @@ export function isValidAgencyManagementState(state, currentDate) {
       (!validDate(state.lastPayrollDate) || state.lastPayrollDate > currentDate ||
        new Date(state.lastPayrollDate + "T00:00:00.000Z").getUTCDay() !== 1)) return false;
 
+  const sponsorships = state.sponsorships === undefined ? [] : state.sponsorships;
+  const competitors = state.competitors === undefined
+    ? COMPETITOR_BLUEPRINTS.map((profile) => ({ ...profile, clients:[], pendingOffers:[], lastActionDate:null }))
+    : state.competitors;
+  const competitiveHistory = state.competitiveHistory === undefined ? [] : state.competitiveHistory;
+  const nextSponsorshipSequence = state.nextSponsorshipSequence ?? 1;
+  const nextCompetitiveSequence = state.nextCompetitiveSequence ?? 1;
+  if (!Number.isSafeInteger(nextSponsorshipSequence) || nextSponsorshipSequence < 1 ||
+      !Number.isSafeInteger(nextCompetitiveSequence) || nextCompetitiveSequence < 1 ||
+      !Array.isArray(sponsorships) || sponsorships.length > MAX_SPONSORSHIPS ||
+      !Array.isArray(competitors) || competitors.length !== COMPETITOR_BLUEPRINTS.length ||
+      !Array.isArray(competitiveHistory) || competitiveHistory.length > MAX_COMPETITIVE_HISTORY) return false;
+
+  const sponsorshipIds = new Set();
+  let highestSponsorship = 0;
+  for (const deal of sponsorships) {
+    const pack = AGENCY_SPONSOR_PACKAGES.find((item) => item.id === deal?.packageId);
+    if (!isRecord(deal) || !pack || typeof deal.id !== "string" ||
+        !sequenceOf(deal.id,"agency-sponsorship") || sponsorshipIds.has(deal.id) ||
+        deal.name !== pack.name || deal.weeklyRevenueEgp !== pack.weeklyRevenueEgp ||
+        deal.signingBonusEgp !== pack.signingBonusEgp || deal.termDays !== pack.termDays ||
+        !validDate(deal.signedDate) || deal.signedDate > currentDate ||
+        deal.expiresDate !== addDays(deal.signedDate,pack.termDays) ||
+        !validDate(deal.nextPaymentDate) || deal.nextPaymentDate <= deal.signedDate ||
+        (deal.lastPaidDate !== null &&
+          (!validDate(deal.lastPaidDate) || deal.lastPaidDate > currentDate ||
+           deal.lastPaidDate < deal.signedDate ||
+           new Date(deal.lastPaidDate + "T00:00:00.000Z").getUTCDay() !== 1)) ||
+        !["active","expired"].includes(deal.status) ||
+        (deal.status === "active" && currentDate > deal.expiresDate) ||
+        (deal.status === "expired" && currentDate <= deal.expiresDate)) return false;
+    sponsorshipIds.add(deal.id);
+    highestSponsorship = Math.max(highestSponsorship,sequenceOf(deal.id,"agency-sponsorship"));
+  }
+  if (nextSponsorshipSequence <= highestSponsorship) return false;
+  const activePackages = sponsorships.filter((deal) => deal.status === "active").map((deal) => deal.packageId);
+  if (new Set(activePackages).size !== activePackages.length) return false;
+
+  const competitorBlueprintById = new Map(COMPETITOR_BLUEPRINTS.map((profile) => [profile.id,profile]));
+  const globalRivalClients = new Set();
+  for (const competitor of competitors) {
+    const blueprint = competitorBlueprintById.get(competitor?.id);
+    if (!isRecord(competitor) || !blueprint ||
+        competitor.name !== blueprint.name || competitor.region !== blueprint.region ||
+        competitor.focus !== blueprint.focus || competitor.focusKey !== blueprint.focusKey ||
+        competitor.reputation !== blueprint.reputation || competitor.maxClients !== blueprint.maxClients ||
+        competitor.acquisitionCostEgp !== blueprint.acquisitionCostEgp ||
+        !validMoney(competitor.budgetEgp) ||
+        !Array.isArray(competitor.clients) || competitor.clients.length > MAX_RIVAL_CLIENTS ||
+        !Array.isArray(competitor.pendingOffers) || competitor.pendingOffers.length > 100 ||
+        (competitor.lastActionDate !== null &&
+          (!validDate(competitor.lastActionDate) || competitor.lastActionDate > currentDate ||
+           new Date(competitor.lastActionDate + "T00:00:00.000Z").getUTCDay() !== 1))) return false;
+    const localClients = new Set();
+    for (const client of competitor.clients) {
+      if (!isRecord(client) || typeof client.playerId !== "string" || !client.playerId.trim() ||
+          localClients.has(client.playerId) || globalRivalClients.has(client.playerId) ||
+          typeof client.playerName !== "string" || !client.playerName.trim() ||
+          !validDate(client.signedDate) || client.signedDate > currentDate ||
+          !Number.isInteger(client.rating) || client.rating < 1 || client.rating > 99 ||
+          !Number.isInteger(client.potential) || client.potential < client.rating || client.potential > 99 ||
+          !Number.isInteger(client.commissionRate) || client.commissionRate < 5 || client.commissionRate > 15) return false;
+      localClients.add(client.playerId);
+      globalRivalClients.add(client.playerId);
+    }
+    const offerIds = new Set();
+    for (const offer of competitor.pendingOffers) {
+      if (!isRecord(offer) || typeof offer.id !== "string" || !offer.id.startsWith("rival-offer-") ||
+          offerIds.has(offer.id) || typeof offer.playerId !== "string" || !offer.playerId.trim() ||
+          typeof offer.playerName !== "string" || !offer.playerName.trim() ||
+          !Number.isInteger(offer.rating) || offer.rating < 1 || offer.rating > 99 ||
+          !Number.isInteger(offer.potential) || offer.potential < offer.rating || offer.potential > 99 ||
+          !Number.isInteger(offer.commissionRate) || offer.commissionRate < 5 || offer.commissionRate > 15 ||
+          !validDate(offer.offeredDate) || !validDate(offer.dueDate) ||
+          offer.dueDate !== addDays(offer.offeredDate,3) || offer.offeredDate > currentDate ||
+          !["pending","accepted","rejected"].includes(offer.status) ||
+          (offer.status === "pending" && currentDate > offer.dueDate) ||
+          (offer.status !== "pending" &&
+            (!validDate(offer.decisionDate) || offer.decisionDate < offer.dueDate || offer.decisionDate > currentDate))) return false;
+      offerIds.add(offer.id);
+    }
+  }
+
+  const historyIds = new Set();
+  let highestCompetitive = 0;
+  for (const entry of competitiveHistory) {
+    if (!isRecord(entry) || !sequenceOf(entry.id,"agency-competition") || historyIds.has(entry.id) ||
+        !COMPETITOR_BLUEPRINTS.some((profile) => profile.id === entry.agencyId) ||
+        typeof entry.agencyName !== "string" || !entry.agencyName.trim() ||
+        typeof entry.playerId !== "string" || !entry.playerId.trim() ||
+        typeof entry.playerName !== "string" || !entry.playerName.trim() ||
+        !validDate(entry.date) || entry.date > currentDate ||
+        !["offer-sent","offer-accepted","offer-rejected"].includes(entry.type) ||
+        typeof entry.note !== "string" || !entry.note.trim()) return false;
+    historyIds.add(entry.id);
+    highestCompetitive = Math.max(highestCompetitive,sequenceOf(entry.id,"agency-competition"));
+  }
+  if (nextCompetitiveSequence <= highestCompetitive) return false;
+
   const staffIds = new Set();
   let highestStaff = 0;
   for (const employee of state.staff) {
@@ -170,11 +269,15 @@ export function isValidAgencyManagementState(state, currentDate) {
   for (const entry of state.ledger) {
     if (!isRecord(entry) || !sequenceOf(entry.id,"agency-ledger") || ledgerIds.has(entry.id) ||
         !validDate(entry.date) || entry.date > currentDate ||
-        !["hiring","branch-opening","weekly-operations"].includes(entry.type) ||
+        !["hiring","branch-opening","weekly-operations","sponsorship-income"].includes(entry.type) ||
         !validMoney(entry.amountEgp) || entry.amountEgp < 1 ||
         !validMoney(entry.paidEgp) || entry.paidEgp > entry.amountEgp ||
         !validMoney(entry.arrearsAfterEgp) || typeof entry.note !== "string" || !entry.note.trim() ||
-        (entry.referenceId !== null && typeof entry.referenceId !== "string")) return false;
+        (entry.referenceId !== null && typeof entry.referenceId !== "string") ||
+        (entry.direction !== undefined && !["income","expense"].includes(entry.direction)) ||
+        (entry.type === "sponsorship-income" && (entry.direction !== "income" ||
+          !["signing","weekly"].includes(entry.incomeKind))) ||
+        (entry.type !== "sponsorship-income" && entry.direction === "income")) return false;
     highestLedger = Math.max(highestLedger, sequenceOf(entry.id,"agency-ledger"));
     ledgerIds.add(entry.id);
   }
