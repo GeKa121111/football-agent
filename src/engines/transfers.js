@@ -182,7 +182,7 @@ export function evaluateTransferOffer(save, offerId, currentDate = save?.world?.
     counter = { ...offer.terms, loanFeeEur: Math.max(offer.terms.loanFeeEur, minLoanFee),
       weeklyWageEur: Math.min(offer.terms.weeklyWageEur, wageCeiling) };
   }
-  if (offer.round >= 3) {
+  if (offer.round >= 4) {
     let next = replaceOffer(state, offer.id, { status: "rejected", round: 4, counterOffer: null });
     next = appendHistory(next, "offer-rejected", offer, currentDate, "رفض النادي العرض بعد استنفاد جولات التفاوض.");
     return { changed: true, status: "rejected", save: { ...save, world: { ...save.world, transfers: next } } };
