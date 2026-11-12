@@ -1421,9 +1421,7 @@ test.describe("Scouting discovery channels and observation history", () => {
 
     const advanceSevenDays = async () => {
       await navigateTo(page, "الرئيسية");
-      for (let day = 0; day < 7; day += 1) {
-        await page.locator(".day-advance-button").click();
-      }
+      await page.locator(".week-advance-button").click();
       await navigateTo(page, "الكشافون");
     };
 
