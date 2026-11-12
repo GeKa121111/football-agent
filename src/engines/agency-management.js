@@ -472,11 +472,25 @@ export function getAgencyManagementSummary(save) {
   const activeBranches = management.branches.filter((item) => item.status === "active");
   const weeklyPayrollEgp = activeStaff.reduce((sum,item) => sum + item.weeklySalaryEgp,0);
   const weeklyRentEgp = activeBranches.reduce((sum,item) => sum + item.weeklyRentEgp,0);
+  const modifiers = getAgencyStaffModifiers(save);
+  const grossWeeklyCostsEgp = weeklyPayrollEgp + weeklyRentEgp;
+  const operationalSavingsEgp = Math.floor(grossWeeklyCostsEgp * modifiers.operationsEfficiencyPct / 100);
+  const weeklyCostsEgp = grossWeeklyCostsEgp - operationalSavingsEgp;
+  const ledger = management.ledger;
+  const totalRevenueEgp = ledger.filter((entry) => entry.direction === "income")
+    .reduce((sum,entry) => sum + entry.paidEgp,0);
+  const totalExpensesEgp = ledger.filter((entry) => entry.direction !== "income")
+    .reduce((sum,entry) => sum + entry.paidEgp,0);
+  const activeSponsorshipRevenueEgp = (management.sponsorships ?? [])
+    .filter((deal) => deal.status === "active")
+    .reduce((sum,deal) => sum + deal.weeklyRevenueEgp,0);
   return {
     activeStaff:activeStaff.length, activeBranches:activeBranches.length,
-    weeklyPayrollEgp, weeklyRentEgp, weeklyCostsEgp:weeklyPayrollEgp + weeklyRentEgp,
-    arrearsEgp:management.arrearsEgp,
-    totalOperatingCommitmentEgp:weeklyPayrollEgp + weeklyRentEgp + management.arrearsEgp
+    weeklyPayrollEgp, weeklyRentEgp, grossWeeklyCostsEgp, operationalSavingsEgp,
+    weeklyCostsEgp, arrearsEgp:management.arrearsEgp,
+    totalOperatingCommitmentEgp:weeklyCostsEgp + management.arrearsEgp,
+    totalRevenueEgp,totalExpensesEgp,netCashFlowEgp:totalRevenueEgp-totalExpensesEgp,
+    activeSponsorshipRevenueEgp
   };
 }
 
@@ -554,25 +568,80 @@ export function closeAgencyBranch(save, branchId, currentDate = save?.world?.cur
   return {changed:true,branchId,save:{...save,agency:{...save.agency,management:next}}};
 }
 
-/** Settles payroll and branch rent every in-game Monday. Unpaid costs remain as arrears. */
-export function advanceAgencyManagementDay(save, currentDate = save?.world?.currentDate) {
+/** Advances agency operations, sponsor payments and competing agencies on the shared career clock. */
+export function advanceAgencyManagementDay(save, currentDate = save?.world?.currentDate, players = []) {
   const state = resolveManagement(save,currentDate);
   if (!state) return {changed:false,save,error:"بيانات إدارة الوكالة أو التاريخ غير صالحة."};
-  if (new Date(currentDate + "T00:00:00.000Z").getUTCDay() !== 1 || state.lastPayrollDate === currentDate)
-    return {changed:false,save,processed:false};
-  const weeklyCost = getAgencyManagementSummary(save).weeklyCostsEgp;
-  const totalDue = state.arrearsEgp + weeklyCost;
-  if (totalDue > 0 && state.ledger.length >= MAX_LEDGER_ENTRIES)
-    return {changed:false,save,processed:false,error:"سجل المصروفات ممتلئ؛ لم تتم تسوية الالتزامات."};
-  const paidEgp = Math.min(save.agency.balance,totalDue);
-  const arrearsAfterEgp = totalDue-paidEgp;
-  let next = {...state,lastPayrollDate:currentDate,arrearsEgp:arrearsAfterEgp};
-  if (totalDue > 0) next = appendLedger(next,{
-    date:currentDate,type:"weekly-operations",referenceId:null,amountEgp:totalDue,
-    paidEgp,arrearsAfterEgp,note:"رواتب الفريق وإيجارات الفروع للأسبوع"
-  });
+  let nextSave = save;
+  let next = state;
+  let processed = false;
+  const isMonday = new Date(currentDate + "T00:00:00.000Z").getUTCDay() === 1;
+
+  for (const deal of [...(next.sponsorships ?? [])]) {
+    if (deal.status === "active" && currentDate > deal.expiresDate) {
+      next = {
+        ...next,
+        sponsorships:next.sponsorships.map((item) => item.id === deal.id
+          ? {...item,status:"expired"} : item)
+      };
+    }
+  }
+
+  if (isMonday && state.lastPayrollDate !== currentDate) {
+    const weeklyCost = getAgencyManagementSummary(save).weeklyCostsEgp;
+    const totalDue = state.arrearsEgp + weeklyCost;
+    if (totalDue > 0 && next.ledger.length >= MAX_LEDGER_ENTRIES)
+      return {changed:false,save,processed:false,error:"سجل المصروفات ممتلئ؛ لم تتم تسوية الالتزامات."};
+    const paidEgp = Math.min(nextSave.agency.balance,totalDue);
+    const arrearsAfterEgp = totalDue-paidEgp;
+    next = {...next,lastPayrollDate:currentDate,arrearsEgp:arrearsAfterEgp};
+    if (totalDue > 0) {
+      next = appendLedger(next,{
+        date:currentDate,type:"weekly-operations",referenceId:null,
+        amountEgp:totalDue,paidEgp,arrearsAfterEgp,
+        note:"رواتب الفريق وإيجارات الفروع بعد احتساب كفاءة العمليات"
+      });
+    }
+    nextSave = {
+      ...nextSave,
+      agency:{...nextSave.agency,balance:nextSave.agency.balance-paidEgp,management:next}
+    };
+    processed = true;
+  }
+
+  if (isMonday) {
+    for (const deal of next.sponsorships.filter((item) =>
+      item.status === "active" && currentDate >= item.nextPaymentDate && currentDate <= item.expiresDate
+    )) {
+      if (next.ledger.length >= MAX_LEDGER_ENTRIES ||
+          nextSave.agency.balance + deal.weeklyRevenueEgp > MAX_MONEY_EGP) continue;
+      next = appendLedger(next,{
+        date:currentDate,type:"sponsorship-income",direction:"income",incomeKind:"weekly",
+        referenceId:deal.id,amountEgp:deal.weeklyRevenueEgp,paidEgp:deal.weeklyRevenueEgp,
+        arrearsAfterEgp:next.arrearsEgp,note:"دفعة أسبوعية من " + deal.name
+      });
+      next = {
+        ...next,
+        sponsorships:next.sponsorships.map((item) => item.id === deal.id
+          ? {...item,lastPaidDate:currentDate,nextPaymentDate:addDays(currentDate,7)} : item)
+      };
+      nextSave = {
+        ...nextSave,
+        agency:{...nextSave.agency,balance:nextSave.agency.balance+deal.weeklyRevenueEgp,management:next}
+      };
+      processed = true;
+    }
+  }
+
+  nextSave = {...nextSave,agency:{...nextSave.agency,management:next}};
+  const beforeEvents = next.competitiveHistory?.length ?? 0;
+  next = advanceCompetitorMarket(nextSave,currentDate,players,next);
+  nextSave = {...nextSave,agency:{...nextSave.agency,management:next}};
+  const competitorEvents = Math.max(0,(next.competitiveHistory?.length ?? 0)-beforeEvents);
   return {
-    changed:true,processed:true,dueEgp:totalDue,paidEgp,arrearsEgp:arrearsAfterEgp,
-    save:{...save,agency:{...save.agency,balance:save.agency.balance-paidEgp,management:next}}
+    changed:nextSave !== save,
+    processed,
+    competitorEvents,
+    save:nextSave
   };
 }
