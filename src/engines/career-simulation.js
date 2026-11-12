@@ -25,7 +25,7 @@ export function advanceCareerSimulationDay(save, players) {
   const bonusSettlement = settleTransferPerformanceBonuses(calendarSave, currentDate);
   const scouting = advanceScoutingMissions(bonusSettlement.save, dailyPlayers, currentDate);
   const representation = advanceRepresentationState(scouting.save, currentDate);
-  const agencyOperations = advanceAgencyManagementDay(representation.save, currentDate);
+  const agencyOperations = advanceAgencyManagementDay(representation.save, currentDate, dailyPlayers);
 
   return {
     save: agencyOperations.save,
