@@ -712,6 +712,28 @@ function isValidMatchResult(result, fixture, competition) {
   );
 }
 
+function isValidCompetitionAwards(awards) {
+  if (awards === null || awards === undefined) return true;
+  if (!isRecord(awards)) return false;
+  return ["topScorer", "topAssists", "bestPlayer"].every((key) => {
+    const award = awards[key];
+    if (award === null) return true;
+    if (!isRecord(award) ||
+        typeof award.playerId !== "string" || !award.playerId.trim() ||
+        typeof award.playerName !== "string" || !award.playerName.trim() ||
+        typeof award.clubId !== "string" || !award.clubId.trim() ||
+        !Number.isFinite(award.value)) return false;
+    if (key === "bestPlayer") {
+      return Number.isSafeInteger(award.appearances) && award.appearances >= 1 &&
+        Number.isSafeInteger(award.minutesPlayed) && award.minutesPlayed >= 1 &&
+        Number.isSafeInteger(award.goals) && award.goals >= 0 &&
+        Number.isSafeInteger(award.assists) && award.assists >= 0 &&
+        award.value >= 4 && award.value <= 10;
+    }
+    return Number.isSafeInteger(award.value) && award.value > 0;
+  });
+}
+
 export function isValidFootballState(state, currentDate, season, database = WORLD_DATABASE) {
   if (!isRecord(state) || state.version !== 1 ||
       !Number.isSafeInteger(state.season) || state.season < 1 || state.season > season ||
@@ -727,6 +749,7 @@ export function isValidFootballState(state, currentDate, season, database = WORL
           typeof archive.competitionId === "string" && archive.competitionId.trim() &&
           typeof archive.competitionName === "string" && archive.competitionName.trim() &&
           typeof archive.complete === "boolean" &&
+          isValidCompetitionAwards(archive.awards) &&
           Number.isSafeInteger(archive.matchesTotal) && archive.matchesTotal >= 1 &&
           Number.isSafeInteger(archive.matchesPlayed) && archive.matchesPlayed >= 0 &&
           Number.isSafeInteger(archive.matchesScheduled) && archive.matchesScheduled >= 0 &&
