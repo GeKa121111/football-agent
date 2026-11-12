@@ -793,13 +793,73 @@ test("continues counting unearned appearance milestones after a loan purchase", 
     ...purchased.save,
     world: {
       ...purchased.save.world,
-      football: { results: [firstMatch, secondMatch] }
+      // The first report may have been pruned from retained match history.
+      football: { results: [secondMatch] }
     }
   }, "2026-07-04", database);
   assert.equal(secondSettlement.paidBonuses.length, 1);
   assert.equal(secondSettlement.paidBonuses[0].type, "appearance");
   assert.equal(secondSettlement.save.world.transfers.financeLedger
     .filter((entry) => entry.type === "performance-bonus").length, 1);
+});
+
+
+test("retries an earned but unfunded appearance bonus after a loan has returned", () => {
+  const lowBudgetDatabase = {
+    ...database,
+    clubs: database.clubs.map((club) => club.id === "club-target"
+      ? { ...club, simulationProfile: 40 }
+      : club)
+  };
+  const highBudgetDatabase = {
+    ...lowBudgetDatabase,
+    clubs: lowBudgetDatabase.clubs.map((club) => club.id === "club-target"
+      ? { ...club, simulationProfile: 99 }
+      : club)
+  };
+  const terms = {
+    ...loanTerms,
+    appearanceBonus: { appearances: 1, amountEur: 20_000_000 }
+  };
+  const sent = createTransferOffer(
+    makeSave(), "player-1", "club-target", "loan", terms, "2026-07-01", lowBudgetDatabase
+  );
+  assert.equal(sent.changed, true);
+  const agreed = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", lowBudgetDatabase);
+  assert.equal(agreed.status, "agreed");
+  const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-01", lowBudgetDatabase);
+  assert.equal(completed.changed, true);
+
+  const firstMatch = {
+    date: "2026-07-02",
+    playerPerformances: [{
+      playerId: "player-1", playerName: "لاعب تجريبي", clubId: "club-target",
+      minutesPlayed: 90, goals: 0
+    }]
+  };
+  const firstSettlement = settleTransferPerformanceBonuses({
+    ...completed.save,
+    world: { ...completed.save.world, football: { results: [firstMatch] } }
+  }, "2026-07-02", lowBudgetDatabase);
+  assert.equal(firstSettlement.paidBonuses.length, 0);
+  assert.equal(firstSettlement.save.world.transfers.moves[0].performanceAppearances, 1);
+
+  const returned = advanceTransferState(firstSettlement.save, "2027-01-01", lowBudgetDatabase);
+  const returnedLoan = returned.save.world.transfers.moves.find((move) => move.id === completed.move.id);
+  assert.equal(returnedLoan.status, "returned");
+
+  const retried = settleTransferPerformanceBonuses(returned.save, "2027-01-02", highBudgetDatabase);
+  assert.equal(retried.paidBonuses.length, 1);
+  assert.equal(retried.paidBonuses[0].type, "appearance");
+  assert.equal(retried.save.world.transfers.financeLedger
+    .filter((entry) => entry.type === "performance-bonus").length, 1);
+  assert.equal(isValidTransferState(
+    retried.save.world.transfers,
+    "2027-01-02",
+    retried.save.agency.clients,
+    retried.save.agency.representation,
+    highBudgetDatabase
+  ), true);
 });
 
 
