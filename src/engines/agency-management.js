@@ -716,12 +716,21 @@ export function getAgencyManagementSummary(save) {
   const activeLoans = (management.creditFacilities ?? []).filter((loan) => loan.status === "active");
   const totalDebtEgp = activeLoans.reduce((sum,loan) => sum + loan.remainingEgp,0);
   const weeklyCreditRepaymentEgp = activeLoans.reduce((sum,loan) => sum + Math.min(loan.weeklyInstallmentEgp,loan.remainingEgp),0);
+  const lateCreditFacilities = activeLoans.filter((loan) => loan.lateWeeks > 0).length;
+  const totalOperatingCommitmentEgp = weeklyCostsEgp + weeklyCreditRepaymentEgp + management.arrearsEgp;
+  const cashAfterWeeklyCommitmentsEgp = (save?.agency?.balance ?? 0) - totalOperatingCommitmentEgp;
+  const liquidityStatus = lateCreditFacilities > 0 || management.arrearsEgp > 0
+    ? "attention"
+    : cashAfterWeeklyCommitmentsEgp < (weeklyCostsEgp + weeklyCreditRepaymentEgp) * 2
+      ? "watch"
+      : "stable";
   return {
     activeStaff:activeStaff.length, activeBranches:activeBranches.length,
     weeklyPayrollEgp, weeklyRentEgp, grossWeeklyCostsEgp, operationalSavingsEgp,
-    weeklyCostsEgp, weeklyCreditRepaymentEgp, totalDebtEgp, activeCreditFacilities:activeLoans.length,
-    arrearsEgp:management.arrearsEgp,
-    totalOperatingCommitmentEgp:weeklyCostsEgp + weeklyCreditRepaymentEgp + management.arrearsEgp,
+    weeklyCostsEgp, weeklyCreditRepaymentEgp, totalDebtEgp,
+    activeCreditFacilities:activeLoans.length, lateCreditFacilities,
+    arrearsEgp:management.arrearsEgp, totalOperatingCommitmentEgp,
+    cashAfterWeeklyCommitmentsEgp, liquidityStatus,
     totalRevenueEgp,totalExpensesEgp,netCashFlowEgp:totalRevenueEgp-totalExpensesEgp,
     activeSponsorshipRevenueEgp
   };
