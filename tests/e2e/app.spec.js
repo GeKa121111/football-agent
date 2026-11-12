@@ -171,7 +171,8 @@ test.describe("Desktop experience", () => {
     expect(yassin.trainingIntensity).toBe("intense");
 
     await navigateTo(page, "الرئيسية");
-    for (let day = 0; day < 3; day += 1) {
+    // Reach Monday so the saved training plan produces a visible rating change.
+    for (let day = 0; day < 5; day += 1) {
       await page.locator(".day-advance-button").click();
     }
     await navigateTo(page, "المباريات");
@@ -181,9 +182,19 @@ test.describe("Desktop experience", () => {
     const playedSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(playedSave.world.football.results.length).toBeGreaterThan(0);
     expect(playedSave.world.events.some((event) => event.type === "football-match-played")).toBe(true);
+    const updatedYassin = playedSave.world.football.playerDevelopment.players
+      .find((player) => player.playerId === "demo-yassin-adel");
+    expect(updatedYassin.trainingHistory.length).toBeGreaterThan(0);
+
+    await navigateTo(page, "اللاعبون");
+    const yassinCard = page.locator('.player-card[data-player-id="demo-yassin-adel"]');
+    await expect(yassinCard.locator(".player-rating strong")).toHaveText(String(updatedYassin.rating));
+
     const standingsTable = page.locator(".football-standings-table");
-    await expect(standingsTable).toContainText("الأهلي");
-    await expect(standingsTable).toContainText("الزمالك");
+    await navigateTo(page, "المباريات");
+    await page.getByLabel("اختيار المسابقة للترتيب").selectOption("competition-eg-premier");
+    await expect(page.locator(".football-standings-table")).toContainText("الأهلي");
+    await expect(page.locator(".football-standings-table")).toContainText("الزمالك");
     await hasNoHorizontalOverflow(page);
   });
 
