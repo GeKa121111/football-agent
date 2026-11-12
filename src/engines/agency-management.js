@@ -477,10 +477,6 @@ function advanceClubInterestAI(save,currentDate,players,state) {
   if (!Array.isArray(players) || players.length === 0) return state;
   const playerById = new Map(players.map((player) => [player.id,player]));
   const clubs = WORLD_DATABASE.clubs;
-  const clubContextById = new Map(clubs.map((club) => [club.id,{
-    financials:getClubTransferFinancials(club.id,save.world.transfers,currentDate,WORLD_DATABASE),
-    window:getTransferWindowForClub(currentDate,club.id,WORLD_DATABASE)
-  }]));
   const activeClientIds = new Set(save.agency.clients ?? []);
   const contracts = save.agency.representation?.contracts ?? [];
   for (const contract of contracts) {
@@ -505,6 +501,10 @@ function advanceClubInterestAI(save,currentDate,players,state) {
   if (new Date(currentDate + "T00:00:00.000Z").getUTCDay() !== 1 ||
       next.clubInterests.length >= MAX_CLUB_INTERESTS) return next;
 
+  const clubContextById = new Map(clubs.map((club) => [club.id,{
+    financials:getClubTransferFinancials(club.id,save.world.transfers,currentDate,WORLD_DATABASE),
+    window:getTransferWindowForClub(currentDate,club.id,WORLD_DATABASE)
+  }]));
   const reserved = new Set(next.clubInterests.filter((item) =>
     ["monitoring","enquiry"].includes(item.status)
   ).map((item) => item.playerId + "::" + item.clubId));
