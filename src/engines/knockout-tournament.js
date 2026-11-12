@@ -104,7 +104,12 @@ function simulatePenaltyShootout(homeRating, awayRating, random) {
 
 /** Returns a persisted winner without changing the regulation-time score. */
 export function resolveKnockoutOutcome(result, fixture) {
-  if (!result || !fixture || !fixture.home || !fixture.away) {
+  if (!result || !result.home || !result.away || !fixture ||
+      typeof fixture.id !== "string" || !fixture.id.trim() ||
+      !dateValue(fixture.date) ||
+      typeof fixture.homeClubId !== "string" || !fixture.homeClubId.trim() ||
+      typeof fixture.awayClubId !== "string" || !fixture.awayClubId.trim() ||
+      fixture.homeClubId === fixture.awayClubId) {
     throw new TypeError("نتيجة أو مباراة الكأس غير صالحة.");
   }
 
