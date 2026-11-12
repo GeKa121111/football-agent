@@ -153,7 +153,7 @@ test("completes an agreed permanent transfer and records a EUR agent commission 
   const countered = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
   const agreed = acceptTransferCounterOffer(countered.save, sent.offer.id, "2026-07-02");
   const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-02");
-  assert.equal(completed.status, "completed");
+  assert.equal(completed.status, "completed", completed.error ?? "Transfer completion failed without an error message.");
   assert.equal(completed.commissionEur, 322_000);
   assert.equal(completed.save.world.transfers.earnedCommissionEur, 322_000);
   assert.equal(completed.save.world.transfers.ledger[0].currency, "EUR");
@@ -177,17 +177,17 @@ test("returns a loan to the most recent permanent club after an earlier permanen
   const countered = evaluateTransferOffer(permanentOffer.save, permanentOffer.offer.id, "2026-07-01", database);
   const agreed = acceptTransferCounterOffer(countered.save, permanentOffer.offer.id, "2026-07-02");
   const permanentMove = completeTransfer(agreed.save, permanentOffer.offer.id, "2026-07-02");
-  assert.equal(getPlayerCurrentClubId("player-1", "club-home", permanentMove.save.world.transfers, "2026-07-02"), "club-target");
+  assert.equal(getPlayerCurrentClubId("player-1", "club-home", permanentMove.save.world.transfers, "2026-07-02", database), "club-target");
 
   const loanOffer = createTransferOffer(permanentMove.save, "player-1", "club-other", "loan",
     loanTerms, "2026-07-03", database);
   assert.equal(loanOffer.offer.fromClubId, "club-target");
   const loanAgreed = evaluateTransferOffer(loanOffer.save, loanOffer.offer.id, "2026-07-03", database);
   const loanMove = completeTransfer(loanAgreed.save, loanOffer.offer.id, "2026-07-03");
-  assert.equal(getPlayerCurrentClubId("player-1", "club-home", loanMove.save.world.transfers, "2026-12-31"), "club-other");
+  assert.equal(getPlayerCurrentClubId("player-1", "club-home", loanMove.save.world.transfers, "2026-12-31", database), "club-other");
 
   const returned = advanceTransferState(loanMove.save, "2027-01-03");
-  assert.equal(getPlayerCurrentClubId("player-1", "club-home", returned.save.world.transfers, "2027-01-03"), "club-target");
+  assert.equal(getPlayerCurrentClubId("player-1", "club-home", returned.save.world.transfers, "2027-01-03", database), "club-target");
   assert.equal(isValidTransferState(returned.save.world.transfers, "2027-01-03", returned.save.agency.clients, returned.save.agency.representation), true);
 });
 
