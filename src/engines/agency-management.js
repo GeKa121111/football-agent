@@ -335,7 +335,8 @@ export function signAgencySponsorship(save, packageId, currentDate = save?.world
   const offer = getAgencySponsorshipOffers(save).find((item) => item.id === packageId);
   if (!offer) return failure(save,"باقة الرعاية المطلوبة غير متاحة.");
   if (!offer.available) return failure(save,offer.lockedReason);
-  if ((state.sponsorships ?? []).length >= MAX_SPONSORSHIPS || state.ledger.length >= MAX_LEDGER_ENTRIES)
+  const existingSponsorships = state.sponsorships ?? [];
+  if (existingSponsorships.length >= MAX_SPONSORSHIPS || state.ledger.length >= MAX_LEDGER_ENTRIES)
     return failure(save,"وصل سجل الرعاية أو الدفتر المالي إلى الحد المتاح.");
   if (save.agency.balance + offer.signingBonusEgp > MAX_MONEY_EGP)
     return failure(save,"قيمة مكافأة التوقيع تتجاوز الحد المالي المسموح.");
@@ -349,7 +350,7 @@ export function signAgencySponsorship(save, packageId, currentDate = save?.world
   };
   let next = {
     ...state,nextSponsorshipSequence:(state.nextSponsorshipSequence ?? 1)+1,
-    sponsorships:[deal,...(state.sponsorships ?? [])]
+    sponsorships:[deal,...existingSponsorships]
   };
   if (deal.signingBonusEgp > 0) {
     next = appendLedger(next,{
@@ -573,7 +574,14 @@ export function advanceAgencyManagementDay(save, currentDate = save?.world?.curr
   const state = resolveManagement(save,currentDate);
   if (!state) return {changed:false,save,error:"بيانات إدارة الوكالة أو التاريخ غير صالحة."};
   let nextSave = save;
-  let next = state;
+  let next = {
+    ...state,
+    sponsorships:state.sponsorships ?? [],
+    competitors:state.competitors ?? createInitialAgencyManagementState().competitors,
+    competitiveHistory:state.competitiveHistory ?? [],
+    nextSponsorshipSequence:state.nextSponsorshipSequence ?? 1,
+    nextCompetitiveSequence:state.nextCompetitiveSequence ?? 1
+  };
   let processed = false;
   const isMonday = new Date(currentDate + "T00:00:00.000Z").getUTCDay() === 1;
 
