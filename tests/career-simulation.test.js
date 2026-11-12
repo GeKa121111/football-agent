@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createInitialSave, isValidSave, readSave, writeSave } from "../src/core/storage.js";
-import { getWorldPlayerProfiles } from "../src/data/world-database.js";
+import { getWorldPlayerProfiles, WORLD_DATABASE } from "../src/data/world-database.js";
 import { startScoutingMission } from "../src/engines/scouting.js";
 import {
   createRepresentationOffer,
@@ -13,6 +13,7 @@ import {
 import { advanceCareerSimulationDay, advanceCareerSimulationDays } from "../src/engines/career-simulation.js";
 import { hireAgencyEmployee, signAgencySponsorship, takeAgencyCredit } from "../src/engines/agency-management.js";
 import { setPlayerTrainingPlan } from "../src/engines/player-development.js";
+import { createTransferOffer, evaluateTransferOffer, completeTransfer, getPlayerCurrentClubId } from "../src/engines/transfers.js";
 
 const PLAYERS = getWorldPlayerProfiles();
 
@@ -160,6 +161,31 @@ test("runs agency payroll on the shared Monday career tick", () => {
 
 test("runs a multi-system career, saves and reloads it, then resumes without losing linked state", () => {
   let save = signFirstClient(createInitialSave()).save;
+  const transferPlayer = WORLD_DATABASE.players.find((player) => player.id === PLAYERS[0].id);
+  assert.ok(transferPlayer);
+  const sourceClub = WORLD_DATABASE.clubs.find((club) => club.id === transferPlayer.clubId);
+  const destinationClub = WORLD_DATABASE.clubs.find((club) =>
+    club.id !== sourceClub.id && club.leagueId === sourceClub.leagueId
+  );
+  assert.ok(destinationClub);
+
+  const transfer = createTransferOffer(save, transferPlayer.id, destinationClub.id, "permanent", {
+    feeEur: Math.round(transferPlayer.marketValueEur * 1.1),
+    weeklyWageEur: 20000,
+    signingBonusEur: 100000,
+    contractYears: 3
+  });
+  assert.equal(transfer.changed, true, transfer.error);
+  const decision = evaluateTransferOffer(transfer.save, transfer.offer.id);
+  assert.equal(decision.status, "agreed", decision.error);
+  const completedTransfer = completeTransfer(decision.save, transfer.offer.id);
+  assert.equal(completedTransfer.status, "completed", completedTransfer.error);
+  save = completedTransfer.save;
+  assert.equal(
+    getPlayerCurrentClubId(transferPlayer.id, transferPlayer.clubId, save.world.transfers, save.world.currentDate),
+    destinationClub.id
+  );
+
   const contract = save.agency.representation.contracts.find((item) =>
     item.playerId === PLAYERS[0].id
   );
