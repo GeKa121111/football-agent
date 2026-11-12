@@ -33,6 +33,7 @@ import {
 import { createPlayerPortrait } from "./ui/player-portrait.js";
 import {
   getTalentProspect,
+  getTalentProspectPerformanceSummary,
   upsertTalentProspect,
   recordTalentProspectContact,
   completeTalentProspectFollowUp,
@@ -2464,6 +2465,14 @@ function renderAgencyManagementPanel(context) {
         node("span", "", (club?.nameAr ?? "نادي") + " · " + interest.position + " · ملاءمة " + interest.fitScore + "/100"),
         node("small", "", "ميزانية انتقال النادي " + formatEuroMoney(interest.clubBudgetEur) +
           " · قيمة تقديرية للاعب " + formatEuroMoney(interest.estimatedFeeEur)),
+        ...(interest.performanceSnapshot?.appearances > 0 ? [node("small", "agency-interest-performance",
+          "الأداء المسجل: " + interest.performanceSnapshot.appearances + " مشاركة · " +
+          (interest.performanceSnapshot.averageMatchRating === null
+            ? "متوسط التقييم غير متاح"
+            : "متوسط التقييم " + interest.performanceSnapshot.averageMatchRating.toFixed(2) + "/10") +
+          " · " + interest.performanceSnapshot.goals + " هدف · " +
+          interest.performanceSnapshot.assists + " صناعة · دعم الملاءمة +" +
+          interest.performanceSnapshot.performanceBonus)] : []),
         node("small", "", interest.status === "enquiry"
           ? "النافذة مفتوحة حتى " + formatHomeDate(interest.transferWindowEndDate)
           : "متابعة مستقبلية · ينتهي الاهتمام " + formatHomeDate(interest.expiresDate))
@@ -3150,6 +3159,20 @@ export function mountApp(root) {
     const staffRoster = getScoutingRoster(state.save.world.scouting, state.save.world.currentDate);
     const staffName = (staffId) => staffRoster.find((scout) => scout.id === staffId)?.name ?? "عضو سابق";
     const body = node("div", "talent-activity-history");
+    const performanceSummary = getTalentProspectPerformanceSummary(entry);
+    if (performanceSummary.appearances > 0) {
+      const performancePanel = node("section", "talent-performance-summary");
+      performancePanel.append(
+        node("strong", "", "ملخص الأداء داخل الملعب"),
+        node("span", "", performanceSummary.appearances + " مشاركة · " +
+          performanceSummary.minutesPlayed + " دقيقة · متوسط " +
+          performanceSummary.averageMatchRating.toFixed(2) + "/10"),
+        node("small", "", performanceSummary.goals + " هدف · " +
+          performanceSummary.assists + " صناعة · آخر ظهور " +
+          formatHomeDate(performanceSummary.lastAppearanceDate))
+      );
+      body.append(performancePanel);
+    }
     if (!entry || activity.length === 0) {
       body.append(node("p", "representation-empty", "لا يوجد نشاط مسجل لهذا اللاعب حتى الآن."));
     } else {
@@ -3162,7 +3185,9 @@ export function mountApp(root) {
               " ← " + (event.toScoutId ? staffName(event.toScoutId) : "بدون مسؤول")
             : event.type === "follow-up-reviewed"
               ? "إتمام مراجعة المتابعة"
-              : event.type === "contact"
+              : event.type === "match-performance"
+                ? "مشاركة في " + event.competitionName + " · " + event.clubName
+                : event.type === "contact"
                 ? "تواصل " + kindLabels[event.kind] + " · " + outcomeLabels[event.outcome]
                 : "نشاط الوكالة";
         row.append(
