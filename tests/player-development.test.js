@@ -4,6 +4,7 @@ import {
   createInitialPlayerDevelopmentState,
   setPlayerTrainingPlan,
   advancePlayerDevelopmentDay,
+  recoverPlayerInjuries,
   recordPlayerMatchPerformances,
   isValidPlayerDevelopmentState,
   getPlayerDevelopmentRecord,
@@ -46,6 +47,44 @@ test("trains players on Mondays and respects potential and age growth limits", (
   assert.equal(state.trainingHistory.length, 0);
   assert.equal(isValidPlayerDevelopmentState(trained, 1), true);
 });
+
+test("keeps a player unavailable for the full final injury day before allowing training", () => {
+  const state = createInitialPlayerDevelopmentState(WORLD_DATABASE.players);
+  const playerId = state.players[0].playerId;
+  const injured = {
+    ...state,
+    players: state.players.map((player) => player.playerId === playerId
+      ? { ...player, injuryDays: 1, trainingFocus: "balanced" }
+      : player)
+  };
+
+  // Monday is a training day. The player must miss it, then recover at day end.
+  const completedDay = advancePlayerDevelopmentDay(injured, "2026-07-06", 1);
+  const recovered = getPlayerDevelopmentRecord(completedDay, playerId);
+  assert.equal(recovered.injuryDays, 0);
+  assert.equal(completedDay.trainingHistory.some((session) => session.playerId === playerId), false);
+
+  const nextDay = advancePlayerDevelopmentDay(completedDay, "2026-07-07", 1);
+  assert.equal(nextDay.trainingHistory.some((session) => session.playerId === playerId), false);
+  assert.equal(getPlayerDevelopmentRecord(nextDay, playerId).injuryDays, 0);
+});
+
+test("recovers only injuries that existed before the completed day", () => {
+  const state = createInitialPlayerDevelopmentState(WORLD_DATABASE.players);
+  const [first, second] = state.players.slice(0, 2);
+  const injured = {
+    ...state,
+    players: state.players.map((player) =>
+      player.playerId === first.playerId || player.playerId === second.playerId
+        ? { ...player, injuryDays: 4 }
+        : player)
+  };
+  const recovered = recoverPlayerInjuries(injured, [first.playerId]);
+  assert.equal(getPlayerDevelopmentRecord(recovered, first.playerId).injuryDays, 3);
+  assert.equal(getPlayerDevelopmentRecord(recovered, second.playerId).injuryDays, 4);
+  assert.equal(getPlayerDevelopmentRecord(injured, first.playerId).injuryDays, 4);
+});
+
 
 test("recovery plans reduce fatigue and restore fitness without inventing skill growth", () => {
   let state = createInitialPlayerDevelopmentState(WORLD_DATABASE.players);
