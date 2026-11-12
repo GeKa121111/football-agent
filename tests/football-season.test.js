@@ -241,6 +241,9 @@ test("generates and completes a seeded knockout cup with automatic rounds and a 
   const savedCupArchive = archived.archives.find((archive) => archive.competitionId === competition.id);
   assert.equal(savedCupArchive.complete, true);
   assert.equal(savedCupArchive.championClubId, history[0].championClubId);
+  assert.ok(savedCupArchive.awards);
+  assert.ok(["playerOfSeason", "goldenBoot", "topAssists"]
+    .every((awardKey) => Object.hasOwn(savedCupArchive.awards, awardKey)));
   assert.equal(isValidFootballState(archived, "2027-07-01", 2, database), true);
 
   const corrupted = {
