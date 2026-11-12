@@ -4593,8 +4593,49 @@ export function mountApp(root) {
     growthTrack.append(growthFill);
     growth.append(growthHeading, growthTrack);
 
+    const seasonPerformance = player.seasonPerformance ?? null;
+    const performanceSection = node("section", "player-profile-growth player-profile-performance");
+    const performanceHeading = node("div", "player-profile-growth-heading");
+    performanceHeading.append(
+      node("strong", "", "أداء الموسم الحالي"),
+      node("span", "", seasonPerformance?.appearances
+        ? seasonPerformance.appearances + " مشاركة"
+        : "لا توجد مشاركات مسجلة")
+    );
+    performanceSection.append(performanceHeading);
+    if (seasonPerformance?.appearances > 0) {
+      const performanceGrid = node("div", "player-profile-stats");
+      [
+        ["الدقائق", seasonPerformance.minutesPlayed, "MIN"],
+        ["الأهداف", seasonPerformance.goals, "G"],
+        ["الصناعة", seasonPerformance.assists, "A"],
+        ["متوسط التقييم", seasonPerformance.averageMatchRating ?? "—", "/10"]
+      ].forEach(([label, value, suffix]) => {
+        const item = node("article", "player-profile-stat");
+        item.append(node("small", "", label), node("strong", "", String(value)), node("span", "", suffix));
+        performanceGrid.append(item);
+      });
+      performanceSection.append(performanceGrid);
+    }
+    const honors = Array.isArray(player.honors) ? player.honors : [];
+    if (honors.length > 0) {
+      const honorsList = node("div", "player-profile-details player-profile-honors");
+      honors.forEach((honor) => {
+        const label = honor.awardType === "topScorer" ? "هداف البطولة"
+          : honor.awardType === "topAssists" ? "الأكثر صناعة"
+            : "أفضل لاعب";
+        const row = node("div", "player-profile-detail");
+        row.append(
+          node("small", "", label + " · الموسم " + honor.season),
+          node("strong", "", honor.competitionName)
+        );
+        honorsList.append(row);
+      });
+      performanceSection.append(honorsList);
+    }
+
     const content = node("div", "player-profile-content");
-    content.append(hero, ratingCards, details, growth,
+    content.append(hero, ratingCards, details, growth, performanceSection,
       node("p", "player-profile-disclaimer", "هذا ملف لاعب خيالي من قاعدة العالم التجريبية. القيمة السوقية تقدير داخل اللعبة وليست عرض انتقال رسميًا.")
     );
 
