@@ -35,8 +35,14 @@ test.describe("Accessibility guardrails", () => {
     await expect(page.locator("html")).toHaveAttribute("lang", "ar");
     await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
     await expect(page.getByRole("main")).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "التنقل الرئيسي على سطح المكتب" })).toBeAttached();
-    await expect(page.getByRole("navigation", { name: "التنقل الرئيسي على الهاتف" })).toBeAttached();
+    const desktopNavigation = page.locator('nav.rebuild-nav[aria-label="التنقل الرئيسي على سطح المكتب"]');
+    const mobileNavigation = page.locator('nav.rebuild-mobile-nav[aria-label="التنقل الرئيسي على الهاتف"]');
+    await expect(desktopNavigation).toBeAttached();
+    await expect(mobileNavigation).toBeAttached();
+    await expect(desktopNavigation).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(mobileNavigation).toBeVisible();
+    await expect(desktopNavigation).toBeHidden();
   });
 
   test("gives every visible button and form control an accessible name", async ({ page }) => {
