@@ -447,11 +447,8 @@ function completeLoanPurchase(save, loan, currentDate, database, mandatory = fal
     goalBonus: loan.goalBonus ?? null,
     registrationCompetition: loan.registrationCompetition ?? "league"
   };
-  const registration = getClubRegistrationStatus(loan.toClubId, loan.playerId, state,
-    currentDate, database, "permanent", terms.registrationCompetition);
-  if (!registration.eligible) {
-    return { changed: false, save, error: "تعذر تسجيل الشراء الإلزامي: " + registration.reason };
-  }
+  // The player is already registered with the destination club as a loanee.
+  // Converting that registration to a permanent move must not consume a second squad slot.
 
   const commissionBasisEur = loan.weeklyWageEur * contractYears * 52;
   if (!validMoney(commissionBasisEur)) return { changed: false, save, error: "أساس احتساب العمولة غير صالح." };
@@ -559,7 +556,9 @@ export function recallLoan(save, moveId, currentDate = save?.world?.currentDate)
  * Pays appearance and goal milestones once, using persisted match reports.
  * Unfunded bonuses remain due and are retried on subsequent game days.
  */
-export function settleTransferPerformanceBonuses(save, currentDate = save?.world?.currentDate) {
+export function settleTransferPerformanceBonuses(
+  save, currentDate = save?.world?.currentDate, database = WORLD_DATABASE
+) {
   const state = save?.world?.transfers;
   if (!isRecord(state) || !isTransferCalendarDate(currentDate)) {
     return { save, paidBonuses: [] };
@@ -583,7 +582,7 @@ export function settleTransferPerformanceBonuses(save, currentDate = save?.world
     ];
     for (const item of clauses) {
       if (!item.clause || paid.has(item.key) || item.current < item.clause[item.thresholdKey]) continue;
-      const financials = getClubTransferFinancials(move.toClubId, next, currentDate);
+      const financials = getClubTransferFinancials(move.toClubId, next, currentDate, database);
       if (financials.budgetEur < item.clause.amountEur ||
           next.financeLedger.length >= MAX_CLUB_FINANCE_ENTRIES ||
           next.history.length >= MAX_TRANSFER_HISTORY) continue;
