@@ -582,9 +582,7 @@ function advanceClubInterestAI(save,currentDate,players,state) {
   const currentSeason = save.world.football?.season ?? 1;
   const awardsByPlayerId = new Map();
   for (const archive of save.world.football?.archives ?? []) {
-    if (!archive.complete || archive.season >= currentSeason - 2) {
-      if (!archive.complete || archive.season >= currentSeason) continue;
-    }
+    if (!archive.complete || archive.season < currentSeason - 2 || archive.season > currentSeason) continue;
     for (const [awardType, award] of Object.entries(archive.awards ?? {})) {
       if (!award?.playerId) continue;
       const awards = awardsByPlayerId.get(award.playerId) ?? [];
