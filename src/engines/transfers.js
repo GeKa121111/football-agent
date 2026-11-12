@@ -14,7 +14,14 @@ export const TRANSFER_CONTRACT_YEARS = Object.freeze([1, 2, 3, 4, 5]);
 export const TRANSFER_LOAN_MONTHS = Object.freeze([3, 6, 9, 12, 18, 24]);
 const MAX_EUR = 2_000_000_000;
 const OFFER_STATUSES = new Set(["pending", "countered", "agreed", "completed", "rejected", "expired"]);
-const HISTORY_TYPES = new Set(["offer-sent", "club-countered", "agency-countered", "offer-agreed", "offer-rejected", "offer-expired", "transfer-completed", "loan-returned", "contract-expired"]);
+const HISTORY_TYPES = new Set([
+  "offer-sent", "club-countered", "agency-countered", "offer-agreed", "offer-rejected",
+  "offer-expired", "transfer-completed", "loan-returned", "contract-expired",
+  "loan-recall-requested", "mandatory-buy-default", "performance-bonus-paid"
+]);
+const VALID_REGISTRATION_COMPETITIONS = new Set(["league", "continental", "domestic-cup"]);
+const VALID_RECALL_NOTICE_DAYS = new Set([7, 14, 30]);
+const MAX_RETAINED_FINANCE_SEASONS = 1000;
 
 function isRecord(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
 function validId(value) { return typeof value === "string" && value.trim().length > 0; }
@@ -63,8 +70,8 @@ export function getTransferWindow(currentDate, clubId = null, database = WORLD_D
 export function createInitialTransferState() {
   return {
     nextOfferSequence: 1, nextMoveSequence: 1, nextHistorySequence: 1,
-    nextLedgerSequence: 1, nextFinanceSequence: 1, earnedCommissionEur: 0,
-    offers: [], moves: [], ledger: [], financeLedger: [], freeAgents: [], history: []
+    nextLedgerSequence: 1, nextFinanceSequence: 1, nextSeasonSequence: 1, earnedCommissionEur: 0,
+    offers: [], moves: [], ledger: [], financeLedger: [], financeSeasons: [], freeAgents: [], history: []
   };
 }
 
@@ -106,17 +113,51 @@ function appendFreeAgent(state, playerId, sinceDate, formerClubId, contractMoveI
   if (records.some((item) => item.playerId === playerId)) return state;
   return { ...state, freeAgents: [...records, { playerId, sinceDate, formerClubId, contractMoveId }] };
 }
+function validBonusClause(value, thresholdKey) {
+  if (value === undefined || value === null) return true;
+  return isRecord(value) && Number.isSafeInteger(value[thresholdKey]) &&
+    value[thresholdKey] >= 1 && value[thresholdKey] <= 1000 &&
+    validMoney(value.amountEur) && value.amountEur > 0;
+}
 function validTerms(type, terms) {
-  if (!isRecord(terms) || !validMoney(terms.weeklyWageEur) || !validMoney(terms.signingBonusEur)) return false;
-  return type === "permanent"
-    ? validMoney(terms.feeEur) && TRANSFER_CONTRACT_YEARS.includes(terms.contractYears)
-    : type === "loan" && validMoney(terms.loanFeeEur) && validMoney(terms.optionToBuyEur) && TRANSFER_LOAN_MONTHS.includes(terms.loanMonths);
+  if (!isRecord(terms) || !validMoney(terms.weeklyWageEur) || !validMoney(terms.signingBonusEur) ||
+      !validBonusClause(terms.appearanceBonus, "appearances") ||
+      !validBonusClause(terms.goalBonus, "goals") ||
+      (terms.registrationCompetition !== undefined && !VALID_REGISTRATION_COMPETITIONS.has(terms.registrationCompetition))) return false;
+  if (type === "permanent") {
+    return validMoney(terms.feeEur) && TRANSFER_CONTRACT_YEARS.includes(terms.contractYears);
+  }
+  if (type !== "loan" || !validMoney(terms.loanFeeEur) || !validMoney(terms.optionToBuyEur) ||
+      !TRANSFER_LOAN_MONTHS.includes(terms.loanMonths)) return false;
+  return (terms.mandatoryBuy === undefined || typeof terms.mandatoryBuy === "boolean") &&
+    (terms.mandatoryBuy !== true || terms.optionToBuyEur > 0) &&
+    (terms.mandatoryBuyContractYears === undefined || TRANSFER_CONTRACT_YEARS.includes(terms.mandatoryBuyContractYears)) &&
+    (terms.recallable === undefined || typeof terms.recallable === "boolean") &&
+    (terms.recallNoticeDays === undefined || VALID_RECALL_NOTICE_DAYS.has(terms.recallNoticeDays)) &&
+    (terms.wageSharePercent === undefined ||
+      (Number.isInteger(terms.wageSharePercent) && terms.wageSharePercent >= 0 && terms.wageSharePercent <= 100));
 }
 function normalizeTerms(type, terms) {
-  const base = { weeklyWageEur: terms.weeklyWageEur, signingBonusEur: terms.signingBonusEur };
+  const base = {
+    weeklyWageEur: terms.weeklyWageEur,
+    signingBonusEur: terms.signingBonusEur,
+    appearanceBonus: terms.appearanceBonus ?? null,
+    goalBonus: terms.goalBonus ?? null,
+    registrationCompetition: terms.registrationCompetition ?? "league"
+  };
   return type === "permanent"
     ? { ...base, feeEur: terms.feeEur, contractYears: terms.contractYears }
-    : { ...base, loanFeeEur: terms.loanFeeEur, loanMonths: terms.loanMonths, optionToBuyEur: terms.optionToBuyEur };
+    : {
+        ...base,
+        loanFeeEur: terms.loanFeeEur,
+        loanMonths: terms.loanMonths,
+        optionToBuyEur: terms.optionToBuyEur,
+        mandatoryBuy: terms.mandatoryBuy === true,
+        mandatoryBuyContractYears: terms.mandatoryBuyContractYears ?? 3,
+        recallable: terms.recallable === true,
+        recallNoticeDays: terms.recallNoticeDays ?? 14,
+        wageSharePercent: terms.wageSharePercent ?? 100
+      };
 }
 
 export function createTransferOffer(save, playerId, destinationClubId, type, terms,
@@ -142,7 +183,8 @@ export function createTransferOffer(save, playerId, destinationClubId, type, ter
     return { changed: false, save, error: "لا توجد رسوم انتقال مستحقة للاعب الحر." };
   if (!save.agency.clients.includes(playerId) || !getActiveRepresentationContract(save, playerId, currentDate))
     return { changed: false, save, error: "لا يمكن التفاوض على انتقال لاعب قبل توقيع عقد تمثيل نشط معه." };
-  const registration = getClubRegistrationStatus(destinationClubId, playerId, state, currentDate, database, type);
+  const registration = getClubRegistrationStatus(destinationClubId, playerId, state, currentDate, database,
+    type, terms.registrationCompetition ?? "league");
   if (!registration.eligible) return { changed: false, save, error: registration.reason };
   if (state.offers.some((offer) => offer.playerId === playerId && ["pending", "countered", "agreed"].includes(offer.status)))
     return { changed: false, save, error: "يوجد بالفعل ملف انتقال مفتوح لهذا اللاعب." };
@@ -290,7 +332,8 @@ export function completeTransfer(save, offerId, currentDate = save?.world?.curre
     offer.fromClubId === FREE_AGENT_CLUB_ID ? null : offer.fromClubId, state, currentDate, database);
   if ((currentClubId ?? FREE_AGENT_CLUB_ID) !== offer.fromClubId)
     return { changed: false, save, error: "تغير النادي الحالي للاعب منذ بدء التفاوض؛ يجب فتح عرض جديد." };
-  const registration = getClubRegistrationStatus(offer.toClubId, offer.playerId, state, currentDate, database, offer.type);
+  const registration = getClubRegistrationStatus(offer.toClubId, offer.playerId, state, currentDate, database,
+    offer.type, offer.agreedTerms.registrationCompetition ?? "league");
   if (!registration.eligible) return { changed: false, save, error: registration.reason };
   const financials = getClubTransferFinancials(offer.toClubId, state, currentDate, database);
   const terms = offer.agreedTerms;
@@ -324,7 +367,16 @@ export function completeTransfer(save, offerId, currentDate = save?.world?.curre
     weeklyWageEur: terms.weeklyWageEur,
     contractYears: offer.type === "permanent" ? terms.contractYears : null,
     contractEndDate: offer.type === "permanent" ? addMonths(currentDate, terms.contractYears * 12) : null,
-    returnDate: offer.type === "loan" ? addMonths(currentDate, terms.loanMonths) : null
+    returnDate: offer.type === "loan" ? addMonths(currentDate, terms.loanMonths) : null,
+    mandatoryBuy: offer.type === "loan" && terms.mandatoryBuy === true,
+    mandatoryBuyContractYears: offer.type === "loan" ? (terms.mandatoryBuyContractYears ?? 3) : null,
+    recallable: offer.type === "loan" && terms.recallable === true,
+    recallNoticeDays: offer.type === "loan" ? (terms.recallNoticeDays ?? 14) : null,
+    recallReturnDate: null,
+    wageSharePercent: offer.type === "loan" ? (terms.wageSharePercent ?? 100) : 100,
+    appearanceBonus: terms.appearanceBonus ?? null,
+    goalBonus: terms.goalBonus ?? null,
+    paidPerformanceBonuses: []
   };
   let next = {
     ...state, nextMoveSequence: state.nextMoveSequence + 1, moves: [move, ...state.moves],
