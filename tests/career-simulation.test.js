@@ -262,14 +262,15 @@ test("runs a multi-system career, saves and reloads it, then resumes without los
   const loaded = readSave(storage);
   assert.equal(loaded.status, "loaded");
   assert.equal(loaded.migrated, false);
-  assert.deepEqual(loaded.save, {
+  const expectedPersisted = JSON.parse(JSON.stringify({
     ...save,
     meta: {
       ...save.meta,
       version: save.meta.version,
       updatedAt: "2026-07-29T12:00:00.000Z"
     }
-  });
+  }));
+  assert.deepEqual(loaded.save, expectedPersisted);
 
   const resumed = advanceCareerSimulationDays(loaded.save, 7, PLAYERS).save;
   assert.equal(resumed.world.currentDate, "2026-08-05");
