@@ -271,3 +271,14 @@
     transition-duration: .01ms !important;
   }
 }
+
+/* WebKit can stall pointer hit-testing on sticky rails and blurred fixed
+   navigation surfaces. Keep the rail in normal flow and the mobile nav opaque. */
+@supports (-webkit-backdrop-filter: blur(1px)) {
+  .rebuild-shell .rebuild-sidebar { position: static; }
+  .rebuild-shell .rebuild-mobile-nav {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: rgba(10, 15, 25, .98);
+  }
+}
