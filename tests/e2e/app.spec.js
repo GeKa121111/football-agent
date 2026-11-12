@@ -480,6 +480,46 @@ test.describe("Desktop experience", () => {
     await hasNoHorizontalOverflow(page);
   });
 
+  test("completes a permanent transfer from an active agency mandate", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+    const modal = page.locator(".modal-overlay");
+    await modal.getByLabel("نسبة العمولة").selectOption("15");
+    await modal.getByLabel("مدة العقد").selectOption("1095");
+    await modal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+    await page.locator(".representation-evaluate-button").click();
+    await page.locator(".representation-accept-button").click();
+
+    let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.agency.clients).toHaveLength(1);
+    const playerId = saved.agency.clients[0];
+
+    await navigateTo(page, "الانتقالات");
+    await expect(page.locator(".transfer-proposal-form")).toBeVisible();
+    await expect(page.getByLabel("لاعب الانتقال")).toHaveValue(playerId);
+    await page.getByLabel("الراتب الأسبوعي باليورو").fill("10000");
+    await page.getByLabel("مكافأة التوقيع باليورو").fill("50000");
+    await page.getByRole("button", { name: "إرسال العرض للنادي" }).click();
+
+    const deal = page.locator(".transfer-deal-card").first();
+    await expect(deal).toContainText("بانتظار رد النادي");
+    await deal.getByRole("button", { name: "محاكاة رد النادي" }).click();
+    await expect(page.locator(".transfer-status-agreed")).toBeVisible();
+
+    await page.locator(".transfer-status-agreed").getByRole("button", { name: "تنفيذ الصفقة" }).click();
+    saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.meta.version).toBe(7);
+    expect(saved.world.transfers.offers[0].status).toBe("completed");
+    expect(saved.world.transfers.moves).toHaveLength(1);
+    expect(saved.world.transfers.moves[0].playerId).toBe(playerId);
+    expect(saved.world.transfers.ledger).toHaveLength(1);
+    expect(saved.world.transfers.earnedCommissionEur).toBeGreaterThan(0);
+    expect(saved.world.transfers.moves[0].toClubId).not.toBe(saved.world.transfers.moves[0].fromClubId);
+    await expect(page.locator(".transfer-move-row")).toContainText(saved.world.transfers.offers[0].playerName);
+    await hasNoHorizontalOverflow(page);
+  });
+
   test("requires an active representation contract before offering a transfer", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الانتقالات");
