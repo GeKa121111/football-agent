@@ -566,6 +566,49 @@ test.describe("Desktop experience", () => {
     await hasNoHorizontalOverflow(page);
   });
 
+  test("offers a fee-free permanent contract and blocks loans for free agents", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+    const modal = page.locator(".modal-overlay");
+    await modal.getByLabel("نسبة العمولة").selectOption("15");
+    await modal.getByLabel("مدة العقد").selectOption("1095");
+    await modal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+    await page.locator(".representation-evaluate-button").click();
+    await page.locator(".representation-accept-button").click();
+
+    const save = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    const playerId = save.agency.clients[0];
+    const player = [...WORLD_DATABASE.players, ...WORLD_DATABASE.squadPlayers]
+      .find((item) => item.id === playerId);
+    save.world.transfers.freeAgents = [{
+      playerId,
+      sinceDate: save.world.currentDate,
+      formerClubId: player?.clubId ?? "club-former",
+      contractMoveId: null
+    }];
+    expect(isValidSave(save)).toBe(true);
+    await page.evaluate((nextSave) => {
+      localStorage.setItem("football-agent.save", JSON.stringify(nextSave));
+    }, save);
+    await page.reload();
+    await navigateTo(page, "الانتقالات");
+
+    const dealType = page.getByLabel("نوع الصفقة");
+    await expect(dealType.locator('option[value="loan"]')).toBeDisabled();
+    await expect(dealType).toHaveValue("permanent");
+    const feeInput = page.getByLabel("رسوم التعاقد للاعب حر (يورو)");
+    await expect(feeInput).toHaveValue("0");
+    await expect(feeInput).toHaveAttribute("readonly", "");
+
+    await page.getByRole("button", { name: "إرسال العرض للنادي" }).click();
+    await expect(page.locator(".transfer-deal-card").first()).toContainText("بانتظار رد النادي");
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
+    expect(saved.world.transfers.offers[0].fromClubId).toBe("free-agent");
+    expect(saved.world.transfers.offers[0].terms.feeEur).toBe(0);
+    await hasNoHorizontalOverflow(page);
+  });
+
   test("shows the live transfer workspace and empty deal history", async ({ page }) => {
     await page.goto("/");
     await navigateTo(page, "الانتقالات");
