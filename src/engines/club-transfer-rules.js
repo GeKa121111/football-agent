@@ -194,7 +194,8 @@ export function getClubRegistrationStatus(
   const seasonStart = currentDate >= year + "-07-01" ? year + "-07-01" : (year - 1) + "-07-01";
   const midSeasonRegistrations = (transferState?.moves ?? []).filter((move) =>
     move.toClubId === clubId && move.playerId !== playerId && move.effectiveDate >= seasonStart &&
-    move.effectiveDate <= currentDate && (move.type !== "loan" || move.status === "active")
+    move.effectiveDate <= currentDate &&
+    (move.type !== "loan" || (move.status === "active" && currentDate < (move.recallReturnDate ?? move.returnDate)))
   ).length + 1;
   if (total > rules.maxRegisteredPlayers) return { eligible: false, reason: "قائمة النادي وصلت للحد الأقصى للتسجيل (" + rules.maxRegisteredPlayers + " لاعبًا).", total, senior, foreign, rules };
   if (senior > rules.maxSeniorPlayers) return { eligible: false, reason: "تجاوز النادي الحد الأقصى للاعبين فوق " + (rules.u21ExemptionAge - 1) + " سنة (" + rules.maxSeniorPlayers + ").", total, senior, foreign, rules };
@@ -228,7 +229,8 @@ export function getClubTransferFinancials(clubId, transferState, currentDate, da
   const committedWagesWeeklyEur = roster.reduce((sum, player) => {
     const latestMove = (transferState?.moves ?? [])
       .filter((move) => move.playerId === player.id && move.effectiveDate <= currentDate &&
-        (move.status === "active" || (move.status === "purchased" && currentDate < move.purchasedDate)))
+        (move.status === "active" || (move.status === "purchased" && currentDate < move.purchasedDate)) &&
+        (move.type !== "loan" || currentDate < (move.recallReturnDate ?? move.returnDate)))
       .sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate) ||
         Number(b.id.split("-").pop()) - Number(a.id.split("-").pop()))[0];
     const wage = latestMove ? latestMove.weeklyWageEur : estimateWeeklyWage(player);
