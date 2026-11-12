@@ -428,10 +428,15 @@ function migrateSave(value) {
       football: isRecord(value.world.football)
         ? {
             ...value.world.football,
-            playerDevelopment: mergePlayerDevelopmentRoster(
-              value.world.football.playerDevelopment,
-              getWorldSquadPlayers()
-            )
+            playerDevelopment: Array.isArray(value.world.football.playerDevelopment?.players)
+              ? mergePlayerDevelopmentRoster(
+                  value.world.football.playerDevelopment,
+                  getWorldSquadPlayers()
+                )
+              : {
+                  ...mergePlayerDevelopmentRoster(null, getWorldSquadPlayers()),
+                  season: value.world.football.season ?? value.career?.season ?? 1
+                }
           }
         : createInitialFootballState(value.career?.season ?? 1, value.world.currentDate),
       transfers: isRecord(value.world.transfers) ? value.world.transfers : createInitialTransferState()
