@@ -16,9 +16,9 @@ export const COMPETITION_FORMATS = Object.freeze({
 
 /**
  * Resolve a competition's format while keeping saves and legacy world data
- * compatible. Existing league definitions remain double round-robin; existing
- * continental definitions become a balanced group stage until their knockout
- * phase is introduced by the later tournament-bracket slice.
+ * compatible. Existing league definitions remain double round-robin;
+ * continental competitions use balanced groups and may qualify the top clubs
+ * into a knockout bracket when knockoutAfterGroups is enabled.
  */
 export function getCompetitionRules(competition) {
   if (!competition || typeof competition !== "object") {
