@@ -1341,6 +1341,7 @@ function renderMarket(context) {
     active: activeDestinationWindows.length > 0,
     openClubCount: activeDestinationWindows.length,
     openLeagueCount: new Set(activeDestinationWindows.map((item) => item.leagueId).filter(Boolean)).size,
+    openWindowTypes: [...new Set(activeDestinationWindows.map((item) => item.window.type))],
     earliestClosingDate: activeDestinationWindows
       .map((item) => item.window.endDate)
       .sort()[0] ?? null,
@@ -1364,8 +1365,13 @@ function renderMarket(context) {
 
   const windowCard = node("section", "transfer-window-card" + (windowInfo.active ? " is-open" : " is-closed"));
   const windowCopy = node("div", "transfer-window-copy");
+  const openWindowLabels = windowInfo.openWindowTypes.map((type) =>
+    type === "summer" ? "الصيفية" : "الشتوية"
+  );
   const windowTitle = windowInfo.active
-    ? "نوافذ انتقالات مفتوحة"
+    ? openWindowLabels.length === 1
+      ? "النافذة " + openWindowLabels[0] + " مفتوحة"
+      : "نوافذ " + openWindowLabels.join(" و") + " مفتوحة"
     : "كل نوافذ الانتقالات مغلقة";
   windowCopy.append(
     node("span", "transfer-window-kicker", "حالة السوق · " + formatHomeDate(currentDate)),
