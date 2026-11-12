@@ -3017,7 +3017,8 @@ export function mountApp(root) {
     const previousSave = state.save;
     const result = terminateRepresentationContractInEngine(state.save, contractId);
     if (!result.changed) { toast(result.error); return; }
-    state.save = result.save;
+    const transferResult = advanceTransferState(result.save, result.save.world.currentDate);
+    state.save = transferResult.save;
     if (saveCareer()) {
       render();
       toast("تم إنهاء عقد التمثيل وحفظه في سجل التعاملات.");
