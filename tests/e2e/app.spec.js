@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { advanceCareerDays } from "../../src/engines/career-calendar.js";
-import { advanceRepresentationState } from "../../src/engines/representation.js";
+import { isValidSave } from "../../src/core/storage.js";
 
 async function navigateTo(page, view) {
   const mobileNav = page.locator(".mobile-nav");
@@ -19,18 +18,28 @@ async function hasNoHorizontalOverflow(page) {
   expect(dimensions.body, JSON.stringify(dimensions)).toBeLessThanOrEqual(dimensions.viewport);
 }
 
-function advanceSaveToDate(save, targetDate) {
-  const current = Date.parse(save.world.currentDate + "T00:00:00.000Z");
-  const target = Date.parse(targetDate + "T00:00:00.000Z");
-  let days = Math.round((target - current) / 86400000);
-  if (days < 0) throw new Error("Target date must not precede the saved career date.");
-  let advanced = save;
-  while (days > 0) {
-    const step = Math.min(days, 31);
-    advanced = advanceCareerDays(advanced, step);
-    days -= step;
-  }
-  return advanceRepresentationState(advanced, targetDate).save;
+function addCalendarDays(date, days) {
+  const timestamp = Date.parse(date + "T00:00:00.000Z");
+  if (!Number.isFinite(timestamp)) throw new Error("Invalid calendar date.");
+  return new Date(timestamp + days * 86400000).toISOString().slice(0, 10);
+}
+
+// Keep the browser test focused on the renewal workflow instead of simulating
+// more than 1,000 unrelated football days just to reach the final 90-day window.
+function prepareNearExpirySave(save, contractId, remainingDays) {
+  const prepared = structuredClone(save);
+  const contract = prepared.agency.representation.contracts.find((item) => item.id === contractId);
+  if (!contract) throw new Error("Representation contract not found.");
+  const offer = prepared.agency.representation.offers.find((item) => item.id === contract.offerId);
+  if (!offer) throw new Error("Original representation offer not found.");
+
+  const expiresOn = addCalendarDays(prepared.world.currentDate, remainingDays);
+  const signedOn = addCalendarDays(expiresOn, -contract.termDays);
+  contract.signedOn = signedOn;
+  contract.expiresOn = expiresOn;
+  offer.createdDate = signedOn;
+  offer.expiresDate = addCalendarDays(signedOn, 14);
+  return prepared;
 }
 
 test.describe("Desktop experience", () => {
@@ -251,10 +260,10 @@ test.describe("Desktop experience", () => {
     await page.locator(".representation-accept-button").click();
 
     let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    const original = saved.agency.representation.contracts[0];
-    const targetDate = new Date(Date.parse(original.expiresOn + "T00:00:00.000Z") - 60 * 86400000)
-      .toISOString().slice(0, 10);
-    const nearExpirySave = advanceSaveToDate(saved, targetDate);
+    const contractId = saved.agency.representation.contracts[0].id;
+    const nearExpirySave = prepareNearExpirySave(saved, contractId, 60);
+    expect(isValidSave(nearExpirySave)).toBe(true);
+    const original = nearExpirySave.agency.representation.contracts.find((item) => item.id === contractId);
     await page.evaluate((snapshot) => {
       localStorage.setItem("football-agent.save", JSON.stringify(snapshot));
     }, nearExpirySave);
@@ -542,7 +551,7 @@ test.describe("Desktop experience", () => {
     await navigateTo(page, "الانتقالات");
     await page.getByLabel("نوع الصفقة").selectOption("loan");
     await page.getByLabel("بند أحقية الشراء / الشراء الإلزامي (€)").fill("500000");
-    await page.getByLabel("مدة العقد / الإعارة").selectOption("6");
+    await page.getByLabel("مدة الإعارة").selectOption("6");
     await page.getByLabel("الراتب الأسبوعي باليورو").fill("10000");
     await page.getByRole("button", { name: "إرسال العرض للنادي" }).click();
 
@@ -767,9 +776,7 @@ test.describe("Mobile experience", () => {
     expect(started.world.scouting.reports).toHaveLength(0);
 
     await navigateTo(page, "الرئيسية");
-    for (let day = 0; day < 7; day += 1) {
-      await page.locator(".day-advance-button").click();
-    }
+    await page.locator(".week-advance-button").click();
 
     const completed = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(completed.world.currentDate).toBe("2026-07-08");
@@ -1377,9 +1384,7 @@ test.describe("Inbox archive", () => {
     expect(started.world.scouting.activeMissions[0].accuracy).toBeGreaterThan(0.62);
 
     await navigateTo(page, "الرئيسية");
-    for (let day = 0; day < 7; day += 1) {
-      await page.locator(".day-advance-button").click();
-    }
+    await page.locator(".week-advance-button").click();
 
     const completed = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     const scout = completed.world.scouting.scouts.find((item) => item.id === "scout-north-africa");
