@@ -67,6 +67,7 @@ import {
   acceptTransferCounterOffer as acceptTransferCounterOfferInEngine,
   rejectTransferOffer as rejectTransferOfferInEngine,
   completeTransfer as completeTransferInEngine,
+  exerciseLoanOption as exerciseLoanOptionInEngine,
   advanceTransferState,
   getTransferWindow,
   getPlayerCurrentClubId
@@ -3422,6 +3423,9 @@ export function mountApp(root) {
   function completeTransfer(offerId) {
     commitTransferResult(completeTransferInEngine(state.save, offerId), "اكتملت الصفقة وتم تسجيل العمولة المستحقة باليورو.");
   }
+  function exerciseLoanOption(moveId) {
+    commitTransferResult(exerciseLoanOptionInEngine(state.save, moveId), "تم تفعيل خيار الشراء وتحولت الإعارة إلى انتقال نهائي.");
+  }
 
   function completeTask(taskId) {
     if (!state.canWrite) {
@@ -3931,6 +3935,7 @@ export function mountApp(root) {
       acceptTransferCounterOffer,
       rejectTransferOffer,
       completeTransfer,
+      exerciseLoanOption,
       updatePlayerTrainingPlan,
       openRepresentationOffer,
       manageTalentProspect,
