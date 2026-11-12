@@ -210,9 +210,12 @@ test("clubs independently monitor agency clients and raise enquiries during open
   assert.equal(monday.save.world.currentDate,"2026-07-06");
   assert.ok(summary.total > 0);
   assert.ok(summary.monitoring + summary.enquiries > 0);
-  assert.ok(monday.save.agency.management.clubInterests.some((interest) =>
+  const firstInterest = monday.save.agency.management.clubInterests.find((interest) =>
     interest.playerId === player.id
-  ));
+  );
+  assert.ok(firstInterest);
+  assert.ok(firstInterest.clubBudgetEur > 0);
+  assert.ok(firstInterest.estimatedFeeEur > 0);
   assert.equal(isValidSave(monday.save),true);
 
   const nextWeek = advanceCareerSimulationDays(monday.save,7,PLAYERS);
