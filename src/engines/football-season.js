@@ -4,6 +4,7 @@ import { getPlayerCurrentClubId } from "./transfers.js";
 import {
   createInitialPlayerDevelopmentState,
   advancePlayerDevelopmentDay,
+  recoverPlayerInjuries,
   recordPlayerMatchPerformances,
   isValidPlayerDevelopmentState
 } from "./player-development.js";
@@ -291,10 +292,14 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
     };
   }
 
+  const injuredAtDayStart = nextState.playerDevelopment.players
+    .filter((player) => player.injuryDays > 0)
+    .map((player) => player.playerId);
   let playerDevelopment = advancePlayerDevelopmentDay(
     nextState.playerDevelopment,
     currentDate,
-    season
+    season,
+    { deferInjuryRecovery: true }
   );
   const todayFixtures = nextState.fixtures.filter((fixture) =>
     fixture.status === "scheduled" && fixture.date === currentDate
@@ -328,6 +333,10 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
     matchEvents.push(records.event);
     matchMessages.push(records.message);
   }
+
+  // Injuries that existed before this date expire only after the player has
+  // missed the whole day. Match- or training-day injuries are not decremented.
+  playerDevelopment = recoverPlayerInjuries(playerDevelopment, injuredAtDayStart);
 
   const resultMap = new Map(playedResults.map((result) => [result.id, result]));
   const fixtures = nextState.fixtures.map((fixture) => resultMap.has(fixture.id)
