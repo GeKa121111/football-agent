@@ -498,8 +498,12 @@ test.describe("Desktop experience", () => {
     await navigateTo(page, "الانتقالات");
     await expect(page.locator(".transfer-proposal-form")).toBeVisible();
     await expect(page.getByLabel("لاعب الانتقال")).toHaveValue(playerId);
+    await expect(page.locator(".transfer-finance-panel")).toBeVisible();
     await page.getByLabel("الراتب الأسبوعي باليورو").fill("10000");
     await page.getByLabel("مكافأة التوقيع باليورو").fill("50000");
+    await page.getByLabel("مكافأة بعد عدد المشاركات").fill("1");
+    await page.getByLabel("قيمة مكافأة المشاركات (€)").fill("25000");
+    await page.getByLabel("قائمة التسجيل المطلوبة").selectOption("continental");
     await page.getByRole("button", { name: "إرسال العرض للنادي" }).click();
 
     const deal = page.locator(".transfer-deal-card").first();
@@ -511,6 +515,8 @@ test.describe("Desktop experience", () => {
     saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
     expect(saved.meta.version).toBe(7);
     expect(saved.world.transfers.offers[0].status).toBe("completed");
+    expect(saved.world.transfers.offers[0].agreedTerms.appearanceBonus).toEqual({ appearances: 1, amountEur: 25000 });
+    expect(saved.world.transfers.offers[0].agreedTerms.registrationCompetition).toBe("continental");
     expect(saved.world.transfers.moves).toHaveLength(1);
     expect(saved.world.transfers.moves[0].playerId).toBe(playerId);
     expect(saved.world.transfers.ledger).toHaveLength(1);
@@ -1446,6 +1452,35 @@ test.describe("Scouting recruitment contracts on mobile", () => {
     expect(contract.contractCost).toBe(15000);
 
     await expect(page.locator(".scout-staff-card:not(.scout-recruit-card)").filter({ hasText: "ماتياس كروغر" })).toContainText("ينتهي في");
+    await hasNoHorizontalOverflow(page);
+  });
+});
+
+
+test.describe("Advanced transfer clauses on mobile", () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test("shows and toggles advanced loan clauses on a phone viewport", async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "الوكالة");
+    await page.locator(".representation-prospect-card").first().locator(".representation-offer-button").click();
+    const modal = page.locator(".modal-overlay");
+    await modal.getByLabel("نسبة العمولة").selectOption("15");
+    await modal.getByLabel("مدة العقد").selectOption("1095");
+    await modal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
+    await page.locator(".representation-evaluate-button").click();
+    await page.locator(".representation-accept-button").click();
+
+    await navigateTo(page, "الانتقالات");
+    await page.getByLabel("نوع الصفقة").selectOption("loan");
+    await expect(page.getByLabel("شراء إلزامي عند نهاية الإعارة")).toBeVisible();
+    await expect(page.getByLabel("السماح بالاستدعاء المبكر")).toBeVisible();
+    await expect(page.getByLabel("مهلة إشعار الاستدعاء")).toBeVisible();
+    await expect(page.getByLabel("حصة الراتب على النادي المستعير")).toBeVisible();
+    await page.getByLabel("شراء إلزامي عند نهاية الإعارة").check();
+    await page.getByLabel("السماح بالاستدعاء المبكر").check();
+    await page.getByLabel("حصة الراتب على النادي المستعير").selectOption("50");
+    await expect(page.locator(".transfer-finance-panel")).toBeVisible();
     await hasNoHorizontalOverflow(page);
   });
 });
