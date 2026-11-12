@@ -381,6 +381,36 @@ test("calculates competition standings from saved results with deterministic tie
   assert.equal(getCompetitionStandings(state, "missing-competition").length, 0);
 });
 
+test("applies competition-specific points and tie-break rules to standings", () => {
+  const competition = WORLD_DATABASE.competitions.find((item) => item.type === "league");
+  const customizedCompetition = {
+    ...competition,
+    points: { win: 5, draw: 2, loss: 0 },
+    tieBreakers: ["goalsFor", "points", "clubId"]
+  };
+  const database = {
+    ...WORLD_DATABASE,
+    competitions: WORLD_DATABASE.competitions.map((item) =>
+      item.id === competition.id ? customizedCompetition : item
+    )
+  };
+  const [homeClubId, awayClubId] = competition.clubIds;
+  const state = {
+    season: 1,
+    results: [{
+      competitionId: competition.id,
+      season: 1,
+      home: { clubId: homeClubId, goals: 1 },
+      away: { clubId: awayClubId, goals: 1 }
+    }]
+  };
+
+  const table = getCompetitionStandings(state, competition.id, database, 1);
+  assert.equal(table.length, 2);
+  assert.equal(table[0].points, 2);
+  assert.equal(table[1].points, 2);
+});
+
 test("simulates three complete seasons without duplicate fixtures, lost results or invalid player state", () => {
   const start = new Date("2026-07-01T00:00:00.000Z");
   const end = new Date("2029-07-01T00:00:00.000Z");
