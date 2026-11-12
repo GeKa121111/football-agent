@@ -66,9 +66,11 @@ import {
   rejectTransferOffer as rejectTransferOfferInEngine,
   completeTransfer as completeTransferInEngine,
   exerciseLoanOption as exerciseLoanOptionInEngine,
+  recallLoan as recallLoanInEngine,
   advanceTransferState,
   getTransferWindow,
-  getPlayerCurrentClubId
+  getPlayerCurrentClubId,
+  getClubTransferFinancials
 } from "./engines/transfers.js";
 import {
   completeCareerTask as completeTaskInEngine,
@@ -1374,7 +1376,39 @@ function renderMarket(context) {
     const periodField = field("مدة العقد / الإعارة", periodSelect);
     const amountLabel = amountField.querySelector("span");
     const periodLabel = periodField.querySelector("span");
-    const optionField = field("بند أحقية الشراء باليورو", optionInput);
+    const optionField = field("بند أحقية الشراء / الشراء الإلزامي (€)", optionInput);
+
+    const competitionSelect = node("select", "search-input");
+    [["league", "قائمة الدوري"], ["continental", "القائمة القارية"], ["domestic-cup", "قائمة الكأس المحلية"]].forEach(([value, label]) => {
+      const option = node("option", "", label); option.value = value; competitionSelect.append(option);
+    });
+    const appearanceThreshold = node("input", "search-input");
+    appearanceThreshold.type = "number"; appearanceThreshold.min = "0"; appearanceThreshold.max = "1000"; appearanceThreshold.step = "1"; appearanceThreshold.value = "0";
+    const appearanceAmount = node("input", "search-input");
+    appearanceAmount.type = "number"; appearanceAmount.min = "0"; appearanceAmount.step = "1000"; appearanceAmount.value = "0";
+    const goalThreshold = node("input", "search-input");
+    goalThreshold.type = "number"; goalThreshold.min = "0"; goalThreshold.max = "1000"; goalThreshold.step = "1"; goalThreshold.value = "0";
+    const goalAmount = node("input", "search-input");
+    goalAmount.type = "number"; goalAmount.min = "0"; goalAmount.step = "1000"; goalAmount.value = "0";
+    const mandatoryBuy = node("input", "search-input"); mandatoryBuy.type = "checkbox";
+    const recallable = node("input", "search-input"); recallable.type = "checkbox";
+    const recallNotice = node("select", "search-input");
+    [[7, "7 أيام"], [14, "14 يومًا"], [30, "30 يومًا"]].forEach(([value, label]) => {
+      const option = node("option", "", label); option.value = String(value); if (value === 14) option.selected = true; recallNotice.append(option);
+    });
+    const wageShare = node("select", "search-input");
+    [[100, "100% على النادي المستعير"], [75, "75% على النادي المستعير"], [50, "50% على كل نادٍ"], [25, "25% على النادي المستعير"]].forEach(([value, label]) => {
+      const option = node("option", "", label); option.value = String(value); wageShare.append(option);
+    });
+    const mandatoryField = field("شراء إلزامي عند نهاية الإعارة", mandatoryBuy);
+    const recallField = field("السماح بالاستدعاء المبكر", recallable);
+    const recallNoticeField = field("مهلة إشعار الاستدعاء", recallNotice);
+    const wageShareField = field("حصة الراتب على النادي المستعير", wageShare);
+    const appearanceThresholdField = field("مكافأة بعد عدد المشاركات", appearanceThreshold);
+    const appearanceAmountField = field("قيمة مكافأة المشاركات (€)", appearanceAmount);
+    const goalThresholdField = field("مكافأة بعد عدد الأهداف", goalThreshold);
+    const goalAmountField = field("قيمة مكافأة الأهداف (€)", goalAmount);
+    const competitionField = field("قائمة التسجيل المطلوبة", competitionSelect);
 
     const refreshDestinationClubs = () => {
       const selectedPlayer = representedPlayers.find((item) => item.player.id === playerSelect.value)?.player;
@@ -1400,6 +1434,10 @@ function renderMarket(context) {
         periodSelect.append(option);
       });
       optionField.hidden = !isLoan;
+      mandatoryField.hidden = !isLoan;
+      recallField.hidden = !isLoan;
+      recallNoticeField.hidden = !isLoan;
+      wageShareField.hidden = !isLoan;
       const player = representedPlayers.find((item) => item.player.id === playerSelect.value)?.player;
       const marketValue = player?.marketValueEur ?? 0;
       amountInput.value = String(isLoan ? Math.round(marketValue * 0.02) : marketValue);
@@ -1420,7 +1458,16 @@ function renderMarket(context) {
       field("الراتب الأسبوعي باليورو", wageInput),
       field("مكافأة التوقيع باليورو", bonusInput),
       periodField,
-      optionField
+      optionField,
+      mandatoryField,
+      recallField,
+      recallNoticeField,
+      wageShareField,
+      appearanceThresholdField,
+      appearanceAmountField,
+      goalThresholdField,
+      goalAmountField,
+      competitionField
     );
     const submit = actionButton("إرسال العرض للنادي", "button-primary transfer-submit-button", () => {});
     submit.type = "submit";
@@ -1428,9 +1475,26 @@ function renderMarket(context) {
     proposalForm.addEventListener("submit", (event) => {
       event.preventDefault();
       const type = typeSelect.value;
-      const common = { weeklyWageEur: Number(wageInput.value), signingBonusEur: Number(bonusInput.value) };
+      const appearanceBonus = Number(appearanceThreshold.value) > 0 && Number(appearanceAmount.value) > 0
+        ? { appearances: Number(appearanceThreshold.value), amountEur: Number(appearanceAmount.value) } : null;
+      const goalBonus = Number(goalThreshold.value) > 0 && Number(goalAmount.value) > 0
+        ? { goals: Number(goalThreshold.value), amountEur: Number(goalAmount.value) } : null;
+      const common = {
+        weeklyWageEur: Number(wageInput.value), signingBonusEur: Number(bonusInput.value),
+        appearanceBonus, goalBonus, registrationCompetition: competitionSelect.value
+      };
       const terms = type === "loan"
-        ? { ...common, loanFeeEur: Number(amountInput.value), loanMonths: Number(periodSelect.value), optionToBuyEur: Number(optionInput.value) }
+        ? {
+            ...common,
+            loanFeeEur: Number(amountInput.value),
+            loanMonths: Number(periodSelect.value),
+            optionToBuyEur: Number(optionInput.value),
+            mandatoryBuy: mandatoryBuy.checked,
+            mandatoryBuyContractYears: 3,
+            recallable: recallable.checked,
+            recallNoticeDays: Number(recallNotice.value),
+            wageSharePercent: Number(wageShare.value)
+          }
         : { ...common, feeEur: Number(amountInput.value), contractYears: Number(periodSelect.value) };
       context.createTransferProposal(playerSelect.value, clubSelect.value, type, terms);
     });
@@ -1451,13 +1515,19 @@ function renderMarket(context) {
         rejected: "مرفوض / ملغي", expired: "انتهت الصلاحية" };
       const terms = ["agreed", "completed"].includes(offer.status) ? offer.agreedTerms : offer.terms;
       const price = offer.type === "loan"
-        ? "رسوم الإعارة " + formatEuroMoney(terms.loanFeeEur) + " · خيار الشراء " + formatEuroMoney(terms.optionToBuyEur)
+        ? "رسوم الإعارة " + formatEuroMoney(terms.loanFeeEur) + " · " +
+          (terms.mandatoryBuy ? "شراء إلزامي " : "خيار شراء ") + formatEuroMoney(terms.optionToBuyEur)
         : "قيمة الانتقال " + formatEuroMoney(terms.feeEur);
       details.append(
         node("div", "transfer-deal-title", offer.playerName + " · " + (offer.type === "loan" ? "إعارة" : "انتقال نهائي")),
         node("p", "", offer.fromClubId + " ← " + offer.toClubName),
         node("p", "", price + " · راتب أسبوعي " + formatEuroMoney(terms.weeklyWageEur)),
-        node("small", "", "الجولة " + offer.round + " من 4 · أُرسل " + formatHomeDate(offer.createdDate)),
+        node("small", "", [
+          terms.appearanceBonus ? "مكافأة " + terms.appearanceBonus.appearances + " مشاركة" : "",
+          terms.goalBonus ? "مكافأة " + terms.goalBonus.goals + " هدف" : "",
+          "قائمة " + (terms.registrationCompetition === "continental" ? "قارية" : terms.registrationCompetition === "domestic-cup" ? "كأس" : "دوري"),
+          "الجولة " + offer.round + " من 4 · أُرسل " + formatHomeDate(offer.createdDate)
+        ].filter(Boolean).join(" · ")),
         node("span", "transfer-deal-status", labels[offer.status] ?? offer.status)
       );
       card.append(details);
@@ -1504,9 +1574,23 @@ function renderMarket(context) {
         counterForm.addEventListener("submit", (event) => {
           event.preventDefault();
           const common = { weeklyWageEur: Number(counterWage.value), signingBonusEur: Number(counterBonus.value) };
+          const retainedClauses = {
+            appearanceBonus: offer.terms.appearanceBonus ?? null,
+            goalBonus: offer.terms.goalBonus ?? null,
+            registrationCompetition: offer.terms.registrationCompetition ?? "league"
+          };
           const counterTerms = offer.type === "loan"
-            ? { ...common, loanFeeEur: Number(counterAmount.value), loanMonths: Number(counterPeriod.value), optionToBuyEur: Number(counterOption.value) }
-            : { ...common, feeEur: Number(counterAmount.value), contractYears: Number(counterPeriod.value) };
+            ? {
+                ...common, ...retainedClauses,
+                loanFeeEur: Number(counterAmount.value), loanMonths: Number(counterPeriod.value),
+                optionToBuyEur: Number(counterOption.value),
+                mandatoryBuy: offer.terms.mandatoryBuy === true,
+                mandatoryBuyContractYears: offer.terms.mandatoryBuyContractYears ?? 3,
+                recallable: offer.terms.recallable === true,
+                recallNoticeDays: offer.terms.recallNoticeDays ?? 14,
+                wageSharePercent: offer.terms.wageSharePercent ?? 100
+              }
+            : { ...common, ...retainedClauses, feeEur: Number(counterAmount.value), contractYears: Number(counterPeriod.value) };
           context.submitTransferCounterOffer(offer.id, counterTerms);
         });
         card.append(counterForm, actionButton("رفض التفاوض", "button-outline", () => context.rejectTransferOffer(offer.id)));
@@ -1535,16 +1619,44 @@ function renderMarket(context) {
           (move.type === "loan" ? " · عودة " + formatHomeDate(move.returnDate) + (move.status === "returned" ? " · عاد" : " · نشطة") : "")),
         node("small", "", move.type === "loan" ? "رسوم الإعارة " + formatEuroMoney(move.loanFeeEur) : "رسوم الانتقال " + formatEuroMoney(move.feeEur))
       );
-      if (move.type === "loan" && move.status === "active" && move.optionToBuyEur > 0) {
+      if (move.type === "loan" && move.status === "active" && move.optionToBuyEur > 0 && move.mandatoryBuy !== true) {
         row.append(actionButton("تفعيل خيار الشراء · " + formatEuroMoney(move.optionToBuyEur), "button-primary", () => context.exerciseLoanOption(move.id)));
+      }
+      if (move.type === "loan" && move.status === "active" && move.mandatoryBuy === true) {
+        row.append(node("small", "", "شراء إلزامي عند " + formatHomeDate(move.returnDate)));
+      }
+      if (move.type === "loan" && move.status === "active" && move.recallable === true && !move.recallReturnDate) {
+        row.append(actionButton("طلب استدعاء اللاعب", "button-outline", () => context.recallLoan(move.id)));
+      }
+      if (move.type === "loan") {
+        row.append(node("small", "", "النادي المستعير يتحمل " + (move.wageSharePercent ?? 100) + "% من الراتب الأسبوعي."));
       }
       moveList.append(row);
     });
     movesPanel.append(moveList);
   }
 
-  page.append(windowCard, summary, proposalPanel, listPanel, movesPanel,
-    node("p", "transfer-market-disclaimer", "مواعيد النوافذ الصيفية والشتوية هنا قواعد موحدة للمحاكاة داخل اللعبة؛ تختلف النوافذ الفعلية بين الاتحادات والدوريات. القيم والميزانيات افتراضية وليست عروضًا رسمية."));
+  const financePanel = node("section", "surface-card transfer-finance-panel");
+  financePanel.append(sectionHeading("المراجعة المالية للأندية", "إيرادات سنوية متوقعة، تكلفة الرواتب والتشغيل، وصافي الموسم ورصيد الانتقالات. الأرقام افتراضية داخل المحاكاة."));
+  const financeRows = WORLD_DATABASE.clubs.map((club) => ({
+    club, finance: getClubTransferFinancials(club.id, transferState, currentDate)
+  })).sort((a, b) => b.finance.projectedAnnualNetEur - a.finance.projectedAnnualNetEur);
+  financeRows.forEach(({ club, finance }) => {
+    const row = node("article", "club-finance-row");
+    row.append(
+      node("strong", "", club.nameAr),
+      node("small", "", "الميزانية " + formatEuroMoney(finance.budgetEur) +
+        " · الرواتب سنويًا " + formatEuroMoney(finance.projectedAnnualWageCostsEur)),
+      node("small", "", "إيراد متوقع " + formatEuroMoney(finance.projectedAnnualRevenueEur) +
+        " · تشغيل " + formatEuroMoney(finance.projectedAnnualOperatingCostsEur)),
+      node("small", "", "صافي سنوي متوقع " + formatEuroMoney(finance.projectedAnnualNetEur) +
+        " · رصيد المواسم " + formatEuroMoney(finance.seasonBalanceEur))
+    );
+    financePanel.append(row);
+  });
+
+  page.append(windowCard, summary, proposalPanel, listPanel, movesPanel, financePanel,
+    node("p", "transfer-market-disclaimer", "قواعد التسجيل والنوافذ والمال هنا نماذج محاكاة مبسطة، وليست نقلًا حرفيًا للوائح الاتحادات أو بيانات مالية رسمية."));
   return page;
 }
 
@@ -3420,6 +3532,13 @@ export function mountApp(root) {
   function exerciseLoanOption(moveId) {
     commitTransferResult(exerciseLoanOptionInEngine(state.save, moveId), "تم تفعيل خيار الشراء وتحولت الإعارة إلى انتقال نهائي.");
   }
+  function recallLoan(moveId) {
+    const result = recallLoanInEngine(state.save, moveId);
+    const message = result.changed
+      ? "تم تسجيل طلب الاستدعاء؛ عودة اللاعب في " + formatHomeDate(result.recallReturnDate) + "."
+      : result.error ?? "تعذر استدعاء اللاعب.";
+    commitTransferResult(result, message);
+  }
 
   function completeTask(taskId) {
     if (!state.canWrite) {
@@ -3930,6 +4049,7 @@ export function mountApp(root) {
       rejectTransferOffer,
       completeTransfer,
       exerciseLoanOption,
+      recallLoan,
       updatePlayerTrainingPlan,
       openRepresentationOffer,
       manageTalentProspect,
