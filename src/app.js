@@ -1328,7 +1328,24 @@ function renderMarket(context) {
   const page = node("div", "page-content rebuild-screen market-screen");
   const currentDate = context.save.world.currentDate;
   const transferState = context.transferState;
-  const windowInfo = getTransferWindow(currentDate);
+  const destinationWindows = WORLD_DATABASE.clubs.map((club) => ({
+    club,
+    ...getTransferWindow(currentDate, club.id)
+  }));
+  const activeDestinationWindows = destinationWindows.filter((item) => item.active && item.window);
+  const nextDestinationWindow = destinationWindows
+    .map((item) => item.nextWindow)
+    .filter(Boolean)
+    .sort((left, right) => left.startDate.localeCompare(right.startDate))[0] ?? null;
+  const windowInfo = {
+    active: activeDestinationWindows.length > 0,
+    openClubCount: activeDestinationWindows.length,
+    openLeagueCount: new Set(activeDestinationWindows.map((item) => item.leagueId).filter(Boolean)).size,
+    earliestClosingDate: activeDestinationWindows
+      .map((item) => item.window.endDate)
+      .sort()[0] ?? null,
+    nextWindow: nextDestinationWindow
+  };
   const activeContracts = context.save.agency.representation.contracts.filter((contract) =>
     contract.status === "active" && getRepresentationContractExpiry(contract) > currentDate
   );
@@ -1348,21 +1365,23 @@ function renderMarket(context) {
   const windowCard = node("section", "transfer-window-card" + (windowInfo.active ? " is-open" : " is-closed"));
   const windowCopy = node("div", "transfer-window-copy");
   const windowTitle = windowInfo.active
-    ? (windowInfo.window.type === "summer" ? "النافذة الصيفية مفتوحة" : "النافذة الشتوية مفتوحة")
-    : "نافذة الانتقالات مغلقة";
+    ? "نوافذ انتقالات مفتوحة"
+    : "كل نوافذ الانتقالات مغلقة";
   windowCopy.append(
     node("span", "transfer-window-kicker", "حالة السوق · " + formatHomeDate(currentDate)),
     node("h2", "", windowTitle),
     node("p", "", windowInfo.active
-      ? "متبقي " + windowInfo.window.daysRemaining + " يومًا على إغلاق النافذة."
-      : "النافذة القادمة تبدأ في " + formatHomeDate(windowInfo.nextWindow.startDate) + ".")
+      ? "متاحة في " + windowInfo.openLeagueCount + " دوريات و" + windowInfo.openClubCount +
+        " أندية. أقرب إغلاق في " + formatHomeDate(windowInfo.earliestClosingDate) + "."
+      : "أقرب نافذة تفتح في " + formatHomeDate(windowInfo.nextWindow?.startDate ?? currentDate) + ".")
   );
   windowCard.append(node("span", "transfer-window-icon", "⇄"), windowCopy);
   windowCard.append(node("span", "transfer-window-status", windowInfo.active ? "OPEN" : "CLOSED"));
 
   const summary = node("div", "market-summary transfer-summary");
   summary.append(
-    metricCard("نافذة السوق", windowInfo.active ? "مفتوحة" : "مغلقة", windowInfo.active ? windowInfo.window.type === "summer" ? "صيفية" : "شتوية" : "تبدأ " + formatHomeDate(windowInfo.nextWindow.startDate), "⇄", "purple"),
+    metricCard("نافذة السوق", windowInfo.active ? "مفتوحة" : "مغلقة",
+      windowInfo.active ? windowInfo.openClubCount + " أندية متاحة" : "تبدأ " + formatHomeDate(windowInfo.nextWindow?.startDate ?? currentDate), "⇄", "purple"),
     metricCard("تفاوض نشط", formatHomeNumber(openOffers.length), "عروض تنتظر قرارًا", "◷", "cyan"),
     metricCard("عمولات مكتسبة", formatEuroMoney(transferState.earnedCommissionEur), "إجمالي مسجل باليورو", "€", "gold")
   );
@@ -1476,17 +1495,26 @@ function renderMarket(context) {
     };
     mandatoryBuy.addEventListener("change", refreshLoanClauseAvailability);
 
+    const destinationHint = node("small", "transfer-window-hint");
+    let submitButton = null;
     const refreshDestinationClubs = () => {
       const selectedPlayer = representedPlayers.find((item) => item.player.id === playerSelect.value)?.player;
       const fromClubId = selectedPlayer
         ? getPlayerCurrentClubId(selectedPlayer.id, selectedPlayer.clubId, transferState, currentDate)
         : null;
+      const openClubs = WORLD_DATABASE.clubs.filter((club) =>
+        club.id !== fromClubId && getTransferWindow(currentDate, club.id).active
+      );
       clubSelect.replaceChildren();
-      WORLD_DATABASE.clubs.filter((club) => club.id !== fromClubId).forEach((club) => {
+      openClubs.forEach((club) => {
         const option = node("option", "", club.nameAr);
         option.value = club.id;
         clubSelect.append(option);
       });
+      destinationHint.textContent = openClubs.length > 0
+        ? "الوجهات المعروضة هي الأندية التي تسمح نافذتها بإرسال عرض في التاريخ الحالي."
+        : "لا يوجد نادٍ آخر بنافذة انتقالات مفتوحة لهذا اللاعب حاليًا.";
+      if (submitButton) submitButton.disabled = openClubs.length === 0;
     };
     const refreshTerms = () => {
       const isLoan = typeSelect.value === "loan";
@@ -1520,6 +1548,7 @@ function renderMarket(context) {
     proposalForm.append(
       field("اللاعب العميل", playerSelect),
       field("النادي المستهدف", clubSelect),
+      destinationHint,
       field("نوع الصفقة", typeSelect),
       amountField,
       field("الراتب الأسبوعي باليورو", wageInput),
@@ -1536,9 +1565,10 @@ function renderMarket(context) {
       goalAmountField,
       competitionField
     );
-    const submit = actionButton("إرسال العرض للنادي", "button-primary transfer-submit-button", () => {});
-    submit.type = "submit";
-    proposalForm.append(submit);
+    submitButton = actionButton("إرسال العرض للنادي", "button-primary transfer-submit-button", () => {});
+    submitButton.type = "submit";
+    submitButton.disabled = clubSelect.options.length === 0;
+    proposalForm.append(submitButton);
     proposalForm.addEventListener("submit", (event) => {
       event.preventDefault();
       const type = typeSelect.value;
