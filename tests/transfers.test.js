@@ -660,3 +660,12 @@ test("does not pay the same performance milestone again after a loan purchase", 
   assert.equal(secondSettlement.save.world.transfers.financeLedger
     .filter((entry) => entry.type === "performance-bonus").length, 1);
 });
+
+
+test("uses only the borrowing club's wage share for the loan wage ceiling", () => {
+  const terms = { ...loanTerms, weeklyWageEur: 60_000, wageSharePercent: 75 };
+  const sent = send(makeSave(), "loan", terms);
+  const agreed = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
+  assert.equal(agreed.status, "agreed");
+  assert.equal(completeTransfer(agreed.save, sent.offer.id, "2026-07-01", database).changed, true);
+});
