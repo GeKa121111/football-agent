@@ -80,7 +80,7 @@ function createRoundRobinRounds(clubIds) {
  * explicitly marked anonymous simulation-only players, never inserted into
  * the searchable world-player database.
  */
-export function buildSimulationTeam(clubId, database = WORLD_DATABASE, playerDevelopment = null, transferState = null, currentDate = "9999-12-31") {
+export function buildSimulationTeam(clubId, database = WORLD_DATABASE, playerDevelopment = null, transferState = null, currentDate = "2026-07-01") {
   const club = database.clubs.find((item) => item.id === clubId);
   if (!club) throw new TypeError("النادي غير موجود في قاعدة العالم: " + clubId);
 
@@ -88,7 +88,7 @@ export function buildSimulationTeam(clubId, database = WORLD_DATABASE, playerDev
     .filter((player) => player.injuryDays > 0)
     .map((player) => player.playerId));
   const realPlayers = getWorldSquadPlayers(database)
-    .filter((player) => getPlayerCurrentClubId(player.id, player.clubId, transferState, currentDate) === clubId && !injuredPlayerIds.has(player.id))
+    .filter((player) => getPlayerCurrentClubId(player.id, player.clubId, transferState, currentDate, database) === clubId && !injuredPlayerIds.has(player.id))
     .sort((a, b) => b.rating - a.rating || compareText(a.id, b.id));
   const unused = new Set(realPlayers.map((player) => player.id));
   const lineup = ROLE_SLOTS.map((role, slotIndex) => {
