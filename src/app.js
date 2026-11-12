@@ -122,8 +122,8 @@ function getCurrentWorldPlayers(save) {
     const development = developmentById.get(player.id);
     return {
       ...player,
-      rating: development?.rating ?? player.rating,
-      potential: development?.potential ?? player.potential,
+      rating: Math.round(development?.rating ?? player.rating),
+      potential: Math.round(development?.potential ?? player.potential),
       age: development?.age ?? player.age,
       clubId: club?.id ?? null,
       club: club?.nameAr ?? "لاعب حر",
@@ -3515,7 +3515,7 @@ export function mountApp(root) {
 
     const previousSave = state.save;
     try {
-      const simulationResult = advanceCareerSimulationDay(state.save, getCurrentWorldPlayers(state.save));
+      const simulationResult = advanceCareerSimulationDay(state.save, getCurrentWorldPlayers);
       state.save = simulationResult.save;
       if (saveCareer()) {
         render();
@@ -3540,7 +3540,7 @@ export function mountApp(root) {
 
     const previousSave = state.save;
     try {
-      const simulationResult = advanceCareerSimulationDays(state.save, 7, getCurrentWorldPlayers(state.save));
+      const simulationResult = advanceCareerSimulationDays(state.save, 7, getCurrentWorldPlayers);
       state.save = simulationResult.save;
       if (saveCareer()) {
         render();
