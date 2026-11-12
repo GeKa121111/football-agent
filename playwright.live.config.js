@@ -5,7 +5,7 @@ if (!configuredBaseURL) {
   throw new Error("FOOTBALL_AGENT_LIVE_URL is required for the production smoke test.");
 }
 const parsedBaseURL = new URL(configuredBaseURL);
-parsedBaseURL.pathname = parsedBaseURL.pathname.replace(/\\/+$/, "") + "/";
+parsedBaseURL.pathname = parsedBaseURL.pathname.replace(/\/+$/, "") + "/";
 const baseURL = parsedBaseURL.toString();
 
 export default defineConfig({
