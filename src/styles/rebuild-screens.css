@@ -840,3 +840,35 @@
  .transfer-proposal-form .transfer-form-field:first-child,.transfer-proposal-form .transfer-form-field:nth-child(2),.transfer-submit-button{grid-column:auto}
  .transfer-move-row{grid-template-columns:minmax(0,1fr)}
 }
+
+
+/* Phase 7 — agency operations and expansion */
+.agency-management-panel{display:grid;gap:18px}
+.agency-operations-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.agency-operations-metric{display:grid;gap:6px;min-width:0;padding:12px;border:1px solid var(--fa-border);border-radius:12px;background:rgba(8,13,22,.38)}
+.agency-operations-metric small,.agency-operations-offer small{color:var(--fa-muted);font-size:8px;line-height:1.6}
+.agency-operations-metric strong{color:var(--fa-text);font-size:13px;overflow-wrap:anywhere}
+.agency-operations-section{display:grid;gap:10px;min-width:0;padding-top:14px;border-top:1px solid var(--fa-border)}
+.agency-operations-section h3{margin:0;color:var(--fa-text);font-size:13px}
+.agency-operations-list,.agency-operations-catalog{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;min-width:0}
+.agency-operations-row,.agency-operations-offer,.agency-operations-ledger-row{display:grid;gap:8px;min-width:0;padding:12px;border:1px solid var(--fa-border);border-radius:12px;background:rgba(17,24,39,.56)}
+.agency-operations-row{grid-template-columns:minmax(0,1fr) auto;align-items:center}
+.agency-operations-row .representation-copy{min-width:0}
+.agency-operations-row .button-outline{white-space:nowrap}
+.agency-operations-offer strong,.agency-operations-ledger-row strong{color:var(--fa-text);font-size:10px}
+.agency-operations-offer p{margin:0;color:var(--fa-muted);font-size:8px;line-height:1.7}
+.agency-operations-offer .button-primary{width:100%;margin-top:4px}
+.agency-operations-offer .button-primary:disabled{opacity:.45;cursor:not-allowed}
+.agency-operations-ledger-row{grid-template-columns:auto auto;align-items:center}
+.agency-operations-ledger-row small{grid-column:1/-1;color:var(--fa-muted);font-size:8px;line-height:1.6}
+.agency-operations-ledger-row span{color:var(--fa-muted);font-size:8px;text-align:end}
+@media(max-width:760px){
+ .agency-operations-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .agency-operations-list,.agency-operations-catalog{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:390px){
+ .agency-operations-row{grid-template-columns:minmax(0,1fr)}
+ .agency-operations-row .button-outline{justify-self:start}
+ .agency-operations-ledger-row{grid-template-columns:minmax(0,1fr)}
+ .agency-operations-ledger-row span{text-align:start}
+}
