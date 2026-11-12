@@ -482,6 +482,9 @@ export function writeSave(save, storage, now = new Date().toISOString()) {
   if (!isValidSave(save)) {
     throw new TypeError("بيانات الحفظ غير مطابقة لبنية اللعبة الحالية.");
   }
+  if (!isValidTimestamp(now)) {
+    throw new TypeError("تاريخ تحديث الحفظ غير صالح.");
+  }
 
   const target = resolveStorage(storage);
   const snapshot = {
