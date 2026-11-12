@@ -546,6 +546,43 @@ test("schedules and completes a client meeting, improving trust and agency reput
   assert.equal(isValidSave(completed.save), true);
 });
 
+test("rejects meetings scheduled on or after the representation contract expiry", () => {
+  const profile = player({
+    id: "meeting-contract-expiry-player",
+    age: 22,
+    rating: 68,
+    potential: 80
+  });
+  const preferences = getPlayerRepresentationProfile(profile);
+  const sent = createRepresentationOffer(createInitialSave(), profile, {
+    commissionRate: preferences.preferredCommissionRate,
+    termDays: preferences.preferredTermDays
+  });
+  const signed = evaluateRepresentationOffer(sent.save, sent.offer.id);
+  assert.equal(signed.status, "signed");
+
+  const expiry = getRepresentationContractExpiry(signed.contract);
+  const dayBeforeExpiry = new Date(Date.parse(expiry + "T00:00:00.000Z") - 86400000)
+    .toISOString().slice(0, 10);
+  const twoDaysBeforeExpiry = new Date(Date.parse(expiry + "T00:00:00.000Z") - 2 * 86400000)
+    .toISOString().slice(0, 10);
+  const nearExpiry = advanceToDate(signed.save, twoDaysBeforeExpiry);
+
+  const atExpiry = createRepresentationInteraction(
+    nearExpiry, signed.contract.id, "meeting", expiry
+  );
+  assert.equal(atExpiry.changed, false);
+  assert.equal(atExpiry.save, nearExpiry);
+
+  const validMeeting = createRepresentationInteraction(
+    nearExpiry, signed.contract.id, "meeting", dayBeforeExpiry
+  );
+  assert.equal(validMeeting.changed, true);
+  assert.equal(validMeeting.interaction.dueDate, dayBeforeExpiry);
+  assert.equal(isValidSave(validMeeting.save), true);
+});
+
+
 test("missed client meetings reduce relationship and agency reputation after the grace period", () => {
   const profile = player({ id: "relationship-missed-player", age: 22, rating: 68, potential: 80 });
   const preferences = getPlayerRepresentationProfile(profile);
