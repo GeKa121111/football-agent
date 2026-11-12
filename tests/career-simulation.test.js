@@ -400,9 +400,10 @@ test("runs one complete integrated career season and resumes it safely after a s
   const firstSeasonFixtureCount = save.world.football.fixtures
     .filter((fixture) => fixture.season === 1).length;
   const additionalCupFixtureCount = WORLD_DATABASE.competitions
-    .filter((competition) => competition.type === "cup")
-    .reduce((total, competition) => total +
-      competition.clubIds.length - 1 - competition.clubIds.length / 2, 0);
+    .filter((competition) => competition.type === "cup" || competition.knockoutAfterGroups === true)
+    .reduce((total, competition) => total + (competition.type === "cup"
+      ? competition.clubIds.length - 1 - competition.clubIds.length / 2
+      : (competition.groupCount ?? 2) * (competition.qualifiersPerGroup ?? 2) - 1), 0);
   assert.ok(firstSeasonFixtureCount > 0);
   const storageRecords = new Map();
   const storage = {
