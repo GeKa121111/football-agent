@@ -36,7 +36,7 @@ test.describe("Accessibility guardrails", () => {
       const label = await button.evaluate((element) => {
         const labelledBy = element.getAttribute("aria-labelledby");
         const referencedText = labelledBy
-          ? labelledBy.split(/\\s+/).map((id) => document.getElementById(id)?.textContent ?? "").join(" ")
+          ? labelledBy.split(/\s+/).map((id) => document.getElementById(id)?.textContent ?? "").join(" ")
           : "";
         return [
           element.getAttribute("aria-label"),
@@ -53,7 +53,7 @@ test.describe("Accessibility guardrails", () => {
       const label = await control.evaluate((element) => {
         const labelledBy = element.getAttribute("aria-labelledby");
         const referencedText = labelledBy
-          ? labelledBy.split(/\\s+/).map((id) => document.getElementById(id)?.textContent ?? "").join(" ")
+          ? labelledBy.split(/\s+/).map((id) => document.getElementById(id)?.textContent ?? "").join(" ")
           : "";
         return [
           element.getAttribute("aria-label"),
