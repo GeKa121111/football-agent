@@ -392,6 +392,8 @@ function isValidMatchResult(result, fixture) {
   if (!isRecord(result) || !validGroupReference ||
       result.id !== fixture.id || result.date !== fixture.date ||
       result.status !== "played" || result.season !== fixture.season ||
+      result.competitionId !== fixture.competitionId ||
+      result.round !== fixture.round || result.leg !== fixture.leg ||
       !isRecord(result.home) || !isRecord(result.away) ||
       result.home.clubId !== fixture.homeClubId ||
       result.away.clubId !== fixture.awayClubId ||
