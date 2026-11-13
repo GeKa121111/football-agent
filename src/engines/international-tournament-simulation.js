@@ -388,41 +388,264 @@ function createTournamentLaunchEvent(plan) {
   };
 }
 
-export function isValidTournamentSeasonRecord(record, season) {
+
+function isValidTournamentPlayerStat(stat, countryIds, currentDate) {
+  return isRecord(stat) &&
+    typeof stat.playerId === "string" && stat.playerId.trim() &&
+    typeof stat.playerName === "string" && stat.playerName.trim() &&
+    countryIds.has(stat.countryId) &&
+    Number.isSafeInteger(stat.appearances) && stat.appearances >= 1 &&
+    Number.isSafeInteger(stat.minutesPlayed) && stat.minutesPlayed >= stat.appearances &&
+    Number.isSafeInteger(stat.goals) && stat.goals >= 0 &&
+    Number.isSafeInteger(stat.assists) && stat.assists >= 0 &&
+    Number.isFinite(stat.averageMatchRating) && stat.averageMatchRating >= 4 && stat.averageMatchRating <= 10 &&
+    Number.isFinite(stat.bestMatchRating) && stat.bestMatchRating >= stat.averageMatchRating && stat.bestMatchRating <= 10 &&
+    isDate(stat.lastMatchDate) && (!currentDate || stat.lastMatchDate <= currentDate);
+}
+
+function isValidTournamentResult(result, fixture, teamIds, currentDate) {
+  if (!isRecord(result) || result.fixtureId !== fixture.id || result.id !== fixture.id ||
+      result.tournamentId !== fixture.tournamentId || result.date !== fixture.date ||
+      result.season !== fixture.season || result.homeTeamId !== fixture.homeTeamId ||
+      result.awayTeamId !== fixture.awayTeamId || !teamIds.has(result.homeTeamId) ||
+      !teamIds.has(result.awayTeamId) || !isDate(result.date) ||
+      (currentDate && result.date > currentDate) ||
+      !Number.isSafeInteger(result.homeGoals) || result.homeGoals < 0 ||
+      !Number.isSafeInteger(result.awayGoals) || result.awayGoals < 0 ||
+      !Number.isSafeInteger(result.durationMinutes) || result.durationMinutes < 90 || result.durationMinutes > 100 ||
+      !Array.isArray(result.events) || !Array.isArray(result.playerPerformances) ||
+      !isRecord(result.home) || !isRecord(result.away) ||
+      result.home.clubId !== result.homeTeamId || result.away.clubId !== result.awayTeamId ||
+      result.home.goals !== result.homeGoals || result.away.goals !== result.awayGoals) return false;
+
+  if (fixture.stage === "groups") {
+    const expectedWinner = result.homeGoals === result.awayGoals ? null
+      : result.homeGoals > result.awayGoals ? fixture.homeTeamId : fixture.awayTeamId;
+    if (result.winnerTeamId !== expectedWinner || result.penaltyShootout !== null) return false;
+  } else {
+    if (![fixture.homeTeamId, fixture.awayTeamId].includes(result.winnerTeamId)) return false;
+    if (result.homeGoals === result.awayGoals) {
+      if (result.decision !== "penalties" || !isRecord(result.penaltyShootout) ||
+          !Number.isSafeInteger(result.penaltyShootout.home) ||
+          !Number.isSafeInteger(result.penaltyShootout.away) ||
+          result.penaltyShootout.home < 0 || result.penaltyShootout.away < 0 ||
+          result.penaltyShootout.home === result.penaltyShootout.away) return false;
+      const penaltyWinner = result.penaltyShootout.home > result.penaltyShootout.away
+        ? fixture.homeTeamId : fixture.awayTeamId;
+      if (result.winnerTeamId !== penaltyWinner) return false;
+    } else {
+      const expectedWinner = result.homeGoals > result.awayGoals ? fixture.homeTeamId : fixture.awayTeamId;
+      if (result.winnerTeamId !== expectedWinner || result.penaltyShootout !== null) return false;
+    }
+  }
+
+  const performanceIds = new Set();
+  for (const performance of result.playerPerformances) {
+    if (!isRecord(performance) || typeof performance.playerId !== "string" ||
+        !performance.playerId.trim() || performanceIds.has(performance.playerId) ||
+        ![fixture.homeTeamId, fixture.awayTeamId].includes(performance.clubId) ||
+        typeof performance.playerName !== "string" || !performance.playerName.trim() ||
+        !Number.isSafeInteger(performance.minutesPlayed) || performance.minutesPlayed < 1 ||
+        performance.minutesPlayed > result.durationMinutes ||
+        !Number.isSafeInteger(performance.goals) || performance.goals < 0 ||
+        !Number.isSafeInteger(performance.assists) || performance.assists < 0 ||
+        !Number.isFinite(performance.rating) || performance.rating < 4 || performance.rating > 10) return false;
+    performanceIds.add(performance.playerId);
+  }
+  return performanceIds.size === 22;
+}
+
+function isValidTournamentArchive(archive, currentDate) {
+  if (!isRecord(archive) || typeof archive.id !== "string" ||
+      archive.id !== "international-archive-" + archive.tournamentId ||
+      !Number.isSafeInteger(archive.season) || archive.season < 1 ||
+      typeof archive.nameAr !== "string" || !archive.nameAr.trim() ||
+      !["continental", "world"].includes(archive.type) ||
+      typeof archive.confederation !== "string" || !archive.confederation.trim() ||
+      !isDate(archive.completedDate) || (currentDate && archive.completedDate > currentDate) ||
+      !Array.isArray(archive.teams) || archive.teams.length < 2 ||
+      !Array.isArray(archive.results) || archive.results.length < 1 ||
+      archive.matchesPlayed !== archive.results.length ||
+      archive.teamCount !== archive.teams.length ||
+      !Array.isArray(archive.standings) || !isRecord(archive.awards) ||
+      !Array.isArray(archive.playerStats)) return false;
+
+  const teamIds = new Set();
+  const countryIds = new Set();
+  for (const team of archive.teams) {
+    if (!isRecord(team) || typeof team.id !== "string" || !team.id.trim() ||
+        teamIds.has(team.id) || typeof team.countryId !== "string" || !team.countryId.trim() ||
+        typeof team.nameAr !== "string" || !team.nameAr.trim() ||
+        !Number.isFinite(team.strength) || team.strength < 1 || team.strength > 99) return false;
+    teamIds.add(team.id);
+    countryIds.add(team.countryId);
+  }
+  if (!teamIds.has(archive.championTeamId) ||
+      archive.championName !== archive.teams.find((team) => team.id === archive.championTeamId)?.nameAr) return false;
+
+  const resultIds = new Set();
+  for (const result of archive.results) {
+    if (!isRecord(result) || typeof result.fixtureId !== "string" ||
+        resultIds.has(result.fixtureId) || !teamIds.has(result.homeTeamId) ||
+        !teamIds.has(result.awayTeamId) || result.homeTeamId === result.awayTeamId ||
+        !isDate(result.date) || result.date > archive.completedDate ||
+        !Number.isSafeInteger(result.homeGoals) || result.homeGoals < 0 ||
+        !Number.isSafeInteger(result.awayGoals) || result.awayGoals < 0) return false;
+    resultIds.add(result.fixtureId);
+  }
+  for (const group of archive.standings) {
+    if (!isRecord(group) || typeof group.groupId !== "string" ||
+        typeof group.nameAr !== "string" || !Array.isArray(group.standings)) return false;
+    const rowIds = new Set();
+    for (const row of group.standings) {
+      if (!isRecord(row) || !teamIds.has(row.teamId) || rowIds.has(row.teamId) ||
+          !["played", "wins", "draws", "losses", "goalsFor", "goalsAgainst", "points"]
+            .every((key) => Number.isSafeInteger(row[key]) && row[key] >= 0) ||
+          !Number.isSafeInteger(row.goalDifference)) return false;
+      rowIds.add(row.teamId);
+    }
+  }
+  for (const awardType of ["topScorer", "topAssists", "bestPlayer"]) {
+    const award = archive.awards[awardType];
+    if (award === null) continue;
+    if (!isRecord(award) || typeof award.playerId !== "string" ||
+        typeof award.playerName !== "string" || !countryIds.has(award.countryId) ||
+        !Number.isFinite(award.value) || award.value < 0 ||
+        !Number.isSafeInteger(award.appearances) || award.appearances < 1 ||
+        !Number.isSafeInteger(award.goals) || award.goals < 0 ||
+        !Number.isSafeInteger(award.assists) || award.assists < 0 ||
+        !Number.isFinite(award.averageMatchRating) ||
+        award.averageMatchRating < 4 || award.averageMatchRating > 10) return false;
+  }
+  const statIds = new Set();
+  for (const stat of archive.playerStats) {
+    if (!isValidTournamentPlayerStat(stat, countryIds, archive.completedDate) ||
+        statIds.has(stat.playerId)) return false;
+    statIds.add(stat.playerId);
+  }
+  return true;
+}
+
+export function isValidTournamentSeasonRecord(record, season, currentDate = null) {
   if (!isRecord(record) || record.season !== season || !isDate(record.generatedAt) ||
+      (currentDate && record.generatedAt > currentDate) ||
       !Array.isArray(record.tournaments) || record.tournaments.length < 1 ||
       record.tournaments.length > 8) return false;
-  const ids = new Set();
+  const tournamentIds = new Set();
   for (const tournament of record.tournaments) {
     if (!isRecord(tournament) || typeof tournament.id !== "string" ||
-        ids.has(tournament.id) || !Array.isArray(tournament.teams) ||
-        !Array.isArray(tournament.groups) || !Array.isArray(tournament.fixtures) ||
-        !Array.isArray(tournament.results) || !Array.isArray(tournament.playerStats)) return false;
-    ids.add(tournament.id);
-    const teamIds = new Set(tournament.teams.map((team) => team.id));
-    const fixtureIds = new Set();
+        !tournament.id.trim() || tournamentIds.has(tournament.id) ||
+        tournament.season !== season ||
+        !["continental", "world"].includes(tournament.type) ||
+        typeof tournament.nameAr !== "string" || !tournament.nameAr.trim() ||
+        typeof tournament.confederation !== "string" || !tournament.confederation.trim() ||
+        !Array.isArray(tournament.teams) || tournament.teams.length < 2 ||
+        tournament.teams.length > 32 || !Array.isArray(tournament.groups) ||
+        !Array.isArray(tournament.fixtures) || tournament.fixtures.length > 500 ||
+        !Array.isArray(tournament.results) || tournament.results.length > 500 ||
+        !Array.isArray(tournament.playerStats) ||
+        !["scheduled", "completed"].includes(tournament.status) ||
+        !["groups", "semi-final", "final", "completed"].includes(tournament.stage)) return false;
+    tournamentIds.add(tournament.id);
+
+    const teamIds = new Set();
+    const countryIds = new Set();
+    for (const team of tournament.teams) {
+      if (!isRecord(team) || typeof team.id !== "string" || !team.id.trim() ||
+          teamIds.has(team.id) || typeof team.countryId !== "string" || !team.countryId.trim() ||
+          typeof team.nameAr !== "string" || !team.nameAr.trim() ||
+          !Number.isFinite(team.strength) || team.strength < 1 || team.strength > 99 ||
+          !Number.isSafeInteger(team.seed) || team.seed < 1) return false;
+      teamIds.add(team.id);
+      countryIds.add(team.countryId);
+    }
+
+    const groupIds = new Set();
+    const groupedTeams = new Set();
+    for (const group of tournament.groups) {
+      if (!isRecord(group) || typeof group.id !== "string" || !group.id.trim() ||
+          groupIds.has(group.id) || typeof group.nameAr !== "string" || !group.nameAr.trim() ||
+          !Array.isArray(group.teamIds) || group.teamIds.length < 2 ||
+          group.teamIds.some((id) => !teamIds.has(id) || groupedTeams.has(id))) return false;
+      groupIds.add(group.id);
+      group.teamIds.forEach((id) => groupedTeams.add(id));
+    }
+    if (tournament.groups.length > 0 && groupedTeams.size !== teamIds.size) return false;
+
+    const fixtureById = new Map();
     for (const fixture of tournament.fixtures) {
-      if (!isRecord(fixture) || typeof fixture.id !== "string" ||
-          fixtureIds.has(fixture.id) || fixture.tournamentId !== tournament.id ||
-          !isDate(fixture.date) || !teamIds.has(fixture.homeTeamId) ||
-          !teamIds.has(fixture.awayTeamId) || fixture.homeTeamId === fixture.awayTeamId ||
+      if (!isRecord(fixture) || typeof fixture.id !== "string" || !fixture.id.trim() ||
+          fixtureById.has(fixture.id) || fixture.tournamentId !== tournament.id ||
+          fixture.season !== season || !isDate(fixture.date) ||
+          (currentDate && fixture.date > addDays(currentDate, 365)) ||
+          !teamIds.has(fixture.homeTeamId) || !teamIds.has(fixture.awayTeamId) ||
+          fixture.homeTeamId === fixture.awayTeamId ||
+          !Number.isSafeInteger(fixture.round) || fixture.round < 1 ||
           !["groups", "knockout"].includes(fixture.stage) ||
           !["scheduled", "played"].includes(fixture.status)) return false;
-      fixtureIds.add(fixture.id);
+      if (fixture.stage === "groups") {
+        if (!groupIds.has(fixture.groupId) ||
+            !tournament.groups.some((group) => group.id === fixture.groupId &&
+              group.teamIds.includes(fixture.homeTeamId) && group.teamIds.includes(fixture.awayTeamId))) return false;
+      } else if (fixture.groupId !== null ||
+          !["semi-final", "final"].includes(fixture.phase)) return false;
+      fixtureById.set(fixture.id, fixture);
     }
-    const resultIds = new Set();
+
+    const resultById = new Map();
     for (const result of tournament.results) {
-      if (!isRecord(result) || !fixtureIds.has(result.fixtureId) ||
-          resultIds.has(result.fixtureId) || !Number.isSafeInteger(result.homeGoals) ||
-          result.homeGoals < 0 || !Number.isSafeInteger(result.awayGoals) ||
-          result.awayGoals < 0 || !teamIds.has(result.homeTeamId) ||
-          !teamIds.has(result.awayTeamId) || result.homeTeamId === result.awayTeamId ||
-          !isDate(result.date)) return false;
-      resultIds.add(result.fixtureId);
+      const fixture = fixtureById.get(result?.fixtureId);
+      if (!fixture || fixture.status !== "played" || resultById.has(result.fixtureId) ||
+          !isValidTournamentResult(result, fixture, teamIds, currentDate)) return false;
+      resultById.set(result.fixtureId, result);
     }
     if (tournament.fixtures.some((fixture) =>
-      (fixture.status === "played") !== resultIds.has(fixture.id)
+      (fixture.status === "played") !== resultById.has(fixture.id)
     )) return false;
+
+    const statIds = new Set();
+    for (const stat of tournament.playerStats) {
+      if (!isValidTournamentPlayerStat(stat, countryIds, currentDate) || statIds.has(stat.playerId)) return false;
+      statIds.add(stat.playerId);
+    }
+
+    if (tournament.status === "completed") {
+      if (tournament.stage !== "completed" || !teamIds.has(tournament.championTeamId) ||
+          !tournament.archive || !isValidTournamentArchive(tournament.archive, currentDate) ||
+          tournament.archive.tournamentId !== tournament.id ||
+          tournament.archive.championTeamId !== tournament.championTeamId) return false;
+    } else if (tournament.championTeamId !== null ||
+        (tournament.archive !== undefined && !isValidTournamentArchive(tournament.archive, currentDate))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function isValidInternationalTournamentState(state, currentDate) {
+  if (!isRecord(state) || !isDate(currentDate)) return false;
+  const seasons = state.tournamentSeasons;
+  const archives = state.tournamentArchives;
+  if (seasons !== undefined && (!Array.isArray(seasons) || seasons.length > MAX_TOURNAMENT_SEASONS)) return false;
+  if (archives !== undefined && (!Array.isArray(archives) || archives.length > MAX_TOURNAMENT_ARCHIVES)) return false;
+  const seasonRecords = seasons ?? [];
+  const archiveRecords = archives ?? [];
+  const seasonsSeen = new Set();
+  for (const record of seasonRecords) {
+    if (!isValidTournamentSeasonRecord(record, record?.season, currentDate) ||
+        seasonsSeen.has(record.season)) return false;
+    seasonsSeen.add(record.season);
+  }
+  const archiveIds = new Set();
+  for (const archive of archiveRecords) {
+    if (!isValidTournamentArchive(archive, currentDate) || archiveIds.has(archive.id)) return false;
+    archiveIds.add(archive.id);
+  }
+  const generatedArchives = seasonRecords.flatMap((record) => record.tournaments
+    .filter((tournament) => tournament.archive)
+    .map((tournament) => tournament.archive));
+  for (const archive of generatedArchives) {
+    if (!archiveIds.has(archive.id)) return false;
   }
   return true;
 }
