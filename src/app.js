@@ -853,6 +853,146 @@ function renderPlayers(context) {
   return page;
 }
 
+function renderInternationalTournamentPanel(context) {
+  const state = context.save.world.nationalTeams ?? {};
+  const overview = getInternationalTournamentOverview(state, context.save.world.currentDate);
+  const section = node("section", "surface-card football-panel international-tournament-panel");
+  const heading = node("div", "football-panel-heading");
+  heading.append(
+    node("h2", "", "المنتخبات والبطولات الدولية"),
+    node("span", "representation-count", "الموسم " + formatHomeNumber(context.save.career.season))
+  );
+  section.append(heading);
+
+  const activeTournaments = overview.tournaments.filter((tournament) => tournament.status !== "completed");
+  const summary = node("div", "international-summary-grid");
+  [
+    ["بطولات نشطة", activeTournaments.length],
+    ["مواعيد قادمة", overview.upcomingFixtures.length],
+    ["أبطال محفوظون", overview.champions.length]
+  ].forEach(([label, value]) => {
+    const card = node("article", "international-summary-card");
+    card.append(node("small", "", label), node("strong", "", formatHomeNumber(value)));
+    summary.append(card);
+  });
+  section.append(summary);
+
+  const tournamentByTeam = new Map();
+  overview.tournaments.forEach((tournament) => {
+    tournament.teams.forEach((team) => tournamentByTeam.set(team.id, team.nameAr));
+  });
+  const tournamentStageLabel = (stage) => ({
+    groups: "دور المجموعات",
+    "semi-final": "نصف النهائي",
+    final: "النهائي",
+    completed: "اكتملت البطولة"
+  })[stage] ?? "لم تبدأ";
+
+  const tournamentList = node("div", "international-tournament-list");
+  if (overview.tournaments.length === 0) {
+    tournamentList.append(node("p", "representation-empty",
+      "مفيش بطولة دولية مجدولة حاليًا. البطولات القارية تُقام كل موسمين، وكأس العالم كل أربعة مواسم داخل محاكاة اللعبة."));
+  } else {
+    overview.tournaments.forEach((tournament) => {
+      const card = node("article", "international-tournament-card");
+      const top = node("div", "international-tournament-top");
+      top.append(
+        node("small", "", (tournament.type === "world" ? "بطولة عالمية" : "بطولة قارية") +
+          " · الموسم " + formatHomeNumber(tournament.season)),
+        node("span", tournament.status === "completed" ? "international-status is-complete" : "international-status",
+          tournamentStageLabel(tournament.stage))
+      );
+      card.append(top, node("h3", "", tournament.nameAr));
+      const played = tournament.fixtures.filter((fixture) => fixture.status === "played").length;
+      card.append(node("p", "modal-note",
+        tournament.teams.length + " منتخبات · " + played + " من " + tournament.fixtures.length + " مباراة في الجدول"));
+      if (tournament.championTeamId) {
+        const champion = tournament.teams.find((team) => team.id === tournament.championTeamId);
+        card.append(node("p", "international-champion",
+          "البطل: " + (champion?.nameAr ?? tournament.championTeamId)));
+      }
+      if (tournament.standings.length > 0) {
+        tournament.standings.forEach((group) => {
+          const groupBlock = node("div", "international-group-block");
+          groupBlock.append(node("strong", "", group.nameAr));
+          if (!group.standings) {
+            groupBlock.append(node("small", "modal-note", "الترتيب هيظهر بعد اكتمال مباريات المجموعة."));
+          } else {
+            const table = node("div", "international-standings-table");
+            const headerRow = node("div", "international-standings-row is-header");
+            ["#", "المنتخب", "لعب", "فارق", "نقاط"].forEach((label) =>
+              headerRow.append(node("span", "", label))
+            );
+            table.append(headerRow);
+            group.standings.forEach((row, index) => {
+              const line = node("div", "international-standings-row");
+              [
+                index + 1,
+                tournamentByTeam.get(row.teamId) ?? row.teamId,
+                row.played,
+                row.goalDifference,
+                row.points
+              ].forEach((value, cellIndex) => {
+                line.append(node("span", cellIndex === 1 ? "international-team-name" : "",
+                  cellIndex === 1 ? String(value) : formatHomeNumber(value)));
+              });
+              table.append(line);
+            });
+            groupBlock.append(table);
+          }
+          card.append(groupBlock);
+        });
+      }
+      tournamentList.append(card);
+    });
+  }
+  section.append(tournamentList);
+
+  const upcomingPanel = node("div", "international-fixture-panel");
+  upcomingPanel.append(node("h3", "", "المواعيد الدولية القادمة"));
+  if (overview.upcomingFixtures.length === 0) {
+    upcomingPanel.append(node("p", "representation-empty", "لا توجد مباريات دولية قادمة في الجدول الحالي."));
+  } else {
+    const list = node("div", "international-fixture-list");
+    overview.upcomingFixtures.slice(0, 8).forEach((fixture) => {
+      const row = node("article", "international-fixture-row");
+      row.append(
+        node("small", "", fixture.tournamentName + " · " + formatHomeDate(fixture.date)),
+        node("strong", "", (tournamentByTeam.get(fixture.homeTeamId) ?? fixture.homeTeamId) +
+          "  —  " + (tournamentByTeam.get(fixture.awayTeamId) ?? fixture.awayTeamId)),
+        node("span", "", tournamentStageLabel(fixture.stage))
+      );
+      list.append(row);
+    });
+    upcomingPanel.append(list);
+  }
+  section.append(upcomingPanel);
+
+  const recentPanel = node("div", "international-fixture-panel");
+  recentPanel.append(node("h3", "", "آخر نتائج المنتخبات"));
+  if (overview.recentResults.length === 0) {
+    recentPanel.append(node("p", "representation-empty", "نتائج أولى البطولات هتظهر هنا بعد تقدم المسيرة."));
+  } else {
+    const list = node("div", "international-fixture-list");
+    overview.recentResults.slice(0, 6).forEach((result) => {
+      const row = node("article", "international-fixture-row");
+      const shootout = result.penaltyShootout
+        ? " · ترجيح " + result.penaltyShootout.home + "-" + result.penaltyShootout.away
+        : "";
+      row.append(
+        node("small", "", result.tournamentName + " · " + formatHomeDate(result.date)),
+        node("strong", "", result.home.name + "  " + result.homeGoals + " - " + result.awayGoals + "  " + result.away.name + shootout),
+        node("span", "", result.decision === "penalties" ? "حُسمت بركلات الترجيح" :
+          result.homeGoals === result.awayGoals ? "تعادل" : "انتهت المباراة")
+      );
+      list.append(row);
+    });
+    recentPanel.append(list);
+  }
+  section.append(recentPanel);
+  return section;
+}
+
 function renderFootball(context) {
   const page = node("div", "page-content rebuild-screen football-screen");
   page.append(
@@ -1160,7 +1300,7 @@ function renderFootball(context) {
     context.updatePlayerTrainingPlan(playerSelect.value, focusSelect.value, intensitySelect.value);
   });
   trainingPanel.append(form, savePlanButton, playerDetails);
-  page.append(summary, schedulePanel, standingsPanel, resultsPanel, trainingPanel);
+  page.append(summary, schedulePanel, standingsPanel, resultsPanel, trainingPanel, renderInternationalTournamentPanel(context));
   return page;
 }
 
@@ -4655,8 +4795,44 @@ export function mountApp(root) {
       performanceSection.append(honorsList);
     }
 
+    const internationalSection = node("section", "player-profile-growth player-profile-international");
+    internationalSection.append(
+      node("strong", "", "المسيرة الدولية"),
+      node("p", "modal-note", player.internationalFriendlyStats
+        ? "مشاركات الوديات الدولية محفوظة بشكل مستقل عن سجلات النادي."
+        : "لا توجد مشاركات ودية دولية مسجلة حتى الآن.")
+    );
+    if (player.internationalFriendlyStats) {
+      const stat = player.internationalFriendlyStats;
+      const friendlyGrid = node("div", "player-profile-stats");
+      [
+        ["المشاركات", stat.appearances, "APP"],
+        ["الدقائق", stat.minutesPlayed, "MIN"],
+        ["الأهداف", stat.goals, "G"],
+        ["الصناعة", stat.assists, "A"]
+      ].forEach(([label, value, suffix]) => {
+        const item = node("article", "player-profile-stat");
+        item.append(node("small", "", label), node("strong", "", String(value)), node("span", "", suffix));
+        friendlyGrid.append(item);
+      });
+      internationalSection.append(friendlyGrid);
+    }
+    const tournamentStats = player.internationalTournamentStats ?? [];
+    if (tournamentStats.length > 0) {
+      const tournamentList = node("div", "player-profile-details player-profile-honors");
+      tournamentStats.slice(-6).reverse().forEach((stat) => {
+        const row = node("div", "player-profile-detail");
+        row.append(
+          node("small", "", stat.tournamentName + " · الموسم " + stat.season),
+          node("strong", "", stat.appearances + " مشاركة · " + stat.goals + " هدف · " + stat.assists + " صناعة")
+        );
+        tournamentList.append(row);
+      });
+      internationalSection.append(tournamentList);
+    }
+
     const content = node("div", "player-profile-content");
-    content.append(hero, ratingCards, details, growth, performanceSection,
+    content.append(hero, ratingCards, details, growth, performanceSection, internationalSection,
       node("p", "player-profile-disclaimer", "هذا ملف لاعب خيالي من قاعدة العالم التجريبية. القيمة السوقية تقدير داخل اللعبة وليست عرض انتقال رسميًا.")
     );
 
