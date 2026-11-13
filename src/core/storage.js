@@ -7,6 +7,7 @@ import { mergePlayerDevelopmentRoster } from "../engines/player-development.js";
 import { createInitialTransferState, isValidTransferState } from "../engines/transfers.js";
 import { createInitialAgencyManagementState, isValidAgencyManagementState } from "../engines/agency-management.js";
 import { createInitialNationalTeamState, isValidNationalTeamState } from "../engines/international-breaks.js";
+import { isValidInternationalMatchState } from "../engines/international-matches.js";
 import { getWorldSquadPlayers } from "../data/world-database.js";
 
 export const STORAGE_KEY = "football-agent.save";
@@ -385,7 +386,10 @@ export function isValidSave(value) {
     isValidRepresentationState(value.agency.representation, currentDate, clients) &&
     isValidTalentPipelineState(value.agency.talentPipeline, currentDate) &&
     isValidAgencyManagementState(value.agency.management, currentDate) &&
-    (value.world.nationalTeams === undefined || isValidNationalTeamState(value.world.nationalTeams, currentDate));
+    (value.world.nationalTeams === undefined || (
+      isValidNationalTeamState(value.world.nationalTeams, currentDate) &&
+      isValidInternationalMatchState(value.world.nationalTeams, currentDate)
+    ));
 }
 
 export function readWatchlist(storage) {
