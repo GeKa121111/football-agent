@@ -225,9 +225,18 @@ export function createInternationalTournamentPlan({
 }
 
 function normalizeResults(results) {
-  return new Map((Array.isArray(results) ? results : [])
-    .filter((result) => result && typeof result.fixtureId === "string")
-    .map((result) => [result.fixtureId, result]));
+  if (!Array.isArray(results)) throw new TypeError("سجل نتائج البطولة غير صالح.");
+  const normalized = new Map();
+  for (const result of results) {
+    if (!isRecord(result) || typeof result.fixtureId !== "string" || !result.fixtureId.trim()) {
+      throw new TypeError("سجل نتيجة مباراة دولية غير صالح.");
+    }
+    if (normalized.has(result.fixtureId)) {
+      throw new TypeError("تم تسجيل نتيجة مكررة للمباراة الدولية نفسها.");
+    }
+    normalized.set(result.fixtureId, result);
+  }
+  return normalized;
 }
 
 function standingsForGroup(tournament, group, results) {
@@ -416,14 +425,18 @@ export function isValidInternationalTournamentPlan(plan) {
         !["scheduled", "completed"].includes(tournament.status) ||
         !["groups", "knockout", "semi-final", "final", "completed"].includes(tournament.stage)) return false;
     tournamentIds.add(tournament.id);
+    if (tournament.teams.some((team) => !isRecord(team) ||
+        typeof team.id !== "string" || !team.id.trim() ||
+        typeof team.countryId !== "string" || !team.countryId.trim() ||
+        !Number.isFinite(team.strength) || team.strength < 1 || team.strength > 99)) return false;
     const teamIds = new Set(tournament.teams.map((team) => team.id));
     if (teamIds.size !== tournament.teams.length ||
-        tournament.teams.some((team) => !isRecord(team) ||
-          typeof team.countryId !== "string" || !teamIds.has(team.id) ||
-          !Number.isFinite(team.strength) || team.strength < 1 || team.strength > 99)) return false;
-    const groupTeamIds = tournament.groups.flatMap((group) => group.teamIds ?? []);
-    if (new Set(groupTeamIds).size !== groupTeamIds.length ||
-        groupTeamIds.some((id) => !teamIds.has(id))) return false;
+        tournament.groups.some((group) => !isRecord(group) ||
+          typeof group.id !== "string" || !group.id.trim() ||
+          !Array.isArray(group.teamIds) || group.teamIds.length < 2 ||
+          !group.teamIds.every((id) => typeof id === "string" && teamIds.has(id)))) return false;
+    const groupTeamIds = tournament.groups.flatMap((group) => group.teamIds);
+    if (new Set(groupTeamIds).size !== groupTeamIds.length) return false;
     const fixtureIds = new Set();
     for (const fixture of tournament.fixtures) {
       if (!isRecord(fixture) || typeof fixture.id !== "string" ||
