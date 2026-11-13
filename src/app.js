@@ -4405,9 +4405,25 @@ export function mountApp(root) {
         description: task.description,
         daysUntil: Math.round((Date.parse(task.dueDate + "T00:00:00.000Z") - currentDateTime) / 86400000)
       }));
+    const internationalFixtures = getInternationalTournamentOverview(
+      state.save.world.nationalTeams ?? {},
+      currentDate
+    ).upcomingFixtures
+      .filter((fixture) => Date.parse(fixture.date + "T00:00:00.000Z") <= horizonTime)
+      .map((fixture) => ({
+        id: fixture.id,
+        date: fixture.date,
+        type: "international-tournament-fixture",
+        title: (fixture.tournamentName ?? "بطولة دولية") + " · " +
+          (fixture.homeTeamId ?? "—") + " × " + (fixture.awayTeamId ?? "—"),
+        description: fixture.stage === "groups" ? "مباراة في دور المجموعات" :
+          fixture.stage === "semi-final" ? "مباراة نصف النهائي" : "مباراة النهائي",
+        daysUntil: Math.round((Date.parse(fixture.date + "T00:00:00.000Z") - currentDateTime) / 86400000)
+      }));
     const events = [
       ...getUpcomingCareerEvents(currentDate, state.save.career.season, 365),
-      ...followUpEvents
+      ...followUpEvents,
+      ...internationalFixtures
     ].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
     const content = node("div", "season-calendar-content");
     const intro = node("p", "modal-copy", "مواعيد الوكالة المجدولة خلال الـ365 يومًا القادمة. المواعيد تنظيمية داخل اللعبة، وليست جداول مباريات أو نوافذ انتقالات رسمية.");
@@ -4420,7 +4436,8 @@ export function mountApp(root) {
       "midseason-review": "مراجعة منتصف الموسم",
       "season-review": "تقييم نهاية الموسم",
       "season-closing": "ختام الموسم",
-      "talent-follow-up-due": "متابعة موهبة"
+      "talent-follow-up-due": "متابعة موهبة",
+      "international-tournament-fixture": "مباراة منتخب"
     };
     if (events.length === 0) {
       list.append(node("p", "career-activity-empty", "لا توجد أحداث مستقبلية في هذه الفترة."));
