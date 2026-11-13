@@ -31,6 +31,7 @@ import {
   startScoutingMission
 } from "./engines/scouting.js";
 import { createPlayerPortrait } from "./ui/player-portrait.js";
+import { getInternationalTournamentOverview } from "./engines/international-tournament-simulation.js";
 import {
   getTalentProspect,
   upsertTalentProspect,
@@ -113,6 +114,19 @@ const WORLD_COUNTS = getWorldSummary();
 function getCurrentWorldPlayers(save) {
   const currentDate = save?.world?.currentDate;
   const transferState = save?.world?.transfers;
+  const nationalTeamState = save?.world?.nationalTeams ?? {};
+  const friendlyStatsById = new Map((nationalTeamState.playerStats ?? [])
+    .map((record) => [record.playerId, record]));
+  const tournamentStatsById = new Map();
+  for (const seasonRecord of nationalTeamState.tournamentSeasons ?? []) {
+    for (const tournament of seasonRecord.tournaments ?? []) {
+      for (const record of tournament.playerStats ?? []) {
+        const entries = tournamentStatsById.get(record.playerId) ?? [];
+        entries.push({ ...record, tournamentName: tournament.nameAr, season: tournament.season });
+        tournamentStatsById.set(record.playerId, entries);
+      }
+    }
+  }
   const developmentById = new Map(
     (save?.world?.football?.playerDevelopment?.players ?? [])
       .map((record) => [record.playerId, record])
@@ -179,6 +193,8 @@ function getCurrentWorldPlayers(save) {
       competitionStats,
       seasonPerformance,
       honors,
+      internationalFriendlyStats: friendlyStatsById.get(player.id) ?? null,
+      internationalTournamentStats: tournamentStatsById.get(player.id) ?? [],
       clubId: club?.id ?? null,
       club: club?.nameAr ?? "لاعب حر",
       clubShortName: club?.shortName ?? "حر",
