@@ -299,7 +299,23 @@ function createTournamentArchive(tournament, completedDate) {
       topAssists: awardRecord(topAssists, topAssists?.assists ?? 0),
       bestPlayer: awardRecord(bestPlayer, bestPlayer?.averageMatchRating ?? 0)
     },
-    results: tournament.results.map((result) => ({ ...result })),
+    results: tournament.results.map((result) => ({
+      fixtureId: result.fixtureId,
+      date: result.date,
+      season: result.season,
+      tournamentId: result.tournamentId,
+      stage: result.stage,
+      phase: result.phase,
+      round: result.round,
+      groupId: result.groupId,
+      homeTeamId: result.homeTeamId,
+      awayTeamId: result.awayTeamId,
+      homeGoals: result.homeGoals,
+      awayGoals: result.awayGoals,
+      winnerTeamId: result.winnerTeamId,
+      decision: result.decision,
+      penaltyShootout: result.penaltyShootout
+    })),
     playerStats: tournament.playerStats.map((record) => ({ ...record }))
   };
 }
@@ -456,6 +472,37 @@ function isValidTournamentResult(result, fixture, teamIds, currentDate) {
   return performanceIds.size === 22;
 }
 
+function isValidArchivedResult(result, fixture, teamIds, currentDate) {
+  if (!isRecord(result) || result.fixtureId !== fixture.id ||
+      result.tournamentId !== fixture.tournamentId || result.season !== fixture.season ||
+      result.date !== fixture.date || (currentDate && result.date > currentDate) ||
+      result.stage !== fixture.stage || result.phase !== (fixture.phase ?? "groups") ||
+      result.round !== fixture.round || result.groupId !== (fixture.groupId ?? null) ||
+      result.homeTeamId !== fixture.homeTeamId || result.awayTeamId !== fixture.awayTeamId ||
+      !teamIds.has(result.homeTeamId) || !teamIds.has(result.awayTeamId) ||
+      !Number.isSafeInteger(result.homeGoals) || result.homeGoals < 0 ||
+      !Number.isSafeInteger(result.awayGoals) || result.awayGoals < 0) return false;
+  if (fixture.stage === "groups") {
+    const expectedWinner = result.homeGoals === result.awayGoals ? null
+      : result.homeGoals > result.awayGoals ? fixture.homeTeamId : fixture.awayTeamId;
+    return result.winnerTeamId === expectedWinner &&
+      (result.decision === "draw" || result.decision === "home-win" || result.decision === "away-win") &&
+      result.penaltyShootout === null;
+  }
+  if (result.homeGoals === result.awayGoals) {
+    if (result.decision !== "penalties" || !isRecord(result.penaltyShootout) ||
+        !Number.isSafeInteger(result.penaltyShootout.home) ||
+        !Number.isSafeInteger(result.penaltyShootout.away) ||
+        result.penaltyShootout.home < 0 || result.penaltyShootout.away < 0 ||
+        result.penaltyShootout.home === result.penaltyShootout.away) return false;
+    return result.winnerTeamId === (result.penaltyShootout.home > result.penaltyShootout.away
+      ? fixture.homeTeamId : fixture.awayTeamId);
+  }
+  const winner = result.homeGoals > result.awayGoals ? fixture.homeTeamId : fixture.awayTeamId;
+  return result.decision === "regular-time" &&
+    result.winnerTeamId === winner && result.penaltyShootout === null;
+}
+
 function isValidTournamentArchive(archive, currentDate) {
   if (!isRecord(archive) || typeof archive.id !== "string" ||
       typeof archive.tournamentId !== "string" || !archive.tournamentId.trim() ||
@@ -501,7 +548,7 @@ function isValidTournamentArchive(archive, currentDate) {
   for (const result of archive.results) {
     const fixture = fixtureById.get(result?.fixtureId);
     if (!fixture || resultIds.has(result.fixtureId) ||
-        !isValidTournamentResult(result, fixture, teamIds, archive.completedDate)) return false;
+        !isValidArchivedResult(result, fixture, teamIds, archive.completedDate)) return false;
     resultIds.add(result.fixtureId);
   }
   if (archive.fixtures.some((fixture) => !resultIds.has(fixture.id))) return false;
