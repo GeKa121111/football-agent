@@ -458,6 +458,7 @@ function isValidTournamentResult(result, fixture, teamIds, currentDate) {
 
 function isValidTournamentArchive(archive, currentDate) {
   if (!isRecord(archive) || typeof archive.id !== "string" ||
+      typeof archive.tournamentId !== "string" || !archive.tournamentId.trim() ||
       archive.id !== "international-archive-" + archive.tournamentId ||
       !Number.isSafeInteger(archive.season) || archive.season < 1 ||
       typeof archive.nameAr !== "string" || !archive.nameAr.trim() ||
@@ -492,6 +493,7 @@ function isValidTournamentArchive(archive, currentDate) {
         !isDate(fixture.date) || fixture.date > archive.completedDate ||
         !teamIds.has(fixture.homeTeamId) || !teamIds.has(fixture.awayTeamId) ||
         fixture.homeTeamId === fixture.awayTeamId || fixture.status !== "played" ||
+        fixture.resultId !== fixture.id ||
         !["groups", "knockout"].includes(fixture.stage)) return false;
     fixtureById.set(fixture.id, fixture);
   }
@@ -764,9 +766,11 @@ export function advanceInternationalTournaments(save, database = WORLD_DATABASE)
         changed = true;
       }
       if (tournament.status === "completed" && !tournament.archive) {
-        const archive = createTournamentArchive(tournament, currentDate);
+        const archiveId = "international-archive-" + tournament.id;
+        const existingArchive = tournamentArchives.find((item) => item.id === archiveId);
+        const archive = existingArchive ?? createTournamentArchive(tournament, currentDate);
         tournament = { ...tournament, archive };
-        tournamentArchives.push(archive);
+        if (!existingArchive) tournamentArchives.push(archive);
         changed = true;
       }
       nextTournaments.push(tournament);
@@ -789,10 +793,13 @@ export function advanceInternationalTournaments(save, database = WORLD_DATABASE)
   }
 
   if (!changed) return save;
-  for (const record of tournamentSeasons) {
-    if (!isValidTournamentSeasonRecord(record, record.season)) {
-      throw new TypeError("سجل البطولة الدولية الناتج غير صالح.");
-    }
+  const nextNationalTeams = {
+    ...originalNationalTeams,
+    tournamentSeasons,
+    tournamentArchives
+  };
+  if (!isValidInternationalTournamentState(nextNationalTeams, currentDate)) {
+    throw new TypeError("سجل البطولات الدولية أو الأرشيف الناتج غير صالح.");
   }
 
   const events = [...(save.world.events ?? []), ...newEvents].slice(-90);
@@ -806,11 +813,7 @@ export function advanceInternationalTournaments(save, database = WORLD_DATABASE)
     ...save,
     world: {
       ...save.world,
-      nationalTeams: {
-        ...originalNationalTeams,
-        tournamentSeasons,
-        tournamentArchives
-      },
+      nationalTeams: nextNationalTeams,
       football: {
         ...save.world.football,
         playerDevelopment: nextPlayerDevelopment
