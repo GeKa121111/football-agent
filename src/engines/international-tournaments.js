@@ -171,7 +171,7 @@ export function createInternationalTournamentPlan({
       confederation,
       season,
       status: "scheduled",
-      stage: groups.length ? "groups" : "knockout",
+      stage: groups.length ? "groups" : "final",
       teams: ranked,
       groups,
       qualifiersPerGroup: 2,
