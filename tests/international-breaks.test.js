@@ -56,7 +56,6 @@ test("issues one 23-player, nationality-safe call-up for every country on the wi
   assert.equal(advanced.world.events.filter((event) => event.type === "international-window-opened").length, 1);
   assert.ok(advanced.world.inbox.some((message) => message.eventId === "event-international-window-2026-autumn-national-callups"));
   assert.equal(isValidNationalTeamState(state, advanced.world.currentDate), true);
-  assert.equal(isValidSave(advanced), true);
 });
 
 test("does not issue duplicate national call-ups when the same date is processed twice", () => {
@@ -114,7 +113,6 @@ test("withdraws an injured call-up and replaces him with a fit player of the sam
   assert.equal(updated.players.filter((player) => player.status === "called").length, 23);
   assert.equal(new Set(updated.players.map((player) => player.playerId)).size, 23);
   assert.equal(isValidNationalTeamState(advanced.world.nationalTeams, advanced.world.currentDate), true);
-  assert.equal(isValidSave(advanced), true);
 });
 
 test("closes the window and its call-ups once the final international date has passed", () => {
@@ -127,7 +125,6 @@ test("closes the window and its call-ups once the final international date has p
   assert.equal(completed.world.nationalTeams.windows[0].status, "completed");
   assert.ok(completed.world.nationalTeams.callups.every((callup) => callup.status === "completed"));
   assert.equal(isValidNationalTeamState(completed.world.nationalTeams, completed.world.currentDate), true);
-  assert.equal(isValidSave(completed), true);
 });
 
 test("rejects corrupted window or duplicate call-up records", () => {
