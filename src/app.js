@@ -4405,17 +4405,24 @@ export function mountApp(root) {
         description: task.description,
         daysUntil: Math.round((Date.parse(task.dueDate + "T00:00:00.000Z") - currentDateTime) / 86400000)
       }));
-    const internationalFixtures = getInternationalTournamentOverview(
+    const internationalOverview = getInternationalTournamentOverview(
       state.save.world.nationalTeams ?? {},
       currentDate
-    ).upcomingFixtures
+    );
+    const internationalTeamNames = new Map(
+      internationalOverview.tournaments.flatMap((tournament) =>
+        tournament.teams.map((team) => [team.id, team.nameAr])
+      )
+    );
+    const internationalFixtures = internationalOverview.upcomingFixtures
       .filter((fixture) => Date.parse(fixture.date + "T00:00:00.000Z") <= horizonTime)
       .map((fixture) => ({
         id: fixture.id,
         date: fixture.date,
         type: "international-tournament-fixture",
         title: (fixture.tournamentName ?? "بطولة دولية") + " · " +
-          (fixture.homeTeamId ?? "—") + " × " + (fixture.awayTeamId ?? "—"),
+          (internationalTeamNames.get(fixture.homeTeamId) ?? fixture.homeTeamId) + " × " +
+          (internationalTeamNames.get(fixture.awayTeamId) ?? fixture.awayTeamId),
         description: fixture.stage === "groups" ? "مباراة في دور المجموعات" :
           fixture.stage === "semi-final" ? "مباراة نصف النهائي" : "مباراة النهائي",
         daysUntil: Math.round((Date.parse(fixture.date + "T00:00:00.000Z") - currentDateTime) / 86400000)
