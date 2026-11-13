@@ -8,6 +8,7 @@ import { createInitialTransferState, isValidTransferState } from "../engines/tra
 import { createInitialAgencyManagementState, isValidAgencyManagementState } from "../engines/agency-management.js";
 import { createInitialNationalTeamState, isValidNationalTeamState } from "../engines/international-breaks.js";
 import { isValidInternationalMatchState } from "../engines/international-matches.js";
+import { isValidInternationalTournamentState } from "../engines/international-tournament-simulation.js";
 import { getWorldSquadPlayers } from "../data/world-database.js";
 
 export const STORAGE_KEY = "football-agent.save";
@@ -388,7 +389,8 @@ export function isValidSave(value) {
     isValidAgencyManagementState(value.agency.management, currentDate) &&
     (value.world.nationalTeams === undefined || (
       isValidNationalTeamState(value.world.nationalTeams, currentDate) &&
-      isValidInternationalMatchState(value.world.nationalTeams, currentDate)
+      isValidInternationalMatchState(value.world.nationalTeams, currentDate) &&
+      isValidInternationalTournamentState(value.world.nationalTeams, currentDate)
     ));
 }
 
