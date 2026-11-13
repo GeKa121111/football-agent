@@ -480,7 +480,7 @@ export function advanceInternationalTournaments(save, database = WORLD_DATABASE)
     throw new RangeError("سجل نتائج البطولات الدولية تجاوز الحد الآمن.");
   }
 
-  if (!changed && originalNationalTeams.tournamentSeasons !== undefined) return save;
+  if (!changed) return save;
   for (const record of tournamentSeasons) {
     if (!isValidTournamentSeason(record, record.season)) {
       throw new TypeError("سجل البطولة الدولية الناتج غير صالح.");
