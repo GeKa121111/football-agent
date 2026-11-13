@@ -290,6 +290,7 @@ function createTournamentArchive(tournament, completedDate) {
     completedDate,
     championTeamId: tournament.championTeamId,
     championName: champion?.nameAr ?? "منتخب غير معروف",
+    teams: tournament.teams.map((team) => ({ ...team })),
     teamCount: tournament.teams.length,
     matchesPlayed: tournament.results.length,
     fixtures: tournament.fixtures.map((fixture) => ({ ...fixture })),
