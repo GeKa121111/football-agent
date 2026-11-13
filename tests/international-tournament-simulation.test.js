@@ -143,6 +143,7 @@ test("completed continental tournaments generate one durable archive with indivi
   for (const archive of national.tournamentArchives) {
     assert.ok(archive.championTeamId);
     assert.equal(archive.matchesPlayed, archive.results.length);
+    assert.ok(archive.results.every((result) => !("playerPerformances" in result) && !("events" in result)));
     assert.ok(archive.standings.length >= 0);
     assert.ok(archive.teams.some((team) => team.id === archive.championTeamId));
     assert.ok(archive.awards.topScorer);
