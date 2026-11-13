@@ -6,6 +6,7 @@ import { createInitialFootballState, isValidFootballState } from "../engines/foo
 import { mergePlayerDevelopmentRoster } from "../engines/player-development.js";
 import { createInitialTransferState, isValidTransferState } from "../engines/transfers.js";
 import { createInitialAgencyManagementState, isValidAgencyManagementState } from "../engines/agency-management.js";
+import { createInitialNationalTeamState, isValidNationalTeamState } from "../engines/international-breaks.js";
 import { getWorldSquadPlayers } from "../data/world-database.js";
 
 export const STORAGE_KEY = "football-agent.save";
@@ -44,7 +45,8 @@ export function createInitialSave(now = new Date().toISOString()) {
       ...initialCalendar,
       scouting: createInitialScoutingState(),
       football: createInitialFootballState(1, "2026-07-01"),
-      transfers: createInitialTransferState()
+      transfers: createInitialTransferState(),
+      nationalTeams: createInitialNationalTeamState()
     }
   };
 }
@@ -382,7 +384,8 @@ export function isValidSave(value) {
     isValidTransferState(value.world.transfers, currentDate, clients, value.agency.representation) &&
     isValidRepresentationState(value.agency.representation, currentDate, clients) &&
     isValidTalentPipelineState(value.agency.talentPipeline, currentDate) &&
-    isValidAgencyManagementState(value.agency.management, currentDate);
+    isValidAgencyManagementState(value.agency.management, currentDate) &&
+    (value.world.nationalTeams === undefined || isValidNationalTeamState(value.world.nationalTeams, currentDate));
 }
 
 export function readWatchlist(storage) {
@@ -468,7 +471,10 @@ function migrateSave(value) {
                 }
           }
         : createInitialFootballState(value.career?.season ?? 1, value.world.currentDate),
-      transfers: isRecord(value.world.transfers) ? value.world.transfers : createInitialTransferState()
+      transfers: isRecord(value.world.transfers) ? value.world.transfers : createInitialTransferState(),
+      nationalTeams: isRecord(value.world.nationalTeams)
+        ? value.world.nationalTeams
+        : createInitialNationalTeamState()
     }
   };
 }
