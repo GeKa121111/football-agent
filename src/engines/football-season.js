@@ -431,7 +431,10 @@ export function createInitialFootballState(season = 1, currentDate = "2026-07-01
     fixtures: generateSeasonFixtures(season, currentDate, database),
     results: [],
     archives: [],
-    playerDevelopment: createInitialPlayerDevelopmentState(getWorldSquadPlayers(database))
+    playerDevelopment: {
+      ...createInitialPlayerDevelopmentState(getWorldSquadPlayers(database)),
+      season
+    }
   };
 }
 

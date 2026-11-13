@@ -940,3 +940,17 @@
  .international-tournament-card{padding:11px}
  .international-standings-row{grid-template-columns:20px minmax(0,1fr) 29px 34px 31px;padding:6px 5px;font-size:8px}
 }
+
+
+/* Phase 10.6 — international tournament archive and awards */
+.international-archive-card{align-content:start}
+.international-award-list{display:grid;gap:6px}
+.international-award-row{display:grid;grid-template-columns:75px minmax(0,1fr) auto;gap:7px;align-items:center;padding:8px 9px;border:1px solid var(--fa-border);border-radius:9px;background:rgba(10,16,27,.34)}
+.international-award-row span{color:var(--fa-muted);font-size:9px}
+.international-award-row strong{overflow:hidden;color:var(--fa-text);font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.international-award-row small{color:var(--fa-accent);font-size:9px;font-weight:800;white-space:nowrap}
+@media(max-width:420px){
+ .international-award-row{grid-template-columns:68px minmax(0,1fr) auto;padding:7px}
+ .international-award-row span,.international-award-row small{font-size:8px}
+ .international-award-row strong{font-size:9px}
+}
