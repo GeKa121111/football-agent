@@ -226,3 +226,54 @@ test("save validation rejects duplicate or corrupted international archive data"
   damaged.world.nationalTeams.tournamentArchives[0].championTeamId = "missing-team";
   assert.equal(isValidSave(damaged), false);
 });
+
+test("multi-season archive survives a World Cup cycle and a v8 save reload", () => {
+  const firstSeason = runDays(saveAt("2027-06-10", 1), 42);
+  assert.equal(firstSeason.world.nationalTeams.tournamentArchives.length, 3);
+
+  const secondStartDate = "2030-06-10";
+  const worldCupSave = {
+    ...firstSeason,
+    career: { ...firstSeason.career, season: 4 },
+    world: {
+      ...firstSeason.world,
+      currentDate: secondStartDate,
+      football: createInitialFootballState(4, secondStartDate),
+      tasks: []
+    }
+  };
+  const launched = advanceInternationalTournaments(worldCupSave);
+  assert.equal(launched.world.nationalTeams.tournamentSeasons.length, 2);
+  const completed = runDays(launched, 125);
+  const national = completed.world.nationalTeams;
+
+  assert.equal(national.tournamentArchives.length, 4);
+  assert.equal(new Set(national.tournamentArchives.map((item) => item.id)).size, 4);
+  assert.ok(national.tournamentArchives.some((item) =>
+    item.type === "world" && item.season === 4 && item.championTeamId
+  ));
+  assert.equal(isValidInternationalTournamentState(national, completed.world.currentDate), true);
+
+  const finalSave = {
+    ...completed,
+    world: {
+      ...completed.world,
+      football: createInitialFootballState(4, completed.world.currentDate),
+      tasks: []
+    }
+  };
+  assert.equal(isValidSave(finalSave), true);
+  const data = new Map();
+  const storage = {
+    getItem(key) { return data.has(key) ? data.get(key) : null; },
+    setItem(key, value) { data.set(key, value); },
+    removeItem(key) { data.delete(key); }
+  };
+  writeSave(finalSave, storage, "2030-10-13T12:00:00.000Z");
+  const reloaded = readSave(storage);
+  assert.equal(reloaded.status, "loaded");
+  assert.deepEqual(
+    reloaded.save.world.nationalTeams.tournamentArchives.map((item) => item.id),
+    finalSave.world.nationalTeams.tournamentArchives.map((item) => item.id)
+  );
+});
