@@ -990,6 +990,44 @@ function renderInternationalTournamentPanel(context) {
     recentPanel.append(list);
   }
   section.append(recentPanel);
+
+  const archivePanel = node("div", "international-fixture-panel international-archive-panel");
+  archivePanel.append(node("h3", "", "أرشيف البطولات والجوائز"));
+  if (overview.archives.length === 0) {
+    archivePanel.append(node("p", "representation-empty",
+      "الأبطال والجوائز الدولية هتتحفظ هنا بعد اكتمال أول بطولة."));
+  } else {
+    const archiveList = node("div", "international-tournament-list");
+    overview.archives.slice(0, 12).forEach((archive) => {
+      const card = node("article", "international-tournament-card international-archive-card");
+      card.append(
+        node("small", "", "الموسم " + formatHomeNumber(archive.season) + " · " + formatHomeDate(archive.completedDate)),
+        node("h3", "", archive.nameAr),
+        node("p", "international-champion", "البطل: " + archive.championName)
+      );
+      const awards = node("div", "international-award-list");
+      [
+        ["الهداف", archive.awards.topScorer, "هدف"],
+        ["الأكثر صناعة", archive.awards.topAssists, "صناعة"],
+        ["أفضل لاعب", archive.awards.bestPlayer, "تقييم"]
+      ].forEach(([label, award, unit]) => {
+        if (!award) return;
+        const row = node("div", "international-award-row");
+        row.append(
+          node("span", "", label),
+          node("strong", "", award.playerName),
+          node("small", "", label === "أفضل لاعب"
+            ? formatHomeNumber(award.value) + " / 10"
+            : formatHomeNumber(award.value) + " " + unit)
+        );
+        awards.append(row);
+      });
+      card.append(awards);
+      archiveList.append(card);
+    });
+    archivePanel.append(archiveList);
+  }
+  section.append(archivePanel);
   return section;
 }
 
