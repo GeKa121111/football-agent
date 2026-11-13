@@ -37,13 +37,38 @@ test("selects a complete, position-balanced and nationality-safe squad for every
   }
 });
 
-test("nationality remains tied to the player's country rather than their current club", () => {
-  const player = getWorldSquadPlayers().find((item) => item.countryId === "country-eg");
-  assert.ok(player);
-  const team = selectNationalTeamSquad("country-eg");
-  assert.ok(team.players.every((member) => member.countryId === "country-eg"));
-  assert.ok(team.players.some((member) => member.playerId === player.id) ||
-    getEligibleNationalTeamPlayers("country-eg").some((candidate) => candidate.id === player.id));
+test("a club move does not change nationality-based national-team eligibility", () => {
+  const countryId = "country-eg";
+  const original = getEligibleNationalTeamPlayers(countryId)
+    .find((player) => player.role === "حراسة");
+  assert.ok(original);
+
+  const movePlayer = (players) => players.map((player) => player.id === original.id
+    ? { ...player, clubId: "club-liverpool" }
+    : player);
+  const movedDatabase = {
+    ...WORLD_DATABASE,
+    players: movePlayer(WORLD_DATABASE.players),
+    squadPlayers: movePlayer(WORLD_DATABASE.squadPlayers ?? [])
+  };
+  const playerDevelopment = {
+    players: [{
+      playerId: original.id,
+      rating: 99,
+      potential: 99,
+      fitness: 100,
+      injuryDays: 0
+    }]
+  };
+  const team = selectNationalTeamSquad(countryId, {
+    database: movedDatabase,
+    playerDevelopment
+  });
+  const selected = team.players.find((player) => player.playerId === original.id);
+  assert.ok(selected);
+  assert.equal(selected.countryId, countryId);
+  assert.equal(selected.clubId, "club-liverpool");
+  assert.equal(isValidNationalTeamSquad(team, countryId, movedDatabase), true);
 });
 
 test("uses live development rating and fitness when ranking eligible players", () => {
