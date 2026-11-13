@@ -240,7 +240,18 @@ test("clubs independently monitor agency clients and raise enquiries during open
   assert.ok(signedSave.agency.clients.includes(player.id));
   assert.equal(isValidSave(signedSave),true);
 
-  const monday = advanceCareerSimulationDays(signedSave,5,PLAYERS);
+  const performancePlayers = PLAYERS.map((item) => item.id === player.id ? {
+    ...item,
+    seasonPerformance: {
+      appearances: 12,
+      minutesPlayed: 980,
+      goals: 8,
+      assists: 4,
+      averageMatchRating: 7.8
+    },
+    honors: [{ competitionId: "competition-test", season: 1, awardType: "bestPlayer" }]
+  } : item);
+  const monday = advanceCareerSimulationDays(signedSave,5,performancePlayers);
   const summary = getAgencyClubInterestSummary(monday.save);
   assert.equal(monday.save.world.currentDate,"2026-07-06");
   assert.ok(summary.total > 0);
@@ -251,6 +262,12 @@ test("clubs independently monitor agency clients and raise enquiries during open
   assert.ok(firstInterest);
   assert.ok(firstInterest.clubBudgetEur > 0);
   assert.ok(firstInterest.estimatedFeeEur > 0);
+  assert.ok(firstInterest.performanceBonus > 0);
+  assert.equal(firstInterest.averageMatchRating,7.8);
+  assert.equal(firstInterest.seasonAppearances,12);
+  assert.equal(firstInterest.seasonGoals,8);
+  assert.equal(firstInterest.seasonAssists,4);
+  assert.equal(firstInterest.honorsCount,1);
   assert.equal(isValidSave(monday.save),true);
 
   const nextWeek = advanceCareerSimulationDays(monday.save,7,PLAYERS);

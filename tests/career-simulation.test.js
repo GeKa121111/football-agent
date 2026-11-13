@@ -351,6 +351,13 @@ test("runs one complete integrated career season and resumes it safely after a s
 
   const firstSeasonFixtureCount = save.world.football.fixtures
     .filter((fixture) => fixture.season === 1).length;
+  const additionalKnockoutFixtureCount = WORLD_DATABASE.competitions
+    .reduce((total, competition) => {
+      if (competition.type === "cup") {
+        return total + competition.clubIds.length - 1 - competition.clubIds.length / 2;
+      }
+      return total + (competition.type === "continental" ? 3 : 0);
+    }, 0);
   assert.ok(firstSeasonFixtureCount > 0);
   const storageRecords = new Map();
   const storage = {
@@ -386,7 +393,7 @@ test("runs one complete integrated career season and resumes it safely after a s
   assert.equal(save.world.football.season, 2);
   assert.equal(
     save.world.football.results.filter((result) => result.season === 1).length,
-    firstSeasonFixtureCount
+    firstSeasonFixtureCount + additionalKnockoutFixtureCount
   );
   assert.equal(
     save.world.football.fixtures.filter((fixture) =>

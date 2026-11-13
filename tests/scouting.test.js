@@ -134,12 +134,29 @@ test("rejects invalid scopes, empty targets, insufficient funds and excess activ
   assert.ok(capped.error);
 });
 
-test("completes due missions into explainable reports only when their duration elapses", () => {
+test("completes due missions into explainable reports with competition form and honors", () => {
+  const playersWithPerformance = PLAYERS.map((player) => ({
+    ...player,
+    seasonPerformance: {
+      appearances: 6,
+      minutesPlayed: 500,
+      goals: 4,
+      assists: 2,
+      averageMatchRating: 7.7
+    },
+    honors: [{
+      competitionId: "competition-test",
+      competitionName: "بطولة اختبار",
+      season: 1,
+      awardType: "bestPlayer",
+      value: 7.7
+    }]
+  }));
   const started = startScoutingMission(createInitialSave(), {
     type: "regional",
     countryId: "country-eg",
     role: "all"
-  }, PLAYERS);
+  }, playersWithPerformance);
   assert.equal(getScoutingDaysRemaining(started.mission, "2026-07-01"), 14);
 
   const early = advanceScoutingMissions(started.save, PLAYERS, "2026-07-14");
@@ -150,7 +167,7 @@ test("completes due missions into explainable reports only when their duration e
     ...started.save,
     world: { ...started.save.world, currentDate: "2026-07-15" }
   };
-  const completed = advanceScoutingMissions(dueSave, PLAYERS);
+  const completed = advanceScoutingMissions(dueSave, playersWithPerformance);
   assert.equal(completed.changed, true);
   assert.equal(completed.save.world.scouting.activeMissions.length, 0);
   assert.equal(completed.save.world.scouting.reports.length, 1);
@@ -166,9 +183,48 @@ test("completes due missions into explainable reports only when their duration e
     assert.ok(finding.estimatedPotential >= finding.estimatedRating && finding.estimatedPotential <= 99);
     assert.ok(finding.confidence >= 40 && finding.confidence <= 99);
     assert.ok(["أولوية", "متابعة", "مراقبة فقط"].includes(finding.recommendation));
+    assert.equal(finding.performance.appearances, 6);
+    assert.equal(finding.performance.averageMatchRating, 7.7);
+    assert.equal(finding.honors.length, 1);
     assert.ok(finding.rationale.length > 0);
   }
   assert.equal(getScoutingDaysRemaining(started.mission, "2026-07-16"), 0);
+});
+
+test("validates scouting snapshots of competition form and individual honors", () => {
+  const playersWithPerformance = PLAYERS.map((player) => ({
+    ...player,
+    seasonPerformance: {
+      appearances: 6,
+      minutesPlayed: 500,
+      goals: 4,
+      assists: 2,
+      averageMatchRating: 7.7
+    },
+    honors: [{
+      competitionId: "competition-test",
+      competitionName: "بطولة اختبار",
+      season: 1,
+      awardType: "bestPlayer",
+      value: 7.7
+    }]
+  }));
+  const started = startScoutingMission(createInitialSave(), {
+    type: "regional",
+    countryId: "country-eg",
+    role: "all"
+  }, playersWithPerformance);
+  const due = advanceCareerDays(started.save, started.mission.durationDays);
+  const completed = advanceScoutingMissions(due, playersWithPerformance);
+  assert.equal(isValidSave(completed.save), true);
+
+  const corruptedPerformance = structuredClone(completed.save);
+  corruptedPerformance.world.scouting.reports[0].findings[0].performance.appearances = -1;
+  assert.equal(isValidSave(corruptedPerformance), false);
+
+  const corruptedHonor = structuredClone(completed.save);
+  corruptedHonor.world.scouting.reports[0].findings[0].honors[0].awardType = "invented-award";
+  assert.equal(isValidSave(corruptedHonor), false);
 });
 
 test("reports are deterministic for the same mission and world seed", () => {

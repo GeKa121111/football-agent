@@ -1,5 +1,6 @@
 // Curated fictional player seed for Phase 3. Club names are reference entities; player identities are fictional.
 import { createPortraitAssignment, validatePortraitAssignments } from "./player-portrait-catalog.js";
+import { validateCompetitionDefinition } from "./competition-rules.js";
 // Club and competition labels are reference entities; every player profile is fictional.
 // This is a compact prototype database, not a live or complete global roster feed.
 
@@ -73,9 +74,10 @@ const COMPETITIONS = [
   { id: "competition-pt-primeira", nameAr: "الدوري البرتغالي", nameEn: "Primeira Liga", type: "league", countryId: "country-pt", leagueId: "league-pt-primeira", season: "2026-2027", clubIds: ["club-benfica", "club-porto"] },
   { id: "competition-br-serie-a", nameAr: "الدوري البرازيلي", nameEn: "Brasileirão", type: "league", countryId: "country-br", leagueId: "league-br-serie-a", season: "2026-2027", clubIds: ["club-flamengo", "club-palmeiras"] },
   { id: "competition-ar-primera", nameAr: "الدوري الأرجنتيني", nameEn: "Primera División", type: "league", countryId: "country-ar", leagueId: "league-ar-primera", season: "2026-2027", clubIds: ["club-river", "club-boca"] },
-  { id: "competition-caf-champions", nameAr: "دوري أبطال أفريقيا", nameEn: "CAF Champions League", type: "continental", countryId: null, leagueId: null, season: "2026-2027", clubIds: ["club-al-ahly", "club-zamalek", "club-wydad", "club-raja", "club-etoile", "club-es-tunis"] },
-  { id: "competition-uefa-champions", nameAr: "دوري أبطال أوروبا", nameEn: "UEFA Champions League", type: "continental", countryId: null, leagueId: null, season: "2026-2027", clubIds: ["club-arsenal", "club-liverpool", "club-real-madrid", "club-barcelona", "club-bayern", "club-dortmund", "club-psg", "club-marseille", "club-inter", "club-juventus", "club-ajax", "club-psv", "club-benfica", "club-porto"] },
-  { id: "competition-conmebol-libertadores", nameAr: "كوبا ليبرتادوريس", nameEn: "CONMEBOL Libertadores", type: "continental", countryId: null, leagueId: null, season: "2026-2027", clubIds: ["club-flamengo", "club-palmeiras", "club-river", "club-boca"] }
+  { id: "competition-caf-champions", nameAr: "دوري أبطال أفريقيا", nameEn: "CAF Champions League", type: "continental", countryId: null, leagueId: null, season: "2026-2027", groupCount: 2, qualifiersPerGroup: 2, clubIds: ["club-al-ahly", "club-zamalek", "club-wydad", "club-raja", "club-etoile", "club-es-tunis"] },
+  { id: "competition-uefa-champions", nameAr: "دوري أبطال أوروبا", nameEn: "UEFA Champions League", type: "continental", countryId: null, leagueId: null, season: "2026-2027", groupCount: 2, qualifiersPerGroup: 2, clubIds: ["club-arsenal", "club-liverpool", "club-real-madrid", "club-barcelona", "club-bayern", "club-dortmund", "club-psg", "club-marseille", "club-inter", "club-juventus", "club-ajax", "club-psv", "club-benfica", "club-porto"] },
+  { id: "competition-conmebol-libertadores", nameAr: "كوبا ليبرتادوريس", nameEn: "CONMEBOL Libertadores", type: "continental", countryId: null, leagueId: null, season: "2026-2027", groupCount: 2, qualifiersPerGroup: 2, clubIds: ["club-flamengo", "club-palmeiras", "club-river", "club-boca"] },
+  { id: "competition-club-world-cup", nameAr: "كأس العالم للأندية", nameEn: "Club World Cup", type: "cup", format: "knockout", countryId: null, leagueId: null, season: "2026-2027", clubIds: ["club-al-ahly", "club-wydad", "club-liverpool", "club-real-madrid", "club-bayern", "club-psg", "club-flamengo", "club-river"] }
 ];
 
 const PLAYER_SEEDS = [
@@ -294,6 +296,8 @@ export function validateWorldDatabase(database = WORLD_DATABASE) {
   }
 
   for (const competition of competitions) {
+    const competitionRulesValidation = validateCompetitionDefinition(competition, database);
+    errors.push(...competitionRulesValidation.errors);
     if (!Array.isArray(competition.clubIds) || competition.clubIds.length === 0) {
       errors.push("المسابقة بلا أندية مشاركة: " + competition.id);
       continue;
@@ -314,6 +318,8 @@ export function validateWorldDatabase(database = WORLD_DATABASE) {
       }
     } else if (competition.type === "continental") {
       if (competition.countryId !== null || competition.leagueId !== null) errors.push("المسابقة القارية لا يجب أن ترتبط بدولة أو دوري محلي: " + competition.id);
+    } else if (competition.type === "cup") {
+      if (competition.countryId !== null || competition.leagueId !== null) errors.push("الكأس المفتوح لا يجب أن يرتبط بدولة أو دوري محلي: " + competition.id);
     } else {
       errors.push("نوع مسابقة غير مدعوم: " + competition.id);
     }

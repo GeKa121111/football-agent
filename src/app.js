@@ -140,11 +140,45 @@ function getCurrentWorldPlayers(save) {
     const league = club ? leaguesById.get(club.leagueId) : null;
     const latestPermanentMove = latestPermanentMoveByPlayer.get(player.id);
     const development = developmentById.get(player.id);
+    const competitionStats = development?.competitionStats ?? [];
+    const currentSeason = save?.world?.football?.season ?? development?.season ?? 1;
+    const seasonRecords = competitionStats.filter((item) => item.season === currentSeason);
+    const seasonPerformance = seasonRecords.reduce((total, item) => ({
+      appearances: total.appearances + item.appearances,
+      minutesPlayed: total.minutesPlayed + item.minutesPlayed,
+      goals: total.goals + item.goals,
+      assists: total.assists + item.assists,
+      ratingTotal: total.ratingTotal + (item.averageMatchRating ?? 0) * item.appearances
+    }), { appearances: 0, minutesPlayed: 0, goals: 0, assists: 0, ratingTotal: 0 });
+    seasonPerformance.averageMatchRating = seasonPerformance.appearances > 0
+      ? Math.round((seasonPerformance.ratingTotal / seasonPerformance.appearances) * 100) / 100
+      : null;
+    delete seasonPerformance.ratingTotal;
+    const honors = (save?.world?.football?.archives ?? []).flatMap((archive) => {
+      const awards = archive.awards ?? {};
+      return ["topScorer", "topAssists", "bestPlayer"]
+        .filter((awardType) => awards[awardType]?.playerId === player.id)
+        .map((awardType) => ({
+          competitionId: archive.competitionId,
+          competitionName: archive.competitionName,
+          season: archive.season,
+          awardType,
+          value: awards[awardType].value
+        }));
+    }).slice(-10);
     return {
       ...player,
       rating: Math.round(development?.rating ?? player.rating),
       potential: Math.round(development?.potential ?? player.potential),
       age: development?.age ?? player.age,
+      appearances: development?.appearances ?? 0,
+      minutesPlayed: development?.minutesPlayed ?? 0,
+      goals: development?.goals ?? 0,
+      assists: development?.assists ?? 0,
+      averageMatchRating: development?.averageMatchRating ?? null,
+      competitionStats,
+      seasonPerformance,
+      honors,
       clubId: club?.id ?? null,
       club: club?.nameAr ?? "لاعب حر",
       clubShortName: club?.shortName ?? "حر",
@@ -846,7 +880,7 @@ function renderFootball(context) {
       const top = node("div", "football-fixture-meta");
       top.append(
         node("span", "", fixture.competitionName),
-        node("small", "", "الجولة " + formatHomeNumber(fixture.round))
+        node("small", "", fixture.phaseNameAr ?? ("الجولة " + formatHomeNumber(fixture.round)))
       );
       const teams = node("div", "football-fixture-teams");
       teams.append(
@@ -2462,6 +2496,11 @@ function renderAgencyManagementPanel(context) {
       copy.append(
         node("strong", "", interest.clubName + " · " + interest.playerName),
         node("span", "", (club?.nameAr ?? "نادي") + " · " + interest.position + " · ملاءمة " + interest.fitScore + "/100"),
+        ...(interest.seasonAppearances > 0 ? [node("small", "", "أداء الموسم: " +
+          interest.seasonAppearances + " مشاركة · " + interest.seasonGoals + " أهداف · " +
+          interest.seasonAssists + " صناعة · " +
+          (interest.averageMatchRating === null ? "لا يوجد متوسط تقييم" : interest.averageMatchRating + "/10") +
+          (interest.honorsCount > 0 ? " · " + interest.honorsCount + " جائزة فردية" : ""))] : []),
         node("small", "", "ميزانية انتقال النادي " + formatEuroMoney(interest.clubBudgetEur) +
           " · قيمة تقديرية للاعب " + formatEuroMoney(interest.estimatedFeeEur)),
         node("small", "", interest.status === "enquiry"
@@ -3929,6 +3968,22 @@ export function mountApp(root) {
           statMini("الإمكانيات المقدرة", finding.estimatedPotential),
           statMini("الثقة", finding.confidence + "%")
         );
+        if (finding.performance?.appearances > 0) {
+          stats.append(
+            statMini("مشاركات الموسم", finding.performance.appearances),
+            statMini("أهداف + أسيست", finding.performance.goals + " + " + finding.performance.assists),
+            statMini("متوسط الأداء", finding.performance.averageMatchRating === null
+              ? "—"
+              : finding.performance.averageMatchRating + "/10")
+          );
+        }
+        const honors = finding.honors ?? [];
+        const honorsNote = honors.length > 0
+          ? node("p", "scout-finding-honors", "جوائز فردية: " + honors.map((honor) =>
+            (honor.awardType === "topScorer" ? "هداف" : honor.awardType === "topAssists" ? "أكثر صناعة" : "أفضل لاعب") +
+            " — " + honor.competitionName + " (" + honor.season + ")"
+          ).join(" · "))
+          : null;
         const history = getPlayerScoutingHistory(state.save.world.scouting, finding.playerId);
         const player = getCurrentWorldPlayers(state.save)
           .find((candidate) => candidate.id === finding.playerId);
@@ -3969,6 +4024,7 @@ export function mountApp(root) {
           subline,
           sources,
           stats,
+          ...(honorsNote ? [honorsNote] : []),
           node("p", "scout-finding-rationale", finding.rationale),
           actionButton("سجل الرصد (" + history.totalObservations + ")", "button-outline scout-history-button", () => openScoutingHistory(finding.playerId)),
           findingActions
@@ -4542,8 +4598,49 @@ export function mountApp(root) {
     growthTrack.append(growthFill);
     growth.append(growthHeading, growthTrack);
 
+    const seasonPerformance = player.seasonPerformance ?? null;
+    const performanceSection = node("section", "player-profile-growth player-profile-performance");
+    const performanceHeading = node("div", "player-profile-growth-heading");
+    performanceHeading.append(
+      node("strong", "", "أداء الموسم الحالي"),
+      node("span", "", seasonPerformance?.appearances
+        ? seasonPerformance.appearances + " مشاركة"
+        : "لا توجد مشاركات مسجلة")
+    );
+    performanceSection.append(performanceHeading);
+    if (seasonPerformance?.appearances > 0) {
+      const performanceGrid = node("div", "player-profile-stats");
+      [
+        ["الدقائق", seasonPerformance.minutesPlayed, "MIN"],
+        ["الأهداف", seasonPerformance.goals, "G"],
+        ["الصناعة", seasonPerformance.assists, "A"],
+        ["متوسط التقييم", seasonPerformance.averageMatchRating ?? "—", "/10"]
+      ].forEach(([label, value, suffix]) => {
+        const item = node("article", "player-profile-stat");
+        item.append(node("small", "", label), node("strong", "", String(value)), node("span", "", suffix));
+        performanceGrid.append(item);
+      });
+      performanceSection.append(performanceGrid);
+    }
+    const honors = Array.isArray(player.honors) ? player.honors : [];
+    if (honors.length > 0) {
+      const honorsList = node("div", "player-profile-details player-profile-honors");
+      honors.forEach((honor) => {
+        const label = honor.awardType === "topScorer" ? "هداف البطولة"
+          : honor.awardType === "topAssists" ? "الأكثر صناعة"
+            : "أفضل لاعب";
+        const row = node("div", "player-profile-detail");
+        row.append(
+          node("small", "", label + " · الموسم " + honor.season),
+          node("strong", "", honor.competitionName)
+        );
+        honorsList.append(row);
+      });
+      performanceSection.append(honorsList);
+    }
+
     const content = node("div", "player-profile-content");
-    content.append(hero, ratingCards, details, growth,
+    content.append(hero, ratingCards, details, growth, performanceSection,
       node("p", "player-profile-disclaimer", "هذا ملف لاعب خيالي من قاعدة العالم التجريبية. القيمة السوقية تقدير داخل اللعبة وليست عرض انتقال رسميًا.")
     );
 

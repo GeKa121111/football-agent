@@ -123,6 +123,7 @@ function createDevelopmentPlayer(player) {
     goals: 0,
     assists: 0,
     averageMatchRating: null,
+    competitionStats: [],
     lastTrainingDate: null
   };
 }
@@ -352,6 +353,58 @@ export function recordPlayerMatchPerformances(state, result, dateKey) {
     const assists = player.assists + performance.assists;
     const ratingTotal = (player.averageMatchRating ?? 0) * player.appearances + performance.rating;
     const averageMatchRating = appearances > 0 ? roundTo(ratingTotal / appearances, 2) : null;
+    const competitionStats = [...(player.competitionStats ?? [])];
+    if (typeof result.competitionId === "string" && result.competitionId.trim() &&
+        Number.isSafeInteger(result.season) && result.season >= 1) {
+      const index = competitionStats.findIndex((item) =>
+        item.competitionId === result.competitionId && item.season === result.season
+      );
+      const previous = index >= 0 ? competitionStats[index] : {
+        competitionId: result.competitionId,
+        competitionName: typeof result.competitionName === "string" ? result.competitionName : result.competitionId,
+        season: result.season,
+        appearances: 0,
+        minutesPlayed: 0,
+        goals: 0,
+        assists: 0,
+        wins: 0,
+        draws: 0,
+        losses: 0,
+        averageMatchRating: null,
+        bestMatchRating: null,
+        recentRatings: []
+      };
+      const teamGoals = result.home?.clubId === performance.clubId
+        ? result.home.goals
+        : result.away?.clubId === performance.clubId ? result.away.goals : null;
+      const opponentGoals = result.home?.clubId === performance.clubId
+        ? result.away.goals
+        : result.away?.clubId === performance.clubId ? result.home.goals : null;
+      const knockoutWinner = result.knockoutDecision?.winnerClubId ?? null;
+      const won = knockoutWinner
+        ? knockoutWinner === performance.clubId
+        : Number.isFinite(teamGoals) && Number.isFinite(opponentGoals) && teamGoals > opponentGoals;
+      const drawn = !knockoutWinner &&
+        Number.isFinite(teamGoals) && Number.isFinite(opponentGoals) && teamGoals === opponentGoals;
+      const nextAppearances = previous.appearances + (performance.minutesPlayed > 0 ? 1 : 0);
+      const nextRatingTotal = (previous.averageMatchRating ?? 0) * previous.appearances + performance.rating;
+      const updated = {
+        ...previous,
+        competitionName: typeof result.competitionName === "string" ? result.competitionName : previous.competitionName,
+        appearances: nextAppearances,
+        minutesPlayed: previous.minutesPlayed + performance.minutesPlayed,
+        goals: previous.goals + performance.goals,
+        assists: previous.assists + performance.assists,
+        wins: previous.wins + (won ? 1 : 0),
+        draws: previous.draws + (drawn ? 1 : 0),
+        losses: previous.losses + (!won && !drawn ? 1 : 0),
+        averageMatchRating: nextAppearances > 0 ? roundTo(nextRatingTotal / nextAppearances, 2) : null,
+        bestMatchRating: Math.max(previous.bestMatchRating ?? 0, performance.rating),
+        recentRatings: [...previous.recentRatings, roundTo(performance.rating, 2)].slice(-5)
+      };
+      if (index >= 0) competitionStats[index] = updated;
+      else competitionStats.push(updated);
+    }
     return {
       ...player,
       appearances,
@@ -359,6 +412,9 @@ export function recordPlayerMatchPerformances(state, result, dateKey) {
       goals,
       assists,
       averageMatchRating,
+      competitionStats: competitionStats
+        .sort((a, b) => b.season - a.season || a.competitionId.localeCompare(b.competitionId))
+        .slice(0, 100),
       injuryDays: Math.max(player.injuryDays, injuryById.get(player.playerId) ?? 0),
       fatigue: roundTo(Math.min(100, player.fatigue + Math.ceil(performance.minutesPlayed / 30)), 1),
       fitness: roundTo(Math.max(0, player.fitness - Math.ceil(performance.minutesPlayed / 25)), 1)
@@ -397,6 +453,27 @@ export function isValidPlayerDevelopmentState(state, season) {
     Number.isSafeInteger(player.assists) && player.assists >= 0 &&
     (player.averageMatchRating === null ||
       (Number.isFinite(player.averageMatchRating) && player.averageMatchRating >= 4 && player.averageMatchRating <= 10)) &&
+    (player.competitionStats === undefined || (
+      Array.isArray(player.competitionStats) && player.competitionStats.length <= 100 &&
+      new Set(player.competitionStats.map((item) => item?.competitionId + "::" + item?.season)).size === player.competitionStats.length &&
+      player.competitionStats.every((item) => isRecord(item) &&
+        typeof item.competitionId === "string" && item.competitionId.trim() &&
+        typeof item.competitionName === "string" && item.competitionName.trim() &&
+        Number.isSafeInteger(item.season) && item.season >= 1 &&
+        Number.isSafeInteger(item.appearances) && item.appearances >= 0 &&
+        Number.isSafeInteger(item.minutesPlayed) && item.minutesPlayed >= 0 &&
+        Number.isSafeInteger(item.goals) && item.goals >= 0 &&
+        Number.isSafeInteger(item.assists) && item.assists >= 0 &&
+        Number.isSafeInteger(item.wins) && item.wins >= 0 &&
+        Number.isSafeInteger(item.draws) && item.draws >= 0 &&
+        Number.isSafeInteger(item.losses) && item.losses >= 0 &&
+        item.wins + item.draws + item.losses === item.appearances &&
+        (item.averageMatchRating === null || (Number.isFinite(item.averageMatchRating) && item.averageMatchRating >= 4 && item.averageMatchRating <= 10)) &&
+        (item.bestMatchRating === null || (Number.isFinite(item.bestMatchRating) && item.bestMatchRating >= 4 && item.bestMatchRating <= 10)) &&
+        Array.isArray(item.recentRatings) && item.recentRatings.length <= 5 &&
+        item.recentRatings.every((rating) => Number.isFinite(rating) && rating >= 4 && rating <= 10)
+      )
+    )) &&
     (player.lastTrainingDate === null || dateParts(player.lastTrainingDate) !== null)
   )) return false;
 

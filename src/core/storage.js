@@ -298,6 +298,25 @@ function isValidScoutingState(scouting, currentDate) {
       Number.isInteger(finding.upside) && finding.upside === finding.estimatedPotential - finding.estimatedRating &&
       recommendations.includes(finding.recommendation) &&
       typeof finding.rationale === "string" && finding.rationale.trim() &&
+      (finding.performance === undefined || finding.performance === null || (
+        isRecord(finding.performance) &&
+        Number.isSafeInteger(finding.performance.appearances) && finding.performance.appearances >= 0 &&
+        Number.isSafeInteger(finding.performance.minutesPlayed) && finding.performance.minutesPlayed >= 0 &&
+        Number.isSafeInteger(finding.performance.goals) && finding.performance.goals >= 0 &&
+        Number.isSafeInteger(finding.performance.assists) && finding.performance.assists >= 0 &&
+        (finding.performance.averageMatchRating === null ||
+          (Number.isFinite(finding.performance.averageMatchRating) &&
+            finding.performance.averageMatchRating >= 4 && finding.performance.averageMatchRating <= 10))
+      )) &&
+      (finding.honors === undefined || (
+        Array.isArray(finding.honors) && finding.honors.length <= 10 &&
+        finding.honors.every((honor) => isRecord(honor) &&
+          typeof honor.competitionId === "string" && honor.competitionId.trim() &&
+          typeof honor.competitionName === "string" && honor.competitionName.trim() &&
+          Number.isSafeInteger(honor.season) && honor.season >= 1 &&
+          ["topScorer", "topAssists", "bestPlayer"].includes(honor.awardType) &&
+          Number.isFinite(honor.value))
+      )) &&
       (finding.discoverySourceIds === undefined ||
         (Array.isArray(finding.discoverySourceIds) && finding.discoverySourceIds.length > 0 &&
           new Set(finding.discoverySourceIds).size === finding.discoverySourceIds.length &&

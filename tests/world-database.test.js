@@ -12,7 +12,7 @@ test("ships a compact but connected multi-country world seed", () => {
   assert.deepEqual(getWorldSummary(), {
     countries: 12,
     leagues: 12,
-    competitions: 15,
+    competitions: 16,
     clubs: 24,
     players: 48,
     squadPlayers: 384,

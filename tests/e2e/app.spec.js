@@ -452,7 +452,7 @@ test.describe("Desktop experience", () => {
 
     const metrics = page.locator(".players-screen .world-metrics .metric-card");
     await expect(metrics).toHaveCount(7);
-    await expect(metrics.filter({ hasText: "المسابقات" }).locator(".metric-value")).toHaveText("15");
+    await expect(metrics.filter({ hasText: "المسابقات" }).locator(".metric-value")).toHaveText(String(WORLD_DATABASE.competitions.length));
     await expect(metrics.filter({ hasText: "أصول الصور" }).locator(".metric-value")).toHaveText("48");
     await expect(metrics.filter({ hasText: "قوائم الأندية" }).locator(".metric-value")).toHaveText("432");
     await expect(page.locator(".player-card .club-crest")).toHaveCount(48);
