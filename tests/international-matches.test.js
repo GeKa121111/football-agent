@@ -143,8 +143,9 @@ test("delays a fixture rather than inventing a goalkeeper when all called-up kee
   };
   const advanced = advanceInternationalMatches(injuredSave);
   const egyptFixture = advanced.world.nationalTeams.fixtures.find((fixture) =>
-    fixture.date === "2026-09-08" &&
-    [fixture.homeCountryId, fixture.awayCountryId].includes("country-eg")
+    fixture.windowId === "international-window-2026-autumn" &&
+    [fixture.homeCountryId, fixture.awayCountryId].includes("country-eg") &&
+    fixture.matchday === 1
   );
 
   assert.ok(egyptFixture);
