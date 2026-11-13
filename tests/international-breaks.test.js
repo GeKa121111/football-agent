@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { WORLD_DATABASE } from "../src/data/world-database.js";
 import { createInitialSave, isValidSave } from "../src/core/storage.js";
+import { advanceCareerSimulationDays } from "../src/engines/career-simulation.js";
 import {
   advanceInternationalWindows,
   createInitialNationalTeamState,
@@ -138,4 +139,18 @@ test("rejects corrupted window or duplicate call-up records", () => {
   const invalidWindow = structuredClone(firstDay.world.nationalTeams);
   invalidWindow.windows[0].endDate = "2026-09-01";
   assert.equal(isValidNationalTeamState(invalidWindow, firstDay.world.currentDate), false);
+});
+
+
+test("processes international call-ups through the real shared career-day pipeline", () => {
+  let save = createInitialSave();
+  save = advanceCareerSimulationDays(save, 31, []);
+  save = advanceCareerSimulationDays(save, 31, []);
+  save = advanceCareerSimulationDays(save, 6, []);
+
+  assert.equal(save.world.currentDate, "2026-09-07");
+  assert.equal(save.world.nationalTeams.callups.length, WORLD_DATABASE.countries.length);
+  assert.ok(save.world.events.some((event) => event.type === "international-window-opened"));
+  assert.ok(save.world.inbox.some((message) => message.eventId === "event-international-window-2026-autumn-national-callups"));
+  assert.equal(isValidSave(save), true);
 });
