@@ -486,7 +486,11 @@ function migrateLegacyCompetitionGroups(state, database = WORLD_DATABASE) {
       buildCompetitionGroups(competition, database)
     ]));
   const fixtures = state.fixtures.map((fixture) => {
-    if (fixture.groupId !== undefined && fixture.groupId !== null) return fixture;
+    // Knockout fixtures are deliberately outside the group stage. Do not
+    // relabel a continental semi-final/final merely because both clubs came
+    // from the same original group.
+    if (fixture.stage === "knockout" ||
+        (fixture.groupId !== undefined && fixture.groupId !== null)) return fixture;
     const groups = groupMap.get(fixture.competitionId);
     const group = groups?.find((candidate) =>
       candidate.clubIds.includes(fixture.homeClubId) &&
