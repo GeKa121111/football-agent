@@ -9,6 +9,7 @@ import {
 
 const MAX_TOURNAMENT_SEASONS = 12;
 const MAX_TOURNAMENT_RESULTS = 1200;
+const MAX_TOURNAMENT_ARCHIVES = 80;
 const MATCH_ROLES = Object.freeze(["حراسة", "دفاع", "وسط", "هجوم"]);
 
 function isRecord(value) {
@@ -246,6 +247,62 @@ function updateDevelopment(playerDevelopment, result) {
   };
 }
 
+function createTournamentArchive(tournament, completedDate) {
+  const stats = [...tournament.playerStats];
+  const rank = (left, right, primary, secondary) =>
+    (right[primary] ?? 0) - (left[primary] ?? 0) ||
+    (right[secondary] ?? 0) - (left[secondary] ?? 0) ||
+    (right.averageMatchRating ?? 0) - (left.averageMatchRating ?? 0) ||
+    compareText(left.playerId, right.playerId);
+  const awardRecord = (player, value) => player ? ({
+    playerId: player.playerId,
+    playerName: player.playerName,
+    countryId: player.countryId,
+    value,
+    appearances: player.appearances,
+    goals: player.goals,
+    assists: player.assists,
+    averageMatchRating: player.averageMatchRating
+  }) : null;
+  const topScorer = [...stats].sort((a, b) => rank(a, b, "goals", "assists"))[0] ?? null;
+  const topAssists = [...stats].sort((a, b) => rank(a, b, "assists", "goals"))[0] ?? null;
+  const bestPlayer = [...stats].sort((left, right) =>
+    (right.averageMatchRating ?? 0) - (left.averageMatchRating ?? 0) ||
+    right.appearances - left.appearances ||
+    (right.goals + right.assists) - (left.goals + left.assists) ||
+    compareText(left.playerId, right.playerId)
+  )[0] ?? null;
+  const champion = tournament.teams.find((team) => team.id === tournament.championTeamId);
+  const standings = getInternationalTournamentStandings(tournament, tournament.results)
+    .map((group) => ({
+      groupId: group.groupId,
+      nameAr: group.nameAr,
+      standings: group.standings ? group.standings.map((row) => ({ ...row })) : null
+    }));
+
+  return {
+    id: "international-archive-" + tournament.id,
+    tournamentId: tournament.id,
+    season: tournament.season,
+    nameAr: tournament.nameAr,
+    type: tournament.type,
+    confederation: tournament.confederation,
+    completedDate,
+    championTeamId: tournament.championTeamId,
+    championName: champion?.nameAr ?? "منتخب غير معروف",
+    teamCount: tournament.teams.length,
+    matchesPlayed: tournament.results.length,
+    standings,
+    awards: {
+      topScorer: awardRecord(topScorer, topScorer?.goals ?? 0),
+      topAssists: awardRecord(topAssists, topAssists?.assists ?? 0),
+      bestPlayer: awardRecord(bestPlayer, bestPlayer?.averageMatchRating ?? 0)
+    },
+    results: tournament.results.map((result) => ({ ...result })),
+    playerStats: tournament.playerStats.map((record) => ({ ...record }))
+  };
+}
+
 function buildTournamentPlayerStats(results) {
   const totals = new Map();
   for (const result of results) {
@@ -331,7 +388,7 @@ function createTournamentLaunchEvent(plan) {
   };
 }
 
-function isValidTournamentSeason(record, season) {
+export function isValidTournamentSeasonRecord(record, season) {
   if (!isRecord(record) || record.season !== season || !isDate(record.generatedAt) ||
       !Array.isArray(record.tournaments) || record.tournaments.length < 1 ||
       record.tournaments.length > 8) return false;
@@ -387,6 +444,9 @@ export function advanceInternationalTournaments(save, database = WORLD_DATABASE)
     throw new TypeError("حالة المسيرة غير صالحة لمحاكاة البطولات الدولية.");
   }
 
+  let tournamentArchives = Array.isArray(originalNationalTeams.tournamentArchives)
+    ? [...originalNationalTeams.tournamentArchives]
+    : [];
   let tournamentSeasons = Array.isArray(originalNationalTeams.tournamentSeasons)
     ? [...originalNationalTeams.tournamentSeasons]
     : [];
@@ -399,7 +459,7 @@ export function advanceInternationalTournaments(save, database = WORLD_DATABASE)
       !tournamentSeasons.some((item) => item.season === season)) {
     const plan = buildTournamentPlan(season, currentDate, database, playerDevelopment);
     if (plan.tournaments.length > 0) {
-      if (!isValidTournamentSeason(plan, season)) {
+      if (!isValidTournamentSeasonRecord(plan, season)) {
         throw new TypeError("خطة البطولات الدولية غير صالحة.");
       }
       tournamentSeasons.push(plan);
@@ -465,6 +525,12 @@ export function advanceInternationalTournaments(save, database = WORLD_DATABASE)
         tournament = { ...tournament, playerStats };
         changed = true;
       }
+      if (tournament.status === "completed" && !tournament.archive) {
+        const archive = createTournamentArchive(tournament, currentDate);
+        tournament = { ...tournament, archive };
+        tournamentArchives.push(archive);
+        changed = true;
+      }
       nextTournaments.push(tournament);
     }
     tournamentSeasons[seasonIndex] = { ...record, tournaments: nextTournaments };
@@ -473,6 +539,10 @@ export function advanceInternationalTournaments(save, database = WORLD_DATABASE)
   tournamentSeasons = tournamentSeasons
     .sort((left, right) => left.season - right.season)
     .slice(-MAX_TOURNAMENT_SEASONS);
+  tournamentArchives = tournamentArchives
+    .sort((left, right) => right.completedDate.localeCompare(left.completedDate) ||
+      compareText(right.id, left.id))
+    .slice(0, MAX_TOURNAMENT_ARCHIVES);
   const resultCount = tournamentSeasons.reduce((sum, item) =>
     sum + item.tournaments.reduce((count, tournament) => count + tournament.results.length, 0), 0
   );
@@ -482,7 +552,7 @@ export function advanceInternationalTournaments(save, database = WORLD_DATABASE)
 
   if (!changed) return save;
   for (const record of tournamentSeasons) {
-    if (!isValidTournamentSeason(record, record.season)) {
+    if (!isValidTournamentSeasonRecord(record, record.season)) {
       throw new TypeError("سجل البطولة الدولية الناتج غير صالح.");
     }
   }
@@ -500,7 +570,8 @@ export function advanceInternationalTournaments(save, database = WORLD_DATABASE)
       ...save.world,
       nationalTeams: {
         ...originalNationalTeams,
-        tournamentSeasons
+        tournamentSeasons,
+        tournamentArchives
       },
       football: {
         ...save.world.football,
