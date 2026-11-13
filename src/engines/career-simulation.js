@@ -3,6 +3,7 @@ import { settleTransferPerformanceBonuses } from "./transfers.js";
 import { advanceScoutingMissions } from "./scouting.js";
 import { advanceRepresentationState } from "./representation.js";
 import { advanceAgencyManagementDay } from "./agency-management.js";
+import { advanceInternationalWindows } from "./international-breaks.js";
 
 /**
  * Runs one complete in-game day across the shared career world.
@@ -17,12 +18,13 @@ export function advanceCareerSimulationDay(save, players) {
   }
 
   const calendarSave = advanceCareerDay(save);
-  const currentDate = calendarSave.world.currentDate;
-  const dailyPlayers = typeof players === "function" ? players(calendarSave) : players;
+  const internationalSave = advanceInternationalWindows(calendarSave);
+  const currentDate = internationalSave.world.currentDate;
+  const dailyPlayers = typeof players === "function" ? players(internationalSave) : players;
   if (!Array.isArray(dailyPlayers)) {
     throw new TypeError("مزود قاعدة لاعبي الكشافة لم يُرجع قائمة صالحة.");
   }
-  const bonusSettlement = settleTransferPerformanceBonuses(calendarSave, currentDate);
+  const bonusSettlement = settleTransferPerformanceBonuses(internationalSave, currentDate);
   const scouting = advanceScoutingMissions(bonusSettlement.save, dailyPlayers, currentDate);
   const representation = advanceRepresentationState(scouting.save, currentDate);
   const agencyOperations = advanceAgencyManagementDay(representation.save, currentDate, dailyPlayers);
