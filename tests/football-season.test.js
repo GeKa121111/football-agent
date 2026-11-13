@@ -315,15 +315,41 @@ test("match results persist full-squad player appearances without anonymous fill
   assert.equal(isValidFootballState(played.football, firstDate, 1), true);
 });
 
-test("creates a new scheduled season without deleting historical results", () => {
+test("creates a new scheduled season without deleting historical results or player statistics", () => {
   const initial = createInitialFootballState(1, "2026-07-01");
   const firstDate = getUpcomingFootballFixtures(initial, "2026-07-01", 1)[0].date;
   const played = advanceFootballSeasonDay(initial, firstDate, 1);
+  const historicalResults = structuredClone(played.football.results);
+  const historicalTraining = structuredClone(played.football.playerDevelopment.trainingHistory);
+  const historicalPlayerStats = played.football.playerDevelopment.players.map((player) => ({
+    playerId: player.playerId,
+    appearances: player.appearances,
+    minutesPlayed: player.minutesPlayed,
+    goals: player.goals,
+    assists: player.assists,
+    competitionStats: structuredClone(player.competitionStats ?? [])
+  }));
   const nextSeason = advanceFootballSeasonDay(played.football, "2027-07-01", 2);
 
   assert.equal(nextSeason.football.season, 2);
   assert.ok(nextSeason.football.fixtures.some((fixture) => fixture.season === 2));
-  assert.equal(nextSeason.football.results.length, played.football.results.length);
+  assert.deepEqual(nextSeason.football.results, historicalResults);
+  assert.equal(nextSeason.football.playerDevelopment.season, 2);
+  assert.deepEqual(
+    nextSeason.football.playerDevelopment.players.map((player) => ({
+      playerId: player.playerId,
+      appearances: player.appearances,
+      minutesPlayed: player.minutesPlayed,
+      goals: player.goals,
+      assists: player.assists,
+      competitionStats: player.competitionStats ?? []
+    })),
+    historicalPlayerStats
+  );
+  assert.deepEqual(
+    nextSeason.football.playerDevelopment.trainingHistory.slice(0, historicalTraining.length),
+    historicalTraining
+  );
   assert.equal(isValidFootballState(nextSeason.football, "2027-07-01", 2), true);
 });
 
