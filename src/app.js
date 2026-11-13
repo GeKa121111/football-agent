@@ -118,13 +118,22 @@ function getCurrentWorldPlayers(save) {
   const friendlyStatsById = new Map((nationalTeamState.playerStats ?? [])
     .map((record) => [record.playerId, record]));
   const tournamentStatsById = new Map();
+  const addTournamentStat = (record, tournamentId, tournamentName, season) => {
+    const entries = tournamentStatsById.get(record.playerId) ?? new Map();
+    entries.set(tournamentId, { ...record, tournamentId, tournamentName, season });
+    tournamentStatsById.set(record.playerId, entries);
+  };
   for (const seasonRecord of nationalTeamState.tournamentSeasons ?? []) {
     for (const tournament of seasonRecord.tournaments ?? []) {
       for (const record of tournament.playerStats ?? []) {
-        const entries = tournamentStatsById.get(record.playerId) ?? [];
-        entries.push({ ...record, tournamentName: tournament.nameAr, season: tournament.season });
-        tournamentStatsById.set(record.playerId, entries);
+        addTournamentStat(record, tournament.id, tournament.nameAr, tournament.season);
       }
+    }
+  }
+  // Long-lived archives remain queryable after old season snapshots are pruned.
+  for (const archive of nationalTeamState.tournamentArchives ?? []) {
+    for (const record of archive.playerStats ?? []) {
+      addTournamentStat(record, archive.tournamentId, archive.nameAr, archive.season);
     }
   }
   const developmentById = new Map(
@@ -194,7 +203,8 @@ function getCurrentWorldPlayers(save) {
       seasonPerformance,
       honors,
       internationalFriendlyStats: friendlyStatsById.get(player.id) ?? null,
-      internationalTournamentStats: tournamentStatsById.get(player.id) ?? [],
+      internationalTournamentStats: [...(tournamentStatsById.get(player.id)?.values() ?? [])]
+        .sort((left, right) => right.season - left.season || String(left.tournamentName).localeCompare(String(right.tournamentName), "ar")),
       clubId: club?.id ?? null,
       club: club?.nameAr ?? "لاعب حر",
       clubShortName: club?.shortName ?? "حر",
