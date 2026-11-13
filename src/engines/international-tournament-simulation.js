@@ -610,10 +610,13 @@ export function isValidTournamentSeasonRecord(record, season, currentDate = null
     }
 
     if (tournament.status === "completed") {
-      if (tournament.stage !== "completed" || !teamIds.has(tournament.championTeamId) ||
-          !tournament.archive || !isValidTournamentArchive(tournament.archive, currentDate) ||
-          tournament.archive.tournamentId !== tournament.id ||
-          tournament.archive.championTeamId !== tournament.championTeamId) return false;
+      if (tournament.stage !== "completed" || !teamIds.has(tournament.championTeamId)) return false;
+      // Earlier Phase 10.5 saves may contain a completed tournament before its
+      // first archive pass; keep those saves loadable so the next career day can backfill it.
+      if (tournament.archive !== undefined &&
+          (!isValidTournamentArchive(tournament.archive, currentDate) ||
+            tournament.archive.tournamentId !== tournament.id ||
+            tournament.archive.championTeamId !== tournament.championTeamId)) return false;
     } else if (tournament.championTeamId !== null ||
         (tournament.archive !== undefined && !isValidTournamentArchive(tournament.archive, currentDate))) {
       return false;
