@@ -327,6 +327,12 @@ test("creates a new scheduled season without deleting historical results", () =>
   assert.equal(isValidFootballState(nextSeason.football, "2027-07-01", 2), true);
 });
 
+test("initializes player development with the requested football season", () => {
+  const state = createInitialFootballState(4, "2030-10-13");
+  assert.equal(state.playerDevelopment.season, 4);
+  assert.equal(isValidFootballState(state, "2030-10-13", 4), true);
+});
+
 test("migrates older saves by assigning legacy continental matches to valid groups", () => {
   const initial = createInitialFootballState(1, "2026-07-01");
   const continental = WORLD_DATABASE.competitions.find((item) => item.type === "continental");
