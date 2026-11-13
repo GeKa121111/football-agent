@@ -888,7 +888,7 @@ export function getInternationalTournamentOverview(state, currentDate) {
         championTeamId: tournament.championTeamId,
         champion: tournament.teams.find((team) => team.id === tournament.championTeamId)?.nameAr ?? "منتخب غير معروف",
         completedDate: tournament.fixtures.reduce((latest, fixture) =>
-          fixture.date > latest ? fixture.date : latest, tournament.fixtures[0]?.date ?? record.generatedAt)
+          fixture.date > latest ? fixture.date : latest, tournament.fixtures[0]?.date ?? currentDate)
       });
     }
   }
