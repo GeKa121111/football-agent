@@ -697,7 +697,10 @@ test("runs continental semi-finals, the final, club cups and two complete season
   const qualifiers = semifinals.flatMap((fixture) => [fixture.homeClubId, fixture.awayClubId]);
   assert.equal(new Set(qualifiers).size, 4);
   assert.ok(semifinals.every((fixture) => fixture.stage === "knockout" && fixture.groupId === null));
-  assert.ok(final[0].stage === "knockout" && final[0].groupId === null);
+  assert.ok(
+    final[0].stage === "knockout" && final[0].groupId === null,
+    "continental final must be a knockout fixture without a group ID: " + JSON.stringify(final[0])
+  );
   assert.ok(football.results.filter((result) =>
     result.competitionId === continental.id && result.season === 1 &&
     result.groupId === null

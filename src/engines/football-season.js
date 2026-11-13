@@ -819,15 +819,8 @@ export function isValidFootballState(state, currentDate, season, database = WORL
     dateValue(fixture.date) !== null &&
     Number.isSafeInteger(fixture.round) && fixture.round >= 1 &&
     [1, 2].includes(fixture.leg) &&
-    ((competitionById.get(fixture.competitionId)?.type === "cup" &&
-      fixture.leg === 1 && fixture.groupId === null &&
-      (fixture.stage === undefined || fixture.stage === "knockout")) ||
-     (competitionById.get(fixture.competitionId)?.type === "continental" &&
-      (fixture.groupId
-        ? (fixture.stage === undefined || fixture.stage === "group")
-        : (fixture.stage === "knockout" && fixture.leg === 1))) ||
-     (competitionById.get(fixture.competitionId)?.type === "league" &&
-      fixture.groupId === null && fixture.stage === undefined)) &&
+    (competitionById.get(fixture.competitionId)?.type !== "cup" ||
+      (fixture.leg === 1 && fixture.groupId === null)) &&
     clubIds.has(fixture.homeClubId) && clubIds.has(fixture.awayClubId) &&
     fixture.homeClubId !== fixture.awayClubId &&
     ((fixture.status === "scheduled" && fixture.resultId === null) ||

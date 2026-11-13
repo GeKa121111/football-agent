@@ -354,7 +354,7 @@ export function advanceKnockoutRound(competition, season, fixtures, results, dat
 
   if (isContinentalGroups && knockoutFixtures.length === 0) {
     const semifinals = buildGroupStageSemifinalFixtures(
-      competition, season, competitionFixtures, results, database
+      competition, season, fixtures, results, database
     );
     return {
       fixtures: semifinals,
