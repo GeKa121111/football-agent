@@ -2,12 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createInitialSave, isValidSave, readSave, writeSave } from "../src/core/storage.js";
 import { createInitialFootballState, isValidFootballState } from "../src/engines/football-season.js";
-import { isValidTransferState } from "../src/engines/transfers.js";
-import { isValidRepresentationState } from "../src/engines/representation.js";
-import { isValidTalentPipelineState } from "../src/engines/talent-pipeline.js";
-import { isValidAgencyManagementState } from "../src/engines/agency-management.js";
-import { isValidNationalTeamState } from "../src/engines/international-breaks.js";
-import { isValidInternationalMatchState } from "../src/engines/international-matches.js";
 import { createInitialCareerCalendar } from "../src/engines/career-calendar.js";
 import { isValidInternationalTournamentState } from "../src/engines/international-tournament-simulation.js";
 import {
@@ -278,26 +272,6 @@ test("multi-season archive survives a World Cup cycle and a v8 save reload", () 
       football: createInitialFootballState(4, completed.world.currentDate)
     }
   };
-  console.log("SAVE_VALIDATION_DIAGNOSTICS", JSON.stringify({
-    meta: finalSave.meta,
-    career: finalSave.career,
-    activityCollections: {
-      events: finalSave.world.events?.length,
-      inbox: finalSave.world.inbox?.length,
-      tasks: finalSave.world.tasks?.length,
-      eventsArray: Array.isArray(finalSave.world.events),
-      inboxArray: Array.isArray(finalSave.world.inbox),
-      tasksArray: Array.isArray(finalSave.world.tasks)
-    },
-    football: isValidFootballState(finalSave.world.football, finalSave.world.currentDate, finalSave.career.season),
-    transfer: isValidTransferState(finalSave.world.transfers, finalSave.world.currentDate, finalSave.agency.clients, finalSave.agency.representation),
-    representation: isValidRepresentationState(finalSave.agency.representation, finalSave.world.currentDate, finalSave.agency.clients),
-    talentPipeline: isValidTalentPipelineState(finalSave.agency.talentPipeline, finalSave.world.currentDate),
-    agencyManagement: isValidAgencyManagementState(finalSave.agency.management, finalSave.world.currentDate),
-    nationalTeams: isValidNationalTeamState(finalSave.world.nationalTeams, finalSave.world.currentDate),
-    internationalMatches: isValidInternationalMatchState(finalSave.world.nationalTeams, finalSave.world.currentDate),
-    internationalTournaments: isValidInternationalTournamentState(finalSave.world.nationalTeams, finalSave.world.currentDate)
-  }));
   assert.equal(isValidSave(finalSave), true);
   const data = new Map();
   const storage = {
