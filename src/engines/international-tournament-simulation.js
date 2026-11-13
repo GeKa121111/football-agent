@@ -292,6 +292,7 @@ function createTournamentArchive(tournament, completedDate) {
     championName: champion?.nameAr ?? "منتخب غير معروف",
     teamCount: tournament.teams.length,
     matchesPlayed: tournament.results.length,
+    fixtures: tournament.fixtures.map((fixture) => ({ ...fixture })),
     standings,
     awards: {
       topScorer: awardRecord(topScorer, topScorer?.goals ?? 0),
@@ -465,6 +466,7 @@ function isValidTournamentArchive(archive, currentDate) {
       !isDate(archive.completedDate) || (currentDate && archive.completedDate > currentDate) ||
       !Array.isArray(archive.teams) || archive.teams.length < 2 ||
       !Array.isArray(archive.results) || archive.results.length < 1 ||
+      !Array.isArray(archive.fixtures) || archive.fixtures.length !== archive.results.length ||
       archive.matchesPlayed !== archive.results.length ||
       archive.teamCount !== archive.teams.length ||
       !Array.isArray(archive.standings) || !isRecord(archive.awards) ||
@@ -483,16 +485,24 @@ function isValidTournamentArchive(archive, currentDate) {
   if (!teamIds.has(archive.championTeamId) ||
       archive.championName !== archive.teams.find((team) => team.id === archive.championTeamId)?.nameAr) return false;
 
+  const fixtureById = new Map();
+  for (const fixture of archive.fixtures) {
+    if (!isRecord(fixture) || typeof fixture.id !== "string" || fixtureById.has(fixture.id) ||
+        fixture.tournamentId !== archive.tournamentId || fixture.season !== archive.season ||
+        !isDate(fixture.date) || fixture.date > archive.completedDate ||
+        !teamIds.has(fixture.homeTeamId) || !teamIds.has(fixture.awayTeamId) ||
+        fixture.homeTeamId === fixture.awayTeamId || fixture.status !== "played" ||
+        !["groups", "knockout"].includes(fixture.stage)) return false;
+    fixtureById.set(fixture.id, fixture);
+  }
   const resultIds = new Set();
   for (const result of archive.results) {
-    if (!isRecord(result) || typeof result.fixtureId !== "string" ||
-        resultIds.has(result.fixtureId) || !teamIds.has(result.homeTeamId) ||
-        !teamIds.has(result.awayTeamId) || result.homeTeamId === result.awayTeamId ||
-        !isDate(result.date) || result.date > archive.completedDate ||
-        !Number.isSafeInteger(result.homeGoals) || result.homeGoals < 0 ||
-        !Number.isSafeInteger(result.awayGoals) || result.awayGoals < 0) return false;
+    const fixture = fixtureById.get(result?.fixtureId);
+    if (!fixture || resultIds.has(result.fixtureId) ||
+        !isValidTournamentResult(result, fixture, teamIds, archive.completedDate)) return false;
     resultIds.add(result.fixtureId);
   }
+  if (archive.fixtures.some((fixture) => !resultIds.has(fixture.id))) return false;
   for (const group of archive.standings) {
     if (!isRecord(group) || typeof group.groupId !== "string" ||
         typeof group.nameAr !== "string" || !Array.isArray(group.standings)) return false;
@@ -644,11 +654,13 @@ export function isValidInternationalTournamentState(state, currentDate) {
     if (!isValidTournamentArchive(archive, currentDate) || archiveIds.has(archive.id)) return false;
     archiveIds.add(archive.id);
   }
+  const archivesById = new Map(archiveRecords.map((archive) => [archive.id, archive]));
   const generatedArchives = seasonRecords.flatMap((record) => record.tournaments
     .filter((tournament) => tournament.archive)
     .map((tournament) => tournament.archive));
   for (const archive of generatedArchives) {
-    if (!archiveIds.has(archive.id)) return false;
+    const storedArchive = archivesById.get(archive.id);
+    if (!storedArchive || JSON.stringify(storedArchive) !== JSON.stringify(archive)) return false;
   }
   return true;
 }
