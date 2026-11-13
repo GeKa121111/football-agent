@@ -142,10 +142,11 @@ function createPenaltyDecision(fixture, homeGoals, awayGoals) {
     seed ^= character.charCodeAt(0);
     seed = Math.imul(seed, 16777619);
   }
-  const homeGoalsOnPenalties = 4 + ((seed >>> 3) % 2);
-  const awayGoalsOnPenalties = homeGoalsOnPenalties === 5 ? 4 : 3;
+  const homeWins = (seed & 1) === 0;
+  const homeGoalsOnPenalties = homeWins ? 5 : 4;
+  const awayGoalsOnPenalties = homeWins ? 4 : 5;
   return {
-    winnerTeamId: fixture.homeTeamId,
+    winnerTeamId: homeWins ? fixture.homeTeamId : fixture.awayTeamId,
     decision: "penalties",
     penaltyShootout: {
       home: homeGoalsOnPenalties,
@@ -162,8 +163,15 @@ function simulateTournamentFixture(fixture, tournament, playerDevelopment, datab
     throw new TypeError("مباراة البطولة تشير إلى منتخب غير موجود.");
   }
 
-  const home = createTournamentSide(homeTeam, { database, playerDevelopment });
-  const away = createTournamentSide(awayTeam, { database, playerDevelopment });
+  let home;
+  let away;
+  try {
+    home = createTournamentSide(homeTeam, { database, playerDevelopment });
+    away = createTournamentSide(awayTeam, { database, playerDevelopment });
+  } catch (error) {
+    if (error instanceof RangeError) return null;
+    throw error;
+  }
   const simulated = simulateMatch({
     id: fixture.id,
     date: fixture.date,
@@ -414,6 +422,25 @@ export function advanceInternationalTournaments(save, database = WORLD_DATABASE)
         .sort((left, right) => compareText(left.date, right.date) || compareText(left.id, right.id));
       for (const fixture of due) {
         const result = simulateTournamentFixture(fixture, tournament, nextPlayerDevelopment, database);
+        if (!result) {
+          let nextDate = addDays(currentDate, 1);
+          for (let attempt = 0; attempt < 21; attempt += 1) {
+            const hasConflict = fixtures.some((other) =>
+              other.id !== fixture.id && other.status === "scheduled" &&
+              other.date === nextDate &&
+              [other.homeTeamId, other.awayTeamId].some((teamId) =>
+                teamId === fixture.homeTeamId || teamId === fixture.awayTeamId
+              )
+            );
+            if (!hasConflict) break;
+            nextDate = addDays(nextDate, 1);
+          }
+          fixtures = fixtures.map((item) => item.id === fixture.id
+            ? { ...item, date: nextDate }
+            : item);
+          changed = true;
+          continue;
+        }
         results.push(result);
         resultIds.add(fixture.id);
         fixtures = fixtures.map((item) => item.id === fixture.id
