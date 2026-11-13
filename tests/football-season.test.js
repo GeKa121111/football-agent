@@ -640,3 +640,109 @@ test("simulates three complete seasons without duplicate fixtures, lost results 
   }
   assert.equal(isValidFootballState(football, "2029-06-30", 3), true);
 });
+
+
+test("runs continental semi-finals, the final, club cups and two complete seasons without duplicate or missing records", () => {
+  const continental = WORLD_DATABASE.competitions.find((item) =>
+    item.id === "competition-conmebol-libertadores"
+  );
+  const cup = WORLD_DATABASE.competitions.find((item) =>
+    item.id === "competition-club-world-cup"
+  );
+  const participatingClubIds = new Set([...continental.clubIds, ...cup.clubIds]);
+  const database = {
+    ...WORLD_DATABASE,
+    clubs: WORLD_DATABASE.clubs.filter((club) => participatingClubIds.has(club.id)),
+    players: WORLD_DATABASE.players.filter((player) => participatingClubIds.has(player.clubId)),
+    squadPlayers: WORLD_DATABASE.squadPlayers.filter((player) => participatingClubIds.has(player.clubId)),
+    competitions: [continental, cup]
+  };
+  const competitionIds = [continental.id, cup.id];
+  let football = createInitialFootballState(1, "2026-07-01", database);
+
+  const runSeason = (start, end, season) => {
+    const cursor = new Date(start + "T00:00:00.000Z");
+    const last = new Date(end + "T00:00:00.000Z");
+    while (cursor <= last) {
+      const currentDate = cursor.toISOString().slice(0, 10);
+      football = advanceFootballSeasonDay(football, currentDate, season, database).football;
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+  };
+
+  runSeason("2026-07-01", "2027-06-30", 1);
+  const seasonOneContinental = football.fixtures.filter((fixture) =>
+    fixture.competitionId === continental.id && fixture.season === 1
+  );
+  const continentalGroups = buildCompetitionGroups(continental, database);
+  const groupStandings = continentalGroups.map((group) =>
+    getCompetitionStandings(football, continental.id, database, 1, group.id)
+  );
+  const expectedSemiPairings = [
+    [groupStandings[0][0].clubId, groupStandings[1][1].clubId],
+    [groupStandings[1][0].clubId, groupStandings[0][1].clubId]
+  ];
+  const semifinals = seasonOneContinental.filter((fixture) => fixture.phase === "semi-final");
+  const final = seasonOneContinental.filter((fixture) => fixture.phase === "final");
+  assert.equal(seasonOneContinental.length, 7);
+  assert.equal(semifinals.length, 2);
+  assert.equal(final.length, 1);
+  assert.deepEqual(
+    semifinals.map((fixture) => [fixture.homeClubId, fixture.awayClubId]),
+    expectedSemiPairings
+  );
+  const qualifiers = semifinals.flatMap((fixture) => [fixture.homeClubId, fixture.awayClubId]);
+  assert.equal(new Set(qualifiers).size, 4);
+  assert.ok(semifinals.every((fixture) => fixture.stage === "knockout" && fixture.groupId === null));
+  assert.ok(final[0].stage === "knockout" && final[0].groupId === null);
+  assert.ok(football.results.filter((result) =>
+    result.competitionId === continental.id && result.season === 1 &&
+    result.groupId === null
+  ).every((result) => result.knockoutDecision?.winnerClubId));
+
+  for (const competitionId of competitionIds) {
+    const played = football.fixtures.filter((fixture) =>
+      fixture.competitionId === competitionId && fixture.season === 1
+    );
+    assert.ok(played.length > 0);
+    assert.ok(played.every((fixture) => fixture.status === "played"));
+    assert.equal(new Set(played.map((fixture) => fixture.id)).size, played.length);
+  }
+  assert.equal(isValidFootballState(football, "2027-06-30", 1, database), true);
+
+  football = advanceFootballSeasonDay(football, "2027-07-01", 2, database).football;
+  runSeason("2027-07-02", "2028-06-30", 2);
+  football = advanceFootballSeasonDay(football, "2028-07-01", 3, database).football;
+
+  assert.equal(football.archives.length, 4);
+  for (const competitionId of competitionIds) {
+    const archives = football.archives.filter((archive) => archive.competitionId === competitionId);
+    assert.deepEqual(archives.map((archive) => archive.season).sort(), [1, 2]);
+    assert.ok(archives.every((archive) =>
+      archive.complete &&
+      archive.matchesPlayed === archive.matchesTotal &&
+      archive.matchesScheduled === 0 &&
+      archive.championClubId &&
+      archive.awards?.bestPlayer?.playerId
+    ));
+    assert.ok(archives.every((archive) => archive.matchesTotal === 7));
+    for (const season of [1, 2]) {
+      const savedResults = football.results.filter((result) =>
+        result.competitionId === competitionId && result.season === season
+      );
+      assert.equal(savedResults.length, 7);
+      assert.equal(new Set(savedResults.map((result) => result.id)).size, 7);
+    }
+  }
+  assert.equal(new Set(football.archives.map((archive) => archive.id)).size, 4);
+  assert.equal(isValidFootballState(football, "2028-07-01", 3, database), true);
+  for (const competitionId of competitionIds) {
+    const history = getCompetitionSeasonHistory(football, competitionId, database);
+    assert.equal(history.length, 3);
+    assert.equal(history[0].season, 3);
+    assert.equal(history[1].season, 2);
+    assert.equal(history[2].season, 1);
+    assert.equal(history[1].complete, true);
+    assert.equal(history[2].complete, true);
+  }
+});

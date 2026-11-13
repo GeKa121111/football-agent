@@ -1,8 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { WORLD_DATABASE } from "../src/data/world-database.js";
+import { buildCompetitionGroups } from "../src/data/competition-rules.js";
+import { generateSeasonFixtures } from "../src/engines/football-season.js";
 import {
   buildKnockoutOpeningPairings,
+  buildGroupStageSemifinalFixtures,
   resolveKnockoutOutcome,
   advanceKnockoutRound
 } from "../src/engines/knockout-tournament.js";
@@ -107,4 +110,105 @@ test("creates one next-round fixture per pair of unique winners after a complete
     fixture.homeClubId, fixture.awayClubId
   ]);
   assert.equal(new Set(advancingClubs).size, 4);
+});
+
+
+test("qualifies the first and second of each completed continental group into cross-group semi-finals exactly once", () => {
+  const competition = WORLD_DATABASE.competitions.find((item) =>
+    item.id === "competition-conmebol-libertadores"
+  );
+  const database = { ...WORLD_DATABASE, competitions: [competition] };
+  const groups = buildCompetitionGroups(competition, database);
+  const groupFixtures = generateSeasonFixtures(1, "2026-07-01", database)
+    .filter((fixture) => fixture.competitionId === competition.id);
+  const plannedTop = groups.map((group) => group.clubIds[0]);
+  const playedFixtures = groupFixtures.map((fixture) => ({ ...fixture, status: "played" }));
+  const results = playedFixtures.map((fixture) => {
+    const groupIndex = groups.findIndex((group) => group.id === fixture.groupId);
+    const topClubId = plannedTop[groupIndex];
+    const topAtHome = fixture.homeClubId === topClubId;
+    return {
+      id: fixture.id,
+      competitionId: competition.id,
+      season: 1,
+      groupId: fixture.groupId,
+      home: { clubId: fixture.homeClubId, goals: topAtHome ? 3 : 0 },
+      away: { clubId: fixture.awayClubId, goals: topAtHome ? 0 : 3 }
+    };
+  });
+
+  const incomplete = [...playedFixtures];
+  incomplete[0] = { ...incomplete[0], status: "scheduled" };
+  assert.deepEqual(
+    buildGroupStageSemifinalFixtures(competition, 1, incomplete, results, database),
+    []
+  );
+
+  const semifinals = buildGroupStageSemifinalFixtures(
+    competition, 1, playedFixtures, results, database
+  );
+  assert.equal(semifinals.length, 2);
+  assert.ok(semifinals.every((fixture) =>
+    fixture.stage === "knockout" &&
+    fixture.phase === "semi-final" &&
+    fixture.phaseNameAr === "نصف النهائي" &&
+    fixture.status === "scheduled"
+  ));
+  assert.deepEqual(
+    semifinals.map((fixture) => [fixture.homeClubId, fixture.awayClubId]),
+    [
+      [groups[0].clubIds[0], groups[1].clubIds[1]],
+      [groups[1].clubIds[0], groups[0].clubIds[1]]
+    ]
+  );
+
+  const initialProgression = advanceKnockoutRound(
+    competition, 1, playedFixtures, results, database
+  );
+  assert.deepEqual(initialProgression.fixtures, semifinals);
+  const replay = advanceKnockoutRound(
+    competition, 1, [...playedFixtures, ...semifinals], results, database
+  );
+  assert.equal(replay.advanced, false);
+  assert.deepEqual(replay.fixtures, []);
+
+  const completedSemifinals = semifinals.map((fixture) => ({
+    ...fixture,
+    status: "played"
+  }));
+  const semifinalResults = completedSemifinals.map((fixture) => ({
+    id: fixture.id,
+    knockoutDecision: { winnerClubId: fixture.homeClubId }
+  }));
+  const finalProgression = advanceKnockoutRound(
+    competition,
+    1,
+    [...playedFixtures, ...completedSemifinals],
+    [...results, ...semifinalResults],
+    database
+  );
+  assert.equal(finalProgression.fixtures.length, 1);
+  assert.equal(finalProgression.fixtures[0].phase, "final");
+  assert.equal(finalProgression.fixtures[0].phaseNameAr, "النهائي");
+  assert.equal(
+    new Set([
+      finalProgression.fixtures[0].homeClubId,
+      finalProgression.fixtures[0].awayClubId
+    ]).size,
+    2
+  );
+
+  const finalFixture = { ...finalProgression.fixtures[0], status: "played" };
+  const champion = advanceKnockoutRound(
+    competition,
+    1,
+    [...playedFixtures, ...completedSemifinals, finalFixture],
+    [...results, ...semifinalResults, {
+      id: finalFixture.id,
+      knockoutDecision: { winnerClubId: finalFixture.homeClubId }
+    }],
+    database
+  );
+  assert.equal(champion.championClubId, finalFixture.homeClubId);
+  assert.equal(champion.fixtures.length, 0);
 });
