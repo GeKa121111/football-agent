@@ -254,10 +254,16 @@ test("multi-season archive survives a World Cup cycle and a v8 save reload", () 
   ));
   assert.equal(isValidInternationalTournamentState(national, completed.world.currentDate), true);
 
+  const cleanNationalState = createInitialSave().world.nationalTeams;
   const finalSave = {
     ...completed,
     world: {
       ...completed.world,
+      nationalTeams: {
+        ...cleanNationalState,
+        tournamentSeasons: national.tournamentSeasons,
+        tournamentArchives: national.tournamentArchives
+      },
       football: createInitialFootballState(4, completed.world.currentDate),
       tasks: []
     }
