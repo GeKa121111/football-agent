@@ -118,13 +118,22 @@ function getCurrentWorldPlayers(save) {
   const friendlyStatsById = new Map((nationalTeamState.playerStats ?? [])
     .map((record) => [record.playerId, record]));
   const tournamentStatsById = new Map();
+  const addTournamentStat = (record, tournamentId, tournamentName, season) => {
+    const entries = tournamentStatsById.get(record.playerId) ?? new Map();
+    entries.set(tournamentId, { ...record, tournamentId, tournamentName, season });
+    tournamentStatsById.set(record.playerId, entries);
+  };
   for (const seasonRecord of nationalTeamState.tournamentSeasons ?? []) {
     for (const tournament of seasonRecord.tournaments ?? []) {
       for (const record of tournament.playerStats ?? []) {
-        const entries = tournamentStatsById.get(record.playerId) ?? [];
-        entries.push({ ...record, tournamentName: tournament.nameAr, season: tournament.season });
-        tournamentStatsById.set(record.playerId, entries);
+        addTournamentStat(record, tournament.id, tournament.nameAr, tournament.season);
       }
+    }
+  }
+  // Long-lived archives remain queryable after old season snapshots are pruned.
+  for (const archive of nationalTeamState.tournamentArchives ?? []) {
+    for (const record of archive.playerStats ?? []) {
+      addTournamentStat(record, archive.tournamentId, archive.nameAr, archive.season);
     }
   }
   const developmentById = new Map(
@@ -194,7 +203,8 @@ function getCurrentWorldPlayers(save) {
       seasonPerformance,
       honors,
       internationalFriendlyStats: friendlyStatsById.get(player.id) ?? null,
-      internationalTournamentStats: tournamentStatsById.get(player.id) ?? [],
+      internationalTournamentStats: [...(tournamentStatsById.get(player.id)?.values() ?? [])]
+        .sort((left, right) => right.season - left.season || String(left.tournamentName).localeCompare(String(right.tournamentName), "ar")),
       clubId: club?.id ?? null,
       club: club?.nameAr ?? "لاعب حر",
       clubShortName: club?.shortName ?? "حر",
@@ -990,6 +1000,44 @@ function renderInternationalTournamentPanel(context) {
     recentPanel.append(list);
   }
   section.append(recentPanel);
+
+  const archivePanel = node("div", "international-fixture-panel international-archive-panel");
+  archivePanel.append(node("h3", "", "أرشيف البطولات والجوائز"));
+  if (overview.archives.length === 0) {
+    archivePanel.append(node("p", "representation-empty",
+      "الأبطال والجوائز الدولية هتتحفظ هنا بعد اكتمال أول بطولة."));
+  } else {
+    const archiveList = node("div", "international-tournament-list");
+    overview.archives.slice(0, 12).forEach((archive) => {
+      const card = node("article", "international-tournament-card international-archive-card");
+      card.append(
+        node("small", "", "الموسم " + formatHomeNumber(archive.season) + " · " + formatHomeDate(archive.completedDate)),
+        node("h3", "", archive.nameAr),
+        node("p", "international-champion", "البطل: " + archive.championName)
+      );
+      const awards = node("div", "international-award-list");
+      [
+        ["الهداف", archive.awards.topScorer, "هدف"],
+        ["الأكثر صناعة", archive.awards.topAssists, "صناعة"],
+        ["أفضل لاعب", archive.awards.bestPlayer, "تقييم"]
+      ].forEach(([label, award, unit]) => {
+        if (!award) return;
+        const row = node("div", "international-award-row");
+        row.append(
+          node("span", "", label),
+          node("strong", "", award.playerName),
+          node("small", "", label === "أفضل لاعب"
+            ? formatHomeNumber(award.value) + " / 10"
+            : formatHomeNumber(award.value) + " " + unit)
+        );
+        awards.append(row);
+      });
+      card.append(awards);
+      archiveList.append(card);
+    });
+    archivePanel.append(archiveList);
+  }
+  section.append(archivePanel);
   return section;
 }
 
