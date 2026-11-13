@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { WORLD_DATABASE } from "../src/data/world-database.js";
-import { createInitialSave } from "../src/core/storage.js";
+import { createInitialSave, isValidSave } from "../src/core/storage.js";
+import { advanceCareerSimulationDays } from "../src/engines/career-simulation.js";
 import { advanceInternationalWindows } from "../src/engines/international-breaks.js";
 import {
   advanceInternationalMatches,
@@ -164,4 +165,19 @@ test("exposes upcoming and recent international fixtures and rejects duplicate r
   const corrupted = structuredClone(state);
   corrupted.matches.push(structuredClone(corrupted.matches[0]));
   assert.equal(isValidInternationalMatchState(corrupted, first.world.currentDate), false);
+});
+
+
+test("runs international fixtures through the complete daily career pipeline and keeps the save valid", () => {
+  let save = createInitialSave();
+  save = advanceCareerSimulationDays(save, 31, []).save;
+  save = advanceCareerSimulationDays(save, 31, []).save;
+  save = advanceCareerSimulationDays(save, 6, []).save;
+  save = advanceCareerSimulationDays(save, 1, []).save;
+
+  assert.equal(save.world.currentDate, "2026-09-08");
+  assert.equal(save.world.nationalTeams.matches.length, WORLD_DATABASE.countries.length / 2);
+  assert.equal(save.world.nationalTeams.fixtures.filter((fixture) => fixture.status === "played").length,
+    WORLD_DATABASE.countries.length / 2);
+  assert.equal(isValidSave(save), true);
 });
