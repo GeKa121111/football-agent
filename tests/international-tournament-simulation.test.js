@@ -13,7 +13,11 @@ function saveAt(date, season) {
   return {
     ...initial,
     career: { ...initial.career, season },
-    world: { ...initial.world, currentDate: date }
+    world: {
+      ...initial.world,
+      currentDate: date,
+      football: createInitialFootballState(season, date)
+    }
   };
 }
 
