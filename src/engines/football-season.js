@@ -169,6 +169,9 @@ export function generateSeasonFixtures(season, startDate, database = WORLD_DATAB
           competition,
           groupId: null,
           groupName: null,
+          stage: "knockout",
+          phase: competition.clubIds.length === 8 ? "quarter-final" : "opening-round",
+          phaseNameAr: competition.clubIds.length === 8 ? "ربع النهائي" : "الدور الأول",
           round: 1,
           leg: 1,
           ...pairing
@@ -192,6 +195,7 @@ export function generateSeasonFixtures(season, startDate, database = WORLD_DATAB
             competition,
             groupId: stage.id,
             groupName: stage.nameAr,
+            ...(rules.format === COMPETITION_FORMATS.GROUP_STAGE ? { stage: "group" } : {}),
             round: roundIndex + 1,
             leg: 1,
             ...match
@@ -201,6 +205,7 @@ export function generateSeasonFixtures(season, startDate, database = WORLD_DATAB
               competition,
               groupId: stage.id,
               groupName: stage.nameAr,
+              ...(rules.format === COMPETITION_FORMATS.GROUP_STAGE ? { stage: "group" } : {}),
               round: roundIndex + 1 + totalRounds,
               leg: 2,
               homeClubId: match.awayClubId,
@@ -250,6 +255,9 @@ export function generateSeasonFixtures(season, startDate, database = WORLD_DATAB
       competitionName: template.competition.nameAr,
       groupId: template.groupId,
       groupName: template.groupName,
+      ...(template.stage ? { stage: template.stage } : {}),
+      ...(template.phase ? { phase: template.phase } : {}),
+      ...(template.phaseNameAr ? { phaseNameAr: template.phaseNameAr } : {}),
       date: matchDate,
       round: template.round,
       leg: template.leg,
@@ -342,8 +350,16 @@ function buildCompetitionSeasonSummary(state, competition, season, database = WO
   );
   const scheduledFixtures = fixtures.filter((fixture) => fixture.status === "scheduled");
   const playedFixtures = fixtures.length - scheduledFixtures.length;
-  const complete = scheduledFixtures.length === 0 && playedFixtures === results.length;
+  let complete = scheduledFixtures.length === 0 && playedFixtures === results.length;
   const rules = getCompetitionRules(competition);
+  const knockoutFixtures = rules.format === COMPETITION_FORMATS.KNOCKOUT
+    ? fixtures
+    : rules.format === COMPETITION_FORMATS.GROUP_STAGE
+      ? fixtures.filter((fixture) => fixture.stage === "knockout")
+      : [];
+  if (rules.format === COMPETITION_FORMATS.GROUP_STAGE && knockoutFixtures.length === 0) {
+    complete = false;
+  }
   const groups = rules.format === COMPETITION_FORMATS.GROUP_STAGE
     ? buildCompetitionGroups(competition, database).map((group) => ({
       groupId: group.id,
@@ -357,9 +373,9 @@ function buildCompetitionSeasonSummary(state, competition, season, database = WO
   let championClubId = complete && standings.length > 0
     ? standings[0].clubId
     : null;
-  if (complete && rules.format === COMPETITION_FORMATS.KNOCKOUT) {
-    const finalRound = Math.max(...fixtures.map((fixture) => fixture.round));
-    const finalFixtures = fixtures.filter((fixture) => fixture.round === finalRound);
+  if (complete && knockoutFixtures.length > 0) {
+    const finalRound = Math.max(...knockoutFixtures.map((fixture) => fixture.round));
+    const finalFixtures = knockoutFixtures.filter((fixture) => fixture.round === finalRound);
     if (finalFixtures.length === 1) {
       championClubId = results.find((result) => result.id === finalFixtures[0].id)
         ?.knockoutDecision?.winnerClubId ?? null;
@@ -428,7 +444,8 @@ function createMatchEvent(result, fixture) {
           : " في الوقت الأصلي"
     )
     : "";
-  const description = fixture.competitionName + " · الجولة " + fixture.round +
+  const roundLabel = fixture.phaseNameAr ?? ("الجولة " + fixture.round);
+  const description = fixture.competitionName + " · " + roundLabel +
     " · " + result.home.shotsOnTarget + " تسديدة على المرمى مقابل " +
     result.away.shotsOnTarget + " للفريق الضيف." + knockoutNote;
 
@@ -582,7 +599,9 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
       leg: fixture.leg,
       competitionName: fixture.competitionName,
       ...(fixture.groupId ? { groupId: fixture.groupId, groupName: fixture.groupName } : {}),
-      ...(database.competitions.find((item) => item.id === fixture.competitionId)?.type === "cup"
+      ...(database.competitions.find((item) => item.id === fixture.competitionId)?.type === "cup" ||
+          (database.competitions.find((item) => item.id === fixture.competitionId)?.type === "continental" &&
+            fixture.stage === "knockout")
         ? { knockoutDecision: resolveKnockoutOutcome(simulated, fixture) }
         : {}),
       rosterType: "fictional-mixed-with-simulation-only-fillers"
@@ -604,7 +623,9 @@ export function advanceFootballSeasonDay(state, currentDate, season, database = 
     : fixture);
   const allResults = [...nextState.results, ...playedResults];
   const generatedKnockoutFixtures = [];
-  for (const competition of database.competitions.filter((item) => item.type === "cup")) {
+  for (const competition of database.competitions.filter((item) =>
+    item.type === "cup" || item.type === "continental"
+  )) {
     const progression = advanceKnockoutRound(
       competition,
       season,
@@ -652,7 +673,9 @@ function isValidMatchResult(result, fixture, competition) {
       !Array.isArray(result.events) || !Array.isArray(result.playerPerformances) ||
       result.playerPerformances.length !== 22) return false;
 
-  if (competition?.type === "cup") {
+  const isKnockoutFixture = competition?.type === "cup" ||
+    (competition?.type === "continental" && fixture.stage === "knockout");
+  if (isKnockoutFixture) {
     const decision = result.knockoutDecision;
     if (!isRecord(decision) ||
         !["regular-time", "extra-time", "penalties"].includes(decision.decidedBy) ||
@@ -788,8 +811,15 @@ export function isValidFootballState(state, currentDate, season, database = WORL
     dateValue(fixture.date) !== null &&
     Number.isSafeInteger(fixture.round) && fixture.round >= 1 &&
     [1, 2].includes(fixture.leg) &&
-    (competitionById.get(fixture.competitionId)?.type !== "cup" ||
-      (fixture.leg === 1 && fixture.groupId === null)) &&
+    ((competitionById.get(fixture.competitionId)?.type === "cup" &&
+      fixture.leg === 1 && fixture.groupId === null &&
+      (fixture.stage === undefined || fixture.stage === "knockout")) ||
+     (competitionById.get(fixture.competitionId)?.type === "continental" &&
+      (fixture.groupId
+        ? (fixture.stage === undefined || fixture.stage === "group")
+        : (fixture.stage === "knockout" && fixture.leg === 1))) ||
+     (competitionById.get(fixture.competitionId)?.type === "league" &&
+      fixture.groupId === null && fixture.stage === undefined)) &&
     clubIds.has(fixture.homeClubId) && clubIds.has(fixture.awayClubId) &&
     fixture.homeClubId !== fixture.awayClubId &&
     ((fixture.status === "scheduled" && fixture.resultId === null) ||

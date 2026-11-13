@@ -45,6 +45,9 @@ export function getCompetitionRules(competition) {
     groupCount: format === COMPETITION_FORMATS.GROUP_STAGE
       ? (competition.groupCount ?? 2)
       : null,
+    qualifiersPerGroup: format === COMPETITION_FORMATS.GROUP_STAGE
+      ? (competition.qualifiersPerGroup ?? 2)
+      : null,
     points: { ...DEFAULT_POINTS, ...(competition.points ?? {}) },
     tieBreakers: [...(competition.tieBreakers ?? [
       "points", "goalDifference", "goalsFor", "clubId"
@@ -134,6 +137,15 @@ export function validateCompetitionDefinition(competition, database) {
         rules.groupCount < 2 ||
         rules.groupCount > Math.floor(competition.clubIds.length / 2)) {
       errors.push("عدد مجموعات المسابقة القارية لا يضمن ناديين على الأقل في كل مجموعة: " + competition.id);
+    }
+    if (!Number.isSafeInteger(rules.qualifiersPerGroup) ||
+        rules.qualifiersPerGroup < 1 ||
+        rules.qualifiersPerGroup > Math.floor(competition.clubIds.length / rules.groupCount)) {
+      errors.push("عدد المتأهلين من كل مجموعة غير صالح: " + competition.id);
+    }
+    if (competition.type === "continental" &&
+        (rules.groupCount !== 2 || rules.qualifiersPerGroup !== 2)) {
+      errors.push("المسار القاري الحالي يتطلب مجموعتين ويتأهل أول وثاني كل مجموعة إلى نصف النهائي: " + competition.id);
     }
   }
 
