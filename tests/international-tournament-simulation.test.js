@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createInitialSave } from "../src/core/storage.js";
+import { createInitialSave, isValidSave, readSave, writeSave } from "../src/core/storage.js";
+import { createInitialFootballState } from "../src/engines/football-season.js";
+import { isValidInternationalTournamentState } from "../src/engines/international-tournament-simulation.js";
 import {
   advanceInternationalTournaments,
   getInternationalTournamentOverview
@@ -125,4 +127,97 @@ test("tournament results and player statistics remain separate from club competi
       tournament.results.every((result) => result.tournamentId === tournament.id)
     )
   ));
+});
+
+test("completed continental tournaments generate one durable archive with individual awards", () => {
+  const initial = saveAt("2027-06-10", 1);
+  const completed = runDays(initial, 42);
+  const national = completed.world.nationalTeams;
+
+  assert.equal(national.tournamentArchives.length, 3);
+  assert.equal(new Set(national.tournamentArchives.map((item) => item.id)).size, 3);
+  for (const archive of national.tournamentArchives) {
+    assert.ok(archive.championTeamId);
+    assert.equal(archive.matchesPlayed, archive.results.length);
+    assert.ok(archive.standings.length >= 0);
+    assert.ok(archive.teams.some((team) => team.id === archive.championTeamId));
+    assert.ok(archive.awards.topScorer);
+    assert.ok(archive.awards.topAssists);
+    assert.ok(archive.awards.bestPlayer);
+  }
+  assert.equal(isValidInternationalTournamentState(national, completed.world.currentDate), true);
+
+  const repeated = advanceInternationalTournaments(completed);
+  assert.equal(repeated, completed);
+  assert.equal(repeated.world.nationalTeams.tournamentArchives.length, 3);
+});
+
+test("legacy national-team saves without tournament extensions remain valid", () => {
+  const initial = createInitialSave();
+  assert.equal(
+    isValidInternationalTournamentState(initial.world.nationalTeams, initial.world.currentDate),
+    true
+  );
+  assert.equal(initial.world.nationalTeams.tournamentSeasons, undefined);
+  assert.equal(initial.world.nationalTeams.tournamentArchives, undefined);
+});
+
+test("v8 saves round-trip completed international archives without changing the schema version", () => {
+  const initial = saveAt("2027-06-10", 1);
+  const simulated = runDays(initial, 42);
+  const currentDate = simulated.world.currentDate;
+  const save = {
+    ...simulated,
+    world: {
+      ...simulated.world,
+      football: createInitialFootballState(1, currentDate),
+      tasks: []
+    }
+  };
+  assert.equal(isValidSave(save), true);
+
+  const data = new Map();
+  const storage = {
+    getItem(key) { return data.has(key) ? data.get(key) : null; },
+    setItem(key, value) { data.set(key, value); },
+    removeItem(key) { data.delete(key); }
+  };
+  const written = writeSave(save, storage, "2027-07-22T12:00:00.000Z");
+  assert.equal(written.meta.version, 8);
+  const loaded = readSave(storage);
+  assert.equal(loaded.status, "loaded");
+  assert.equal(loaded.save.meta.version, 8);
+  assert.deepEqual(
+    loaded.save.world.nationalTeams.tournamentArchives.map((item) => item.id),
+    save.world.nationalTeams.tournamentArchives.map((item) => item.id)
+  );
+  assert.equal(
+    isValidInternationalTournamentState(loaded.save.world.nationalTeams, currentDate),
+    true
+  );
+});
+
+test("save validation rejects duplicate or corrupted international archive data", () => {
+  const initial = saveAt("2027-06-10", 1);
+  const simulated = runDays(initial, 42);
+  const currentDate = simulated.world.currentDate;
+  const base = {
+    ...simulated,
+    world: {
+      ...simulated.world,
+      football: createInitialFootballState(1, currentDate),
+      tasks: []
+    }
+  };
+  assert.equal(isValidSave(base), true);
+
+  const duplicate = structuredClone(base);
+  duplicate.world.nationalTeams.tournamentArchives.push(
+    structuredClone(duplicate.world.nationalTeams.tournamentArchives[0])
+  );
+  assert.equal(isValidSave(duplicate), false);
+
+  const damaged = structuredClone(base);
+  damaged.world.nationalTeams.tournamentArchives[0].championTeamId = "missing-team";
+  assert.equal(isValidSave(damaged), false);
 });
