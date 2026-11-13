@@ -62,7 +62,7 @@ function toCallupPlayer(player, shirtNumber, transferState, currentDate, databas
     fitness: player.fitness,
     currentClubId: getPlayerCurrentClubId(
       player.id, player.clubId, transferState, currentDate, database
-    ),
+    ) ?? "free-agent",
     shirtNumber,
     status: "called"
   };
@@ -237,9 +237,23 @@ export function advanceInternationalWindows(save, database = WORLD_DATABASE) {
     throw new TypeError("حالة المسيرة غير صالحة لتحديث التوقف الدولي.");
   }
 
-  const currentState = isRecord(save.world.nationalTeams)
+  const storedState = isRecord(save.world.nationalTeams)
     ? save.world.nationalTeams
     : createInitialNationalTeamState();
+  const endedWindowIds = new Set((storedState.windows ?? [])
+    .filter((window) => window?.status === "active" && validDate(window.endDate) && currentDate > window.endDate)
+    .map((window) => window.id));
+  const currentState = endedWindowIds.size > 0
+    ? {
+        ...storedState,
+        windows: storedState.windows.map((window) => endedWindowIds.has(window.id)
+          ? { ...window, status: "completed" }
+          : window),
+        callups: storedState.callups.map((callup) => endedWindowIds.has(callup.windowId)
+          ? { ...callup, status: "completed" }
+          : callup)
+      }
+    : storedState;
   if (!isValidNationalTeamState(currentState, currentDate, database)) {
     throw new TypeError("سجل المنتخبات الوطنية غير صالح.");
   }
@@ -302,7 +316,6 @@ export function advanceInternationalWindows(save, database = WORLD_DATABASE) {
 
   callups = callups.map((callup) => {
     if (!activeWindowIds.has(callup.windowId) || callup.status !== "active") return callup;
-    const window = windows.find((item) => item.id === callup.windowId);
     const players = [...callup.players];
     const changes = [...callup.changes];
     const alreadyChanged = new Set(changes.map((change) => change.id));
