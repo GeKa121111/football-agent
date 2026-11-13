@@ -113,15 +113,13 @@ test("tournament results and player statistics remain separate from club competi
   const completed = runDays(initial, 42);
   const after = completed.world.football.playerDevelopment.players
     .find((player) => player.playerId === trackedId);
-  const stats = completed.world.nationalTeams.tournamentSeasons
-    .flatMap((record) => record.tournaments.flatMap((tournament) =>
-      tournament.playerStats.filter((item) => item.playerId === trackedId)
-    ));
+  const tournamentStats = completed.world.nationalTeams.tournamentSeasons
+    .flatMap((record) => record.tournaments.flatMap((tournament) => tournament.playerStats));
 
   assert.equal(after.appearances, before.appearances);
   assert.equal(after.goals, before.goals);
   assert.equal(after.assists, before.assists);
-  assert.ok(stats.length >= 0);
+  assert.ok(tournamentStats.length > 0);
   assert.ok(completed.world.nationalTeams.tournamentSeasons.every((record) =>
     record.tournaments.every((tournament) =>
       tournament.results.every((result) => result.tournamentId === tournament.id)
