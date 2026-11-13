@@ -214,10 +214,12 @@ function buildGroupStandings(competition, group, season, fixtures, results, rule
     const result = resultById.get(fixture.id);
     const home = rows.get(fixture.homeClubId);
     const away = rows.get(fixture.awayClubId);
-    if (!home || !away || result.home?.clubId !== fixture.homeClubId ||
+    if (!home || !away || result.competitionId !== competition.id ||
+        result.season !== season || result.groupId !== group.id ||
+        result.home?.clubId !== fixture.homeClubId ||
         result.away?.clubId !== fixture.awayClubId ||
-        !Number.isSafeInteger(result.home.goals) ||
-        !Number.isSafeInteger(result.away.goals)) return null;
+        !Number.isSafeInteger(result.home.goals) || result.home.goals < 0 ||
+        !Number.isSafeInteger(result.away.goals) || result.away.goals < 0) return null;
     home.played += 1;
     away.played += 1;
     home.goalsFor += result.home.goals;

@@ -880,7 +880,7 @@ function renderFootball(context) {
       const top = node("div", "football-fixture-meta");
       top.append(
         node("span", "", fixture.competitionName),
-        node("small", "", "الجولة " + formatHomeNumber(fixture.round))
+        node("small", "", fixture.phaseNameAr ?? ("الجولة " + formatHomeNumber(fixture.round)))
       );
       const teams = node("div", "football-fixture-teams");
       teams.append(

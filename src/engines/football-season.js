@@ -357,8 +357,16 @@ function buildCompetitionSeasonSummary(state, competition, season, database = WO
     : rules.format === COMPETITION_FORMATS.GROUP_STAGE
       ? fixtures.filter((fixture) => fixture.stage === "knockout")
       : [];
-  if (rules.format === COMPETITION_FORMATS.GROUP_STAGE && knockoutFixtures.length === 0) {
-    complete = false;
+  if (rules.format === COMPETITION_FORMATS.GROUP_STAGE) {
+    if (knockoutFixtures.length === 0) {
+      complete = false;
+    } else {
+      const finalRound = Math.max(...knockoutFixtures.map((fixture) => fixture.round));
+      const finalFixtures = knockoutFixtures.filter((fixture) => fixture.round === finalRound);
+      if (finalFixtures.length !== 1 || finalFixtures[0].status !== "played") {
+        complete = false;
+      }
+    }
   }
   const groups = rules.format === COMPETITION_FORMATS.GROUP_STAGE
     ? buildCompetitionGroups(competition, database).map((group) => ({
