@@ -855,30 +855,54 @@ export function getInternationalTournamentPlayerStats(state, playerId) {
 }
 
 export function getInternationalTournamentOverview(state, currentDate) {
-  if (!Array.isArray(state?.tournamentSeasons) || !isDate(currentDate)) {
-    return { tournaments: [], upcomingFixtures: [], recentResults: [], champions: [] };
+  if (!isRecord(state) || !isDate(currentDate)) {
+    return { tournaments: [], upcomingFixtures: [], recentResults: [], champions: [], archives: [] };
   }
-  const tournaments = state.tournamentSeasons.flatMap((record) =>
+  const seasonRecords = Array.isArray(state.tournamentSeasons) ? state.tournamentSeasons : [];
+  const archives = Array.isArray(state.tournamentArchives) ? state.tournamentArchives : [];
+  const tournaments = seasonRecords.flatMap((record) =>
     record.tournaments.map((tournament) => ({
       ...tournament,
       season: record.season,
       standings: getInternationalTournamentStandings(tournament, tournament.results)
     }))
   );
-  return {
-    tournaments: tournaments.sort((left, right) =>
-      right.season - left.season || compareText(left.nameAr, right.nameAr)
-    ),
-    upcomingFixtures: getUpcomingInternationalTournamentFixtures(state, currentDate, 12),
-    recentResults: getRecentInternationalTournamentResults(state, 12),
-    champions: tournaments
-      .filter((tournament) => tournament.status === "completed" && tournament.championTeamId)
-      .map((tournament) => ({
+  const championsById = new Map();
+  for (const archive of archives) {
+    championsById.set(archive.tournamentId, {
+      tournamentId: archive.tournamentId,
+      tournamentName: archive.nameAr,
+      season: archive.season,
+      championTeamId: archive.championTeamId,
+      champion: archive.championName,
+      completedDate: archive.completedDate
+    });
+  }
+  for (const tournament of tournaments) {
+    if (tournament.status === "completed" && tournament.championTeamId &&
+        !championsById.has(tournament.id)) {
+      championsById.set(tournament.id, {
         tournamentId: tournament.id,
         tournamentName: tournament.nameAr,
         season: tournament.season,
         championTeamId: tournament.championTeamId,
-        champion: tournament.teams.find((team) => team.id === tournament.championTeamId)?.nameAr ?? "منتخب غير معروف"
-      }))
+        champion: tournament.teams.find((team) => team.id === tournament.championTeamId)?.nameAr ?? "منتخب غير معروف",
+        completedDate: tournament.fixtures.reduce((latest, fixture) =>
+          fixture.date > latest ? fixture.date : latest, tournament.fixtures[0]?.date ?? record.generatedAt)
+      });
+    }
+  }
+  return {
+    tournaments: tournaments.sort((left, right) =>
+      right.season - left.season || compareText(left.nameAr, right.nameAr)
+    ),
+    upcomingFixtures: getUpcomingInternationalTournamentFixtures({ tournamentSeasons: seasonRecords }, currentDate, 12),
+    recentResults: getRecentInternationalTournamentResults({ tournamentSeasons: seasonRecords }, 12),
+    champions: [...championsById.values()].sort((left, right) =>
+      right.completedDate.localeCompare(left.completedDate) || compareText(right.tournamentId, left.tournamentId)
+    ),
+    archives: [...archives].sort((left, right) =>
+      right.completedDate.localeCompare(left.completedDate) || compareText(right.id, left.id)
+    )
   };
 }
