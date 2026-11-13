@@ -144,9 +144,9 @@ test("rejects corrupted window or duplicate call-up records", () => {
 
 test("processes international call-ups through the real shared career-day pipeline", () => {
   let save = createInitialSave();
-  save = advanceCareerSimulationDays(save, 31, []);
-  save = advanceCareerSimulationDays(save, 31, []);
-  save = advanceCareerSimulationDays(save, 6, []);
+  save = advanceCareerSimulationDays(save, 31, []).save;
+  save = advanceCareerSimulationDays(save, 31, []).save;
+  save = advanceCareerSimulationDays(save, 6, []).save;
 
   assert.equal(save.world.currentDate, "2026-09-07");
   assert.equal(save.world.nationalTeams.callups.length, WORLD_DATABASE.countries.length);
