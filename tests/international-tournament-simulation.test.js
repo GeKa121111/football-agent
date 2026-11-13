@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createInitialSave, isValidSave, readSave, writeSave } from "../src/core/storage.js";
 import { createInitialFootballState } from "../src/engines/football-season.js";
+import { createInitialCareerCalendar } from "../src/engines/career-calendar.js";
 import { isValidInternationalTournamentState } from "../src/engines/international-tournament-simulation.js";
 import {
   advanceInternationalTournaments,
@@ -262,6 +263,7 @@ test("multi-season archive survives a World Cup cycle and a v8 save reload", () 
     world: {
       ...cleanSave.world,
       currentDate: completed.world.currentDate,
+      ...createInitialCareerCalendar(completed.world.currentDate, 4),
       nationalTeams: {
         ...cleanNationalState,
         tournamentSeasons: national.tournamentSeasons,
