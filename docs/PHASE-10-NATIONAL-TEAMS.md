@@ -1,6 +1,6 @@
 # Football Agent — المرحلة العاشرة: المنتخبات الوطنية والمباريات الدولية
 
-**الحالة:** الدفعات 10.1–10.4 مدمجة في main. الدفعة 10.5 قيد الاختبار والمراجعة في PR #65، والدفعة 10.6 قيد التنفيذ على الفرع phase-10-6-international-archive فوق 10.5. PR #64 (10.4) مدمج عند commit 55fa3bd74fd980dfdbc538b0b0e14c953aa114fc.  
+**الحالة:** الدفعات 10.1–10.5 مدمجة في main. PR #65 (10.5) مدمج بعد نجاح Workflow #664. الدفعة 10.6 قيد المراجعة في PR #66 للأرشيف الدولي والتحقق من الحفظ متعدد المواسم.  
 **الفروع:** phase-10-national-teams (10.1–10.2)، phase-10-3-international-matches (10.3)، phase-10-4-international-tournaments (10.4)، phase-10-5-tournament-integration-ui (10.5)، phase-10-6-international-archive (10.6)  
 **نقطة البداية:** `059d384d390406fdd6305ad67bb699d170729c5f` — دمج المرحلة التاسعة في `main`. نقطة بداية 10.4 الحالية: `3b1ba7362ed24e6cd730b4880334aeada866ee38`.
 
