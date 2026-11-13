@@ -117,3 +117,22 @@ test("invalid dates, duplicate teams and invalid tournament records are rejected
   invalid.worldCup.teams[1].id = invalid.worldCup.teams[0].id;
   assert.equal(isValidInternationalTournamentPlan(invalid), false);
 });
+
+test("malformed groups, teams and duplicate result records fail closed", () => {
+  const plan = createInternationalTournamentPlan({ season: 10 });
+  const nullTeam = structuredClone(plan);
+  nullTeam.worldCup.teams[0] = null;
+  assert.equal(isValidInternationalTournamentPlan(nullTeam), false);
+
+  const nullGroup = structuredClone(plan);
+  nullGroup.worldCup.groups[0] = null;
+  assert.equal(isValidInternationalTournamentPlan(nullGroup), false);
+
+  const tournament = plan.worldCup;
+  const duplicateResults = resultsFor(tournament.fixtures);
+  duplicateResults.push(duplicateResults[0]);
+  assert.throws(
+    () => getInternationalTournamentStandings(tournament, duplicateResults),
+    /نتيجة مكررة/
+  );
+});
