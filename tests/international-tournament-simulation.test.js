@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createInitialSave, isValidSave, readSave, writeSave } from "../src/core/storage.js";
 import { createInitialFootballState, isValidFootballState } from "../src/engines/football-season.js";
+import { advancePlayerDevelopmentDay } from "../src/engines/player-development.js";
 import { createInitialCareerCalendar } from "../src/engines/career-calendar.js";
 import { isValidInternationalTournamentState } from "../src/engines/international-tournament-simulation.js";
 import {
@@ -228,58 +229,86 @@ test("save validation rejects duplicate or corrupted international archive data"
   assert.equal(isValidSave(damaged), false);
 });
 
-test("multi-season archive survives a World Cup cycle and a v8 save reload", () => {
-  const firstSeason = runDays(saveAt("2027-06-10", 1), 42);
-  assert.equal(firstSeason.world.nationalTeams.tournamentArchives.length, 3);
-
-  const secondStartDate = "2030-06-10";
-  const worldCupSave = {
-    ...firstSeason,
-    career: { ...firstSeason.career, season: 4 },
-    world: {
-      ...firstSeason.world,
-      currentDate: secondStartDate,
-      football: createInitialFootballState(4, secondStartDate),
-      tasks: []
-    }
+test("continuous seasons 1–4 retain continental and World Cup archives through a v8 save reload", () => {
+  let current = saveAt("2027-06-10", 1);
+  const finalDate = "2030-10-13";
+  const seasonForDate = (date) => {
+    const [year, month] = date.split("-").map(Number);
+    return year - 2026 + (month >= 7 ? 1 : 0);
   };
-  const launched = advanceInternationalTournaments(worldCupSave);
-  assert.equal(launched.world.nationalTeams.tournamentSeasons.length, 2);
-  const completed = runDays(launched, 125);
-  const national = completed.world.nationalTeams;
 
-  assert.equal(national.tournamentArchives.length, 4);
-  assert.equal(new Set(national.tournamentArchives.map((item) => item.id)).size, 4);
+  // Advance every in-game day and update the actual career season at July 1.
+  // This exercises the intervening no-tournament season instead of jumping
+  // directly from season 1 to season 4.
+  while (current.world.currentDate <= finalDate) {
+    const season = seasonForDate(current.world.currentDate);
+    const playerDevelopment = advancePlayerDevelopmentDay(
+      current.world.football.playerDevelopment,
+      current.world.currentDate,
+      season
+    );
+    current = {
+      ...current,
+      career: { ...current.career, season },
+      world: {
+        ...current.world,
+        football: { ...current.world.football, playerDevelopment }
+      }
+    };
+    current = advanceInternationalTournaments(current);
+    current = nextDay(current);
+  }
+
+  const national = current.world.nationalTeams;
+  assert.equal(current.career.season, 5);
+  assert.equal(national.tournamentArchives.length, 7);
+  assert.equal(
+    new Set(national.tournamentArchives.map((item) => item.id)).size,
+    7
+  );
+  assert.deepEqual(
+    [...new Set(national.tournamentArchives.map((item) => item.season))].sort(),
+    [1, 3, 4]
+  );
+  assert.equal(
+    national.tournamentArchives.filter((item) =>
+      item.type === "continental" && [1, 3].includes(item.season)
+    ).length,
+    6
+  );
   assert.ok(national.tournamentArchives.some((item) =>
     item.type === "world" && item.season === 4 && item.championTeamId
   ));
-  assert.equal(isValidInternationalTournamentState(national, completed.world.currentDate), true);
+  assert.equal(
+    isValidInternationalTournamentState(national, current.world.currentDate),
+    true
+  );
 
   const cleanSave = createInitialSave();
-  const cleanNationalState = cleanSave.world.nationalTeams;
   const finalSave = {
     ...cleanSave,
-    career: { ...cleanSave.career, season: 4 },
+    career: { ...cleanSave.career, season: 5 },
     world: {
       ...cleanSave.world,
-      currentDate: completed.world.currentDate,
-      ...createInitialCareerCalendar(completed.world.currentDate, 4),
+      currentDate: current.world.currentDate,
+      ...createInitialCareerCalendar(current.world.currentDate, 5),
       nationalTeams: {
-        ...cleanNationalState,
+        ...cleanSave.world.nationalTeams,
         tournamentSeasons: national.tournamentSeasons,
         tournamentArchives: national.tournamentArchives
       },
-      football: createInitialFootballState(4, completed.world.currentDate)
+      football: createInitialFootballState(5, current.world.currentDate)
     }
   };
   assert.equal(isValidSave(finalSave), true);
+
   const data = new Map();
   const storage = {
     getItem(key) { return data.has(key) ? data.get(key) : null; },
     setItem(key, value) { data.set(key, value); },
     removeItem(key) { data.delete(key); }
   };
-  writeSave(finalSave, storage, "2030-10-13T12:00:00.000Z");
+  writeSave(finalSave, storage, "2030-10-14T12:00:00.000Z");
   const reloaded = readSave(storage);
   assert.equal(reloaded.status, "loaded");
   assert.deepEqual(
