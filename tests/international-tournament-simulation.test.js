@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createInitialSave, isValidSave, readSave, writeSave } from "../src/core/storage.js";
 import { createInitialFootballState, isValidFootballState } from "../src/engines/football-season.js";
+import { advancePlayerDevelopmentDay } from "../src/engines/player-development.js";
 import { createInitialCareerCalendar } from "../src/engines/career-calendar.js";
 import { isValidInternationalTournamentState } from "../src/engines/international-tournament-simulation.js";
 import {
@@ -241,9 +242,18 @@ test("continuous seasons 1–4 retain continental and World Cup archives through
   // directly from season 1 to season 4.
   while (current.world.currentDate <= finalDate) {
     const season = seasonForDate(current.world.currentDate);
+    const playerDevelopment = advancePlayerDevelopmentDay(
+      current.world.football.playerDevelopment,
+      current.world.currentDate,
+      season
+    );
     current = {
       ...current,
-      career: { ...current.career, season }
+      career: { ...current.career, season },
+      world: {
+        ...current.world,
+        football: { ...current.world.football, playerDevelopment }
+      }
     };
     current = advanceInternationalTournaments(current);
     current = nextDay(current);
