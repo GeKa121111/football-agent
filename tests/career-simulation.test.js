@@ -432,3 +432,56 @@ test("runs one complete integrated career season and resumes it safely after a s
   );
   assert.equal(isValidSave(save), true);
 });
+
+
+test("settles player wages weekly and charges representation commission only on realized income", () => {
+  let save = signFirstClient(createInitialSave("2026-07-01T00:00:00.000Z")).save;
+  const player = WORLD_DATABASE.players.find((item) => item.id === PLAYERS[0].id);
+  assert.ok(player);
+  const sourceClub = WORLD_DATABASE.clubs.find((club) => club.id === player.clubId);
+  const destinationClub = WORLD_DATABASE.clubs.find((club) =>
+    club.id !== sourceClub.id && club.leagueId === sourceClub.leagueId
+  );
+  assert.ok(destinationClub);
+
+  const offer = createTransferOffer(save, player.id, destinationClub.id, "permanent", {
+    feeEur: Math.round(player.marketValueEur * 1.1),
+    weeklyWageEur: 20000,
+    signingBonusEur: 100000,
+    contractYears: 3
+  });
+  assert.equal(offer.changed, true, offer.error);
+  const decision = evaluateTransferOffer(offer.save, offer.offer.id);
+  const agreed = decision.status === "countered"
+    ? acceptTransferCounterOffer(decision.save, offer.offer.id)
+    : decision;
+  assert.equal(agreed.status, "agreed");
+  const completed = completeTransfer(agreed.save, offer.offer.id);
+  assert.equal(completed.status, "completed", completed.error);
+  assert.equal(completed.save.world.transfers.earnedCommissionEur, 0);
+  assert.equal(completed.save.world.playerIncome.ledger.length, 1);
+  assert.equal(completed.save.world.playerIncome.ledger[0].kind, "signing-bonus");
+  assert.equal(completed.save.world.playerIncome.ledger[0].agencyCommissionEur, 10000);
+
+  const monday = advanceCareerSimulationDays(completed.save, 5, PLAYERS);
+  assert.equal(monday.save.world.currentDate, "2026-07-06");
+  assert.equal(isValidSave(monday.save), true);
+  const wage = monday.save.world.playerIncome.ledger.find((entry) =>
+    entry.kind === "salary" && entry.moveId === completed.move.id
+  );
+  assert.ok(wage);
+  assert.equal(wage.periodStart, "2026-07-01");
+  assert.equal(wage.periodEnd, "2026-07-05");
+  assert.equal(wage.activeDays, 5);
+  assert.equal(wage.grossEur, 14286);
+  assert.equal(wage.agencyCommissionEur, 1429);
+  assert.equal(wage.playerNetEur, 12857);
+  assert.equal(monday.playerIncomeCommissionEur, 1429);
+  assert.equal(monday.paidPlayerIncome.length > 0, true);
+
+  const duplicate = advanceCareerSimulationDays(monday.save, 1, PLAYERS);
+  assert.equal(duplicate.save.world.playerIncome.ledger.filter((entry) =>
+    entry.kind === "salary" && entry.moveId === completed.move.id
+  ).length, 1);
+  assert.equal(isValidSave(duplicate.save), true);
+});
