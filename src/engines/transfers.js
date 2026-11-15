@@ -1,5 +1,6 @@
 import { WORLD_DATABASE } from "../data/world-database.js";
 import { getRepresentationContractExpiry, getRepresentationContractCommission } from "./representation.js";
+import { PLAYER_INCOME_COMMISSION_MODEL, settleTransferBonusIncome } from "./player-income.js";
 import {
   FREE_AGENT_CLUB_ID, MAX_CLUB_FINANCE_ENTRIES, getTransferWindowForClub,
   getPlayerCurrentClubIdFromState, getClubRegistrationStatus, getClubTransferFinancials
@@ -357,19 +358,13 @@ export function completeTransfer(save, offerId, currentDate = save?.world?.curre
   if (state.moves.length >= MAX_TRANSFER_MOVES || state.ledger.length >= MAX_TRANSFER_LEDGER ||
       state.history.length >= MAX_TRANSFER_HISTORY || state.financeLedger.length + 3 > MAX_CLUB_FINANCE_ENTRIES)
     return { changed: false, save, error: "وصل سجل الصفقات أو العمولات أو ميزانيات الأندية إلى الحد المتاح." };
-  const contractWeeks = offer.type === "permanent"
-    ? terms.contractYears * 52
-    : Math.round(terms.loanMonths * 52 / 12);
-  const commissionBasisEur = terms.weeklyWageEur * contractWeeks + terms.signingBonusEur;
-  if (!validMoney(commissionBasisEur))
-    return { changed: false, save, error: "قيمة دخل اللاعب التعاقدي تجاوزت الحد المالي المسموح." };
-  const commissionRate = getRepresentationContractCommission(mandate, currentDate);
-  const commissionEur = Math.round(commissionBasisEur * commissionRate / 100);
-  if (state.earnedCommissionEur + commissionEur > MAX_EUR) return { changed: false, save, error: "سجل عمولات الوكالة تجاوز الحد المالي المسموح." };
+  // New deals charge representation commission only when player income is actually paid.
+  // Historical moves without this marker retain their original upfront commission model.
   const moveId = "transfer-move-" + state.nextMoveSequence;
   const move = {
     id: moveId, offerId: offer.id, playerId: offer.playerId, playerName: offer.playerName,
     type: offer.type, fromClubId: offer.fromClubId, toClubId: offer.toClubId,
+    commissionModel: PLAYER_INCOME_COMMISSION_MODEL,
     effectiveDate: currentDate, status: "active",
     performanceTrackingStartDate: currentDate,
     performanceAppearances: 0,
@@ -398,18 +393,18 @@ export function completeTransfer(save, offerId, currentDate = save?.world?.curre
     freeAgents: state.freeAgents.filter((item) => item.playerId !== offer.playerId),
     offers: state.offers.map((item) => item.id === offer.id ? { ...item, status: "completed", completedDate: currentDate, moveId } : item)
   };
-  if (commissionEur > 0) {
-    const entry = { id: "transfer-ledger-" + next.nextLedgerSequence, type: "agent-commission",
-      offerId: offer.id, moveId, playerId: offer.playerId, date: currentDate, currency: "EUR",
-      amountEur: commissionEur, commissionRate, representationContractId: mandate.id, basisEur: commissionBasisEur };
-    next = { ...next, nextLedgerSequence: next.nextLedgerSequence + 1,
-      earnedCommissionEur: next.earnedCommissionEur + commissionEur, ledger: [entry, ...next.ledger] };
-  }
   next = appendClubFinance(next, { ...offer, agreedTerms: terms }, move, currentDate);
   next = appendHistory(next, "transfer-completed", offer, currentDate,
     (offer.type === "loan" ? "اكتملت إعارة اللاعب إلى " : "اكتمل انتقال اللاعب إلى ") + offer.toClubName + ".", { moveId });
-  return { changed: true, status: "completed", move, commissionEur,
-    save: { ...save, world: { ...save.world, transfers: next } } };
+  const completedSave = { ...save, world: { ...save.world, transfers: next } };
+  const income = settleTransferBonusIncome(completedSave, currentDate);
+  return {
+    changed: true,
+    status: "completed",
+    move,
+    commissionEur: income.addedCommissionEur,
+    save: income.save
+  };
 }
 
 /**
@@ -468,12 +463,18 @@ function completeLoanPurchase(save, loan, currentDate, database, mandatory = fal
   // The player is already registered with the destination club as a loanee.
   // Converting that registration to a permanent move must not consume a second squad slot.
 
-  const commissionBasisEur = loan.weeklyWageEur * contractYears * 52;
-  if (!validMoney(commissionBasisEur)) return { changed: false, save, error: "أساس احتساب العمولة غير صالح." };
-  const commissionRate = mandate ? getRepresentationContractCommission(mandate, currentDate) : 0;
-  const commissionEur = Math.round(commissionBasisEur * commissionRate / 100);
-  if (state.earnedCommissionEur + commissionEur > MAX_EUR) {
-    return { changed: false, save, error: "سجل عمولات الوكالة تجاوز الحد المالي المسموح." };
+  const usesRealizedIncomeModel = loan.commissionModel === PLAYER_INCOME_COMMISSION_MODEL;
+  let commissionBasisEur = 0;
+  let commissionRate = 0;
+  let commissionEur = 0;
+  if (!usesRealizedIncomeModel) {
+    commissionBasisEur = loan.weeklyWageEur * contractYears * 52;
+    if (!validMoney(commissionBasisEur)) return { changed: false, save, error: "أساس احتساب العمولة غير صالح." };
+    commissionRate = mandate ? getRepresentationContractCommission(mandate, currentDate) : 0;
+    commissionEur = Math.round(commissionBasisEur * commissionRate / 100);
+    if (state.earnedCommissionEur + commissionEur > MAX_EUR) {
+      return { changed: false, save, error: "سجل عمولات الوكالة تجاوز الحد المالي المسموح." };
+    }
   }
 
   const offerId = "transfer-offer-" + state.nextOfferSequence;
@@ -492,6 +493,7 @@ function completeLoanPurchase(save, loan, currentDate, database, mandatory = fal
   const permanentMove = {
     id: permanentMoveId, offerId, playerId: loan.playerId, playerName: loan.playerName,
     type: "permanent", fromClubId: loan.fromClubId, toClubId: loan.toClubId,
+    ...(usesRealizedIncomeModel ? { commissionModel: PLAYER_INCOME_COMMISSION_MODEL } : {}),
     effectiveDate: currentDate, status: "active", feeEur: purchaseFee,
     performanceTrackingStartDate: loan.performanceTrackingStartDate ?? loan.effectiveDate,
     performanceAppearances: Number.isSafeInteger(loan.performanceAppearances) ? loan.performanceAppearances : 0,
@@ -513,7 +515,7 @@ function completeLoanPurchase(save, loan, currentDate, database, mandatory = fal
     moves: [permanentMove, ...state.moves.map((item) => item.id === loan.id
       ? { ...item, status: "purchased", purchasedDate: currentDate, purchaseMoveId: permanentMoveId } : item)]
   };
-  if (commissionEur > 0) {
+  if (!usesRealizedIncomeModel && commissionEur > 0) {
     const entry = {
       id: "transfer-ledger-" + next.nextLedgerSequence, type: "agent-commission",
       offerId, moveId: permanentMoveId, playerId: loan.playerId, date: currentDate, currency: "EUR",
@@ -531,9 +533,15 @@ function completeLoanPurchase(save, loan, currentDate, database, mandatory = fal
     mandatory ? "أصبح الانتقال نهائيًا بموجب الالتزام التعاقدي." : "تم الاتفاق تلقائيًا وفق قيمة خيار الشراء المحددة في العقد.");
   next = appendHistory(next, "transfer-completed", offer, currentDate,
     "تحولت الإعارة إلى انتقال نهائي لصالح " + club.nameAr + ".", { moveId: permanentMoveId });
+  const purchasedSave = { ...save, world: { ...save.world, transfers: next } };
+  const income = settleTransferBonusIncome(purchasedSave, currentDate);
   return {
-    changed: true, status: "completed", action: mandatory ? "mandatory-buy-exercised" : "option-exercised",
-    move: permanentMove, commissionEur, save: { ...save, world: { ...save.world, transfers: next } }
+    changed: true,
+    status: "completed",
+    action: mandatory ? "mandatory-buy-exercised" : "option-exercised",
+    move: permanentMove,
+    commissionEur: usesRealizedIncomeModel ? income.addedCommissionEur : commissionEur,
+    save: income.save
   };
 }
 
@@ -926,6 +934,7 @@ export function isValidTransferState(state, currentDate, clients = [], represent
         move.fromClubId !== offer.fromClubId || move.toClubId !== offer.toClubId ||
         !isTransferCalendarDate(move.effectiveDate) || move.effectiveDate > currentDate ||
         move.effectiveDate !== offer.completedDate || move.effectiveDate < offer.agreedDate ||
+        (move.commissionModel !== undefined && move.commissionModel !== PLAYER_INCOME_COMMISSION_MODEL) ||
         (move.performanceTrackingStartDate !== undefined &&
           (!isTransferCalendarDate(move.performanceTrackingStartDate) ||
            move.performanceTrackingStartDate > move.effectiveDate)) ||
@@ -994,6 +1003,7 @@ export function isValidTransferState(state, currentDate, clients = [], represent
     if (!sequenceOf(entry.id, "transfer-ledger") || !offer || offer.status !== "completed" ||
         !move || move.offerId !== entry.offerId || move.id !== offer.moveId ||
         entry.playerId !== move.playerId || entry.date !== move.effectiveDate ||
+        move.commissionModel === PLAYER_INCOME_COMMISSION_MODEL ||
         entry.type !== "agent-commission" || !isTransferCalendarDate(entry.date) || entry.date > currentDate ||
         entry.currency !== "EUR" || !validMoney(entry.amountEur) ||
         !Number.isInteger(entry.commissionRate) || entry.commissionRate < 5 || entry.commissionRate > 15 ||
