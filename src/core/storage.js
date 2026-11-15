@@ -10,9 +10,10 @@ import { createInitialNationalTeamState, isValidNationalTeamState } from "../eng
 import { isValidInternationalMatchState } from "../engines/international-matches.js";
 import { isValidInternationalTournamentState } from "../engines/international-tournament-simulation.js";
 import { getWorldSquadPlayers } from "../data/world-database.js";
+import { createInitialPlayerIncomeState, isValidPlayerIncomeState } from "../engines/player-income.js";
 
 export const STORAGE_KEY = "football-agent.save";
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 export const WATCHLIST_KEY = "football-agent.watchlist";
 
 export function createInitialSave(now = new Date().toISOString()) {
@@ -48,7 +49,8 @@ export function createInitialSave(now = new Date().toISOString()) {
       scouting: createInitialScoutingState(),
       football: createInitialFootballState(1, "2026-07-01"),
       transfers: createInitialTransferState(),
-      nationalTeams: createInitialNationalTeamState()
+      nationalTeams: createInitialNationalTeamState(),
+      playerIncome: createInitialPlayerIncomeState("2026-07-01")
     }
   };
 }
@@ -391,7 +393,13 @@ export function isValidSave(value) {
       isValidNationalTeamState(value.world.nationalTeams, currentDate) &&
       isValidInternationalMatchState(value.world.nationalTeams, currentDate) &&
       isValidInternationalTournamentState(value.world.nationalTeams, currentDate)
-    ));
+    )) &&
+    isValidPlayerIncomeState(
+      value.world.playerIncome,
+      currentDate,
+      value.agency.representation,
+      value.world.transfers
+    );
 }
 
 export function readWatchlist(storage) {
@@ -437,7 +445,7 @@ function resolveStorage(storage) {
 
 function migrateSave(value) {
   if (!isRecord(value) || !isRecord(value.meta) || !isRecord(value.world)) return value;
-  if (![1, 2, 3, 4, 5, 6, 7].includes(value.meta.version)) return value;
+  if (![1, 2, 3, 4, 5, 6, 7, 8].includes(value.meta.version)) return value;
 
   return {
     ...value,
@@ -480,7 +488,13 @@ function migrateSave(value) {
       transfers: isRecord(value.world.transfers) ? value.world.transfers : createInitialTransferState(),
       nationalTeams: isRecord(value.world.nationalTeams)
         ? value.world.nationalTeams
-        : createInitialNationalTeamState()
+        : createInitialNationalTeamState(),
+      // Existing v1-v8 saves already contain their historical deal commissions.
+      // Start the new realized-income payroll cursor at the migrated save date
+      // so older wages are not re-accrued or charged a second time.
+      playerIncome: isRecord(value.world.playerIncome)
+        ? value.world.playerIncome
+        : createInitialPlayerIncomeState(value.world.currentDate, true)
     }
   };
 }
@@ -511,7 +525,7 @@ export function readSave(storage) {
       return { status: "unsupported", save: null, error: null };
     }
 
-    const migrated = [1, 2, 3, 4, 5, 6, 7].includes(parsed?.meta?.version);
+    const migrated = [1, 2, 3, 4, 5, 6, 7, 8].includes(parsed?.meta?.version);
     if (migrated) parsed = migrateSave(parsed);
 
     if (!isValidSave(parsed)) {

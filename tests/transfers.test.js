@@ -7,6 +7,7 @@ import {
   completeTransfer, exerciseLoanOption, recallLoan, settleTransferPerformanceBonuses,
   advanceTransferState, getTransferWindow, getPlayerCurrentClubId, isValidTransferState
 } from "../src/engines/transfers.js";
+import { settleTransferBonusIncome } from "../src/engines/player-income.js";
 
 const database = {
   clubs: [
@@ -149,20 +150,27 @@ test("rejects offers without creating moves or earning commissions", () => {
   assert.equal(isValidTransferState(rejected.save.world.transfers, "2026-07-02", rejected.save.agency.clients, rejected.save.agency.representation), true);
 });
 
-test("completes an agreed permanent transfer and records a EUR agent commission exactly once", () => {
+test("completes a permanent transfer and charges commission only on the signing bonus actually paid", () => {
   const sent = send();
   const countered = evaluateTransferOffer(sent.save, sent.offer.id, "2026-07-01", database);
   const agreed = acceptTransferCounterOffer(countered.save, sent.offer.id, "2026-07-02");
   const completed = completeTransfer(agreed.save, sent.offer.id, "2026-07-02", database);
   assert.equal(completed.status, "completed", completed.error ?? "Transfer completion failed without an error message.");
-  assert.equal(completed.commissionEur, 322_000);
-  assert.equal(completed.save.world.transfers.earnedCommissionEur, 322_000);
-  assert.equal(completed.save.world.transfers.ledger[0].currency, "EUR");
-  assert.equal(completed.save.world.transfers.ledger[0].basisEur, 3_220_000);
-  assert.equal(completed.save.world.transfers.ledger[0].commissionRate, 10);
+  assert.equal(completed.commissionEur, 10_000);
+  assert.equal(completed.save.world.transfers.earnedCommissionEur, 0);
+  assert.equal(completed.save.world.transfers.ledger.length, 0);
+  assert.equal(completed.move.commissionModel, "realized-income-v1");
+  assert.equal(completed.save.world.playerIncome.ledger.length, 1);
+  assert.equal(completed.save.world.playerIncome.ledger[0].kind, "signing-bonus");
+  assert.equal(completed.save.world.playerIncome.ledger[0].grossEur, 100_000);
+  assert.equal(completed.save.world.playerIncome.ledger[0].agencyCommissionEur, 10_000);
+  assert.equal(completed.save.world.playerIncome.ledger[0].playerNetEur, 90_000);
   assert.equal(getPlayerCurrentClubId("player-1", "club-home", completed.save.world.transfers, "2026-07-02", database), "club-target");
   assert.equal(completeTransfer(completed.save, sent.offer.id, "2026-07-02", database).changed, false);
   assert.equal(isValidTransferState(completed.save.world.transfers, "2026-07-02", completed.save.agency.clients, completed.save.agency.representation), true);
+  const duplicate = settleTransferBonusIncome(completed.save, "2026-07-02");
+  assert.equal(duplicate.entriesAdded.length, 0);
+  assert.equal(duplicate.save.world.playerIncome.ledger.length, 1);
 });
 
 test("retains completed historical deals after an agency mandate ends", () => {
@@ -323,12 +331,36 @@ test("rejects malformed, duplicated or financially inconsistent transfer state",
   const countered = evaluateTransferOffer(sentForLedger.save, sentForLedger.offer.id, "2026-07-01", database);
   const agreed = acceptTransferCounterOffer(countered.save, sentForLedger.offer.id, "2026-07-02");
   const completed = completeTransfer(agreed.save, sentForLedger.offer.id, "2026-07-02", database);
-  const wrongBasis = structuredClone(completed.save.world.transfers);
+  const legacyLedgerState = structuredClone(completed.save.world.transfers);
+  const legacyMove = legacyLedgerState.moves.find((move) => move.id === completed.move.id);
+  const offer = legacyLedgerState.offers.find((item) => item.id === completed.move.offerId);
+  delete legacyMove.commissionModel;
+
+  const basisEur = offer.agreedTerms.weeklyWageEur *
+    offer.agreedTerms.contractYears * 52 + offer.agreedTerms.signingBonusEur;
+  const commissionRate = 10;
+  const amountEur = Math.round(basisEur * commissionRate / 100);
+  legacyLedgerState.ledger = [{
+    id: "transfer-ledger-1",
+    offerId: offer.id,
+    moveId: legacyMove.id,
+    playerId: legacyMove.playerId,
+    date: legacyMove.effectiveDate,
+    type: "agent-commission",
+    currency: "EUR",
+    basisEur,
+    commissionRate,
+    amountEur,
+    representationContractId: "representation-contract-1"
+  }];
+  legacyLedgerState.nextLedgerSequence = 2;
+  legacyLedgerState.earnedCommissionEur = amountEur;
+
+  const wrongBasis = structuredClone(legacyLedgerState);
   wrongBasis.ledger[0].basisEur += 1;
-  assert.equal(isValidTransferState(wrongBasis, "2026-07-02", completed.save.agency.clients, completed.save.agency.representation), false);
+  assert.equal(isValidTransferState(wrongBasis, "2026-07-02",
+    completed.save.agency.clients, completed.save.agency.representation), false);
 });
-
-
 test("uses league-specific registration windows and roster limits", async () => {
   const { getLeagueTransferRules, getTransferWindowForClub, getClubRegistrationStatus, getClubTransferFinancials } =
     await import("../src/engines/club-transfer-rules.js");
@@ -514,6 +546,13 @@ test("pays appearance and goal bonuses once and charges the destination club", (
   assert.equal(transferState.financeLedger.filter((entry) => entry.type === "performance-bonus").length, 2);
   assert.equal(transferState.financeLedger.filter((entry) => entry.type === "performance-bonus")
     .reduce((sum, entry) => sum + entry.amountEur, 0), -65_000);
+  const realized = settleTransferBonusIncome(settled.save, "2026-07-02");
+  const performanceIncome = realized.entriesAdded.filter((entry) => entry.kind === "appearance-bonus" || entry.kind === "goal-bonus");
+  assert.equal(performanceIncome.length, 2);
+  assert.equal(performanceIncome.reduce((sum, entry) => sum + entry.grossEur, 0), 65_000);
+  assert.equal(performanceIncome.reduce((sum, entry) => sum + entry.agencyCommissionEur, 0), 6_500);
+  const duplicateIncome = settleTransferBonusIncome(realized.save, "2026-07-02");
+  assert.equal(duplicateIncome.entriesAdded.length, 0);
   const repeated = settleTransferPerformanceBonuses(settled.save, "2026-07-03", database);
   assert.equal(repeated.paidBonuses.length, 0);
   assert.equal(repeated.save.world.transfers.financeLedger.filter((entry) => entry.type === "performance-bonus").length, 2);

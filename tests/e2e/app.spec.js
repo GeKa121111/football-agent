@@ -151,7 +151,7 @@ test.describe("Desktop experience", () => {
     await expect(page.locator(".football-screen")).toHaveCount(0);
     await page.getByRole("button", { name: "حفظ المسيرة" }).click();
     const firstSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(firstSave.meta.version).toBe(8);
+    expect(firstSave.meta.version).toBe(9);
     expect(firstSave.world.football.fixtures.length).toBeGreaterThan(0);
 
     await navigateTo(page, "المباريات");
@@ -227,7 +227,7 @@ test.describe("Desktop experience", () => {
     await modal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
 
     let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(saved.meta.version).toBe(8);
+    expect(saved.meta.version).toBe(9);
     expect(saved.agency.representation.offers).toHaveLength(1);
     expect(saved.agency.representation.offers[0].status).toBe("pending");
     expect(saved.agency.clients).toHaveLength(0);
@@ -434,7 +434,9 @@ test.describe("Desktop experience", () => {
     await expect(dossier.locator(".representation-dossier-hero h3")).toHaveText(contract.playerName);
     await expect(dossier.getByRole("heading", { name: "العلاقة والثقة" })).toBeVisible();
     await expect(dossier.getByRole("heading", { name: "العقد الحالي" })).toBeVisible();
-    await expect(dossier.locator(".representation-dossier-stat")).toHaveCount(7);
+    await expect(dossier.locator(".representation-dossier-stat")).toHaveCount(11);
+    await expect(dossier.getByRole("heading", { name: "دخل اللاعب والعمولات" })).toBeVisible();
+    await expect(dossier.getByText("إجمالي الدخل المسجل")).toBeVisible();
     await expect(dossier.getByText(/تمثيل حصري|تمثيل غير حصري/).first()).toBeVisible();
     await expect(dossier.getByRole("heading", { name: "الرسائل والاجتماعات" })).toBeVisible();
     await expect(dossier.getByText("بانتظار الرد").first()).toBeVisible();
@@ -663,14 +665,31 @@ test.describe("Desktop experience", () => {
 
     await page.locator(".transfer-status-agreed").getByRole("button", { name: "تنفيذ الصفقة" }).click();
     saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(saved.meta.version).toBe(8);
+    expect(saved.meta.version).toBe(9);
     expect(saved.world.transfers.offers[0].status).toBe("completed");
     expect(saved.world.transfers.offers[0].agreedTerms.appearanceBonus).toEqual({ appearances: 1, amountEur: 25000 });
     expect(saved.world.transfers.offers[0].agreedTerms.registrationCompetition).toBe("continental");
     expect(saved.world.transfers.moves).toHaveLength(1);
     expect(saved.world.transfers.moves[0].playerId).toBe(playerId);
-    expect(saved.world.transfers.ledger).toHaveLength(1);
-    expect(saved.world.transfers.earnedCommissionEur).toBeGreaterThan(0);
+    expect(saved.world.transfers.moves[0].commissionModel).toBe("realized-income-v1");
+    expect(saved.world.transfers.ledger).toHaveLength(0);
+    expect(saved.world.transfers.earnedCommissionEur).toBe(0);
+    expect(saved.world.playerIncome.ledger).toHaveLength(1);
+    const signingIncome = saved.world.playerIncome.ledger[0];
+    expect(signingIncome.kind).toBe("signing-bonus");
+    expect(signingIncome.grossEur).toBe(50000);
+    expect(signingIncome.representationContractId).toBeTruthy();
+    const activeMandate = saved.agency.representation.contracts.find((contract) =>
+      contract.id === signingIncome.representationContractId
+    );
+    expect(activeMandate).toBeTruthy();
+    expect(signingIncome.commissionRate).toBe(activeMandate.commissionRate);
+    expect(signingIncome.agencyCommissionEur).toBe(
+      Math.round(signingIncome.grossEur * signingIncome.commissionRate / 100)
+    );
+    expect(signingIncome.playerNetEur).toBe(
+      signingIncome.grossEur - signingIncome.agencyCommissionEur
+    );
     expect(saved.world.transfers.moves[0].toClubId).not.toBe(saved.world.transfers.moves[0].fromClubId);
     await expect(page.locator(".transfer-move-row")).toContainText(saved.world.transfers.offers[0].playerName);
     const destinationName = WORLD_DATABASE.clubs.find((club) =>
@@ -926,7 +945,7 @@ test.describe("Mobile experience", () => {
     await page.getByRole("button", { name: "تأكيد إطلاق البعثة" }).click();
 
     const started = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(started.meta.version).toBe(8);
+    expect(started.meta.version).toBe(9);
     expect(started.agency.balance).toBe(95000);
     expect(started.world.scouting.activeMissions).toHaveLength(1);
     expect(started.world.scouting.activeMissions[0].sourceId).toBe("academy");
@@ -1121,6 +1140,10 @@ test.describe("Mobile experience", () => {
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       save.world.currentDate = "2027-06-27";
+      // This test jumps the calendar directly; align the v9 payroll cursor too,
+      // so the next Monday does not attempt to accrue an unprocessed year.
+      save.world.playerIncome.lastWageSettlementDate = "2027-06-27";
+      save.world.playerIncome.wagePaidThroughDate = "2027-06-27";
       save.world.events = [];
       save.world.inbox = [];
       save.world.tasks = [{
@@ -1177,7 +1200,7 @@ test.describe("Mobile experience", () => {
 
     await page.locator(".day-advance-button").click();
     let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(saved.meta.version).toBe(8);
+    expect(saved.meta.version).toBe(9);
     expect(saved.career.day).toBe(6);
     expect(saved.career.week).toBe(1);
     expect(saved.career.season).toBe(1);

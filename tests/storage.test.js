@@ -607,3 +607,25 @@ test("preserves the previous save when LocalStorage rejects a write because of q
   assert.equal(restored.status, "loaded");
   assert.equal(restored.save.agency.name, "Existing Agency");
 });
+
+
+test("migrates legacy v8 saves to schema v9 without replaying historical player wages", () => {
+  const legacy = createInitialSave("2026-07-01T00:00:00.000Z");
+  legacy.meta.version = 8;
+  legacy.world.currentDate = "2026-07-06";
+  legacy.career.day = 6;
+  legacy.career.week = 1;
+  delete legacy.world.playerIncome;
+  const raw = JSON.stringify(legacy);
+  const storage = memoryStorage({ [STORAGE_KEY]: raw });
+
+  const result = readSave(storage);
+  assert.equal(result.status, "loaded");
+  assert.equal(result.migrated, true);
+  assert.equal(result.save.meta.version, 9);
+  assert.deepEqual(result.save.world.playerIncome.ledger, []);
+  assert.equal(result.save.world.playerIncome.lastWageSettlementDate, "2026-07-06");
+  assert.equal(result.save.world.playerIncome.wagePaidThroughDate, "2026-07-06");
+  assert.equal(isValidSave(result.save), true);
+  assert.equal(storage.getItem(STORAGE_KEY), raw, "migration must not rewrite the save on read");
+});

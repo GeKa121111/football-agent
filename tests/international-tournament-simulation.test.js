@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createInitialSave, isValidSave, readSave, writeSave } from "../src/core/storage.js";
+import { SAVE_VERSION, createInitialSave, isValidSave, readSave, writeSave } from "../src/core/storage.js";
 import { createInitialFootballState, isValidFootballState } from "../src/engines/football-season.js";
 import { advancePlayerDevelopmentDay } from "../src/engines/player-development.js";
 import { createInitialCareerCalendar } from "../src/engines/career-calendar.js";
@@ -169,7 +169,7 @@ test("legacy national-team saves without tournament extensions remain valid", ()
   assert.equal(initial.world.nationalTeams.tournamentArchives, undefined);
 });
 
-test("v8 saves round-trip completed international archives without changing the schema version", () => {
+test("current-schema saves round-trip completed international archives", () => {
   const initial = saveAt("2027-06-10", 1);
   const simulated = runDays(initial, 42);
   const currentDate = simulated.world.currentDate;
@@ -190,10 +190,10 @@ test("v8 saves round-trip completed international archives without changing the 
     removeItem(key) { data.delete(key); }
   };
   const written = writeSave(save, storage, "2027-07-22T12:00:00.000Z");
-  assert.equal(written.meta.version, 8);
+  assert.equal(written.meta.version, SAVE_VERSION);
   const loaded = readSave(storage);
   assert.equal(loaded.status, "loaded");
-  assert.equal(loaded.save.meta.version, 8);
+  assert.equal(loaded.save.meta.version, SAVE_VERSION);
   assert.deepEqual(
     loaded.save.world.nationalTeams.tournamentArchives.map((item) => item.id),
     save.world.nationalTeams.tournamentArchives.map((item) => item.id)
