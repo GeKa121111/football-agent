@@ -408,7 +408,6 @@ export function isValidPlayerIncomeState(state, currentDate, representation, tra
 
     if (entry.kind === "salary") {
       if (entry.sourceId !== "salary|" + move.id + "|" + entry.date ||
-          move.commissionModel !== PLAYER_INCOME_COMMISSION_MODEL ||
           !isPlayerIncomeDate(entry.periodStart) || !isPlayerIncomeDate(entry.periodEnd) ||
           entry.periodEnd !== addPlayerIncomeDays(entry.date, -1) ||
           entry.periodStart > entry.periodEnd ||
@@ -418,7 +417,10 @@ export function isValidPlayerIncomeState(state, currentDate, representation, tra
           (move.type === "loan"
             ? entry.hostClubEur !== Math.round(entry.grossEur * (move.wageSharePercent ?? 100) / 100)
             : entry.hostClubEur !== entry.grossEur) ||
-          (move.type === "permanent" && entry.parentClubEur !== 0)) return false;
+          (move.type === "permanent" && entry.parentClubEur !== 0) ||
+          (move.commissionModel !== PLAYER_INCOME_COMMISSION_MODEL &&
+            (entry.commissionRate !== null || entry.representationContractId !== null ||
+             entry.agencyCommissionEur !== 0))) return false;
     } else {
       const financeEntry = financeEntries.get(entry.sourceId);
       const expectedKind = financeEntry?.type === "signing-bonus"
