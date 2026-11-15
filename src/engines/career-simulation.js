@@ -6,6 +6,7 @@ import { advanceAgencyManagementDay } from "./agency-management.js";
 import { advanceInternationalWindows } from "./international-breaks.js";
 import { advanceInternationalMatches } from "./international-matches.js";
 import { advanceInternationalTournaments } from "./international-tournament-simulation.js";
+import { settleWeeklyPlayerWages, settleTransferBonusIncome } from "./player-income.js";
 
 /**
  * Runs one complete in-game day across the shared career world.
@@ -19,7 +20,15 @@ export function advanceCareerSimulationDay(save, players) {
     throw new TypeError("قاعدة لاعبي الكشافة غير متاحة.");
   }
 
-  const calendarSave = advanceCareerDay(save);
+  const nextDate = (() => {
+    const date = new Date(save.world.currentDate + "T00:00:00.000Z");
+    date.setUTCDate(date.getUTCDate() + 1);
+    return date.toISOString().slice(0, 10);
+  })();
+  // Payroll runs against the pre-transition contract state so a contract
+  // ending on Monday still pays the completed Monday-to-Sunday period.
+  const wageSettlement = settleWeeklyPlayerWages(save, nextDate);
+  const calendarSave = advanceCareerDay(wageSettlement.save);
   const internationalSave = advanceInternationalWindows(calendarSave);
   const matchdaySave = advanceInternationalMatches(internationalSave);
   const tournamentSave = advanceInternationalTournaments(matchdaySave);
@@ -29,7 +38,8 @@ export function advanceCareerSimulationDay(save, players) {
     throw new TypeError("مزود قاعدة لاعبي الكشافة لم يُرجع قائمة صالحة.");
   }
   const bonusSettlement = settleTransferPerformanceBonuses(tournamentSave, currentDate);
-  const scouting = advanceScoutingMissions(bonusSettlement.save, dailyPlayers, currentDate);
+  const bonusIncome = settleTransferBonusIncome(bonusSettlement.save, currentDate);
+  const scouting = advanceScoutingMissions(bonusIncome.save, dailyPlayers, currentDate);
   const representation = advanceRepresentationState(scouting.save, currentDate);
   const agencyOperations = advanceAgencyManagementDay(representation.save, currentDate, dailyPlayers);
 
@@ -39,6 +49,8 @@ export function advanceCareerSimulationDay(save, players) {
     expiredOffers: representation.expiredOffers,
     expiredContracts: representation.expiredContracts,
     paidPerformanceBonuses: bonusSettlement.paidBonuses,
+    paidPlayerIncome: [...wageSettlement.entriesAdded, ...bonusIncome.entriesAdded],
+    playerIncomeCommissionEur: wageSettlement.agencyCommissionEur + bonusIncome.addedCommissionEur,
     agencyOperations: agencyOperations.processed ? agencyOperations : null
   };
 }
@@ -59,6 +71,8 @@ export function advanceCareerSimulationDays(save, days, players) {
   const completedReports = [];
   const expiredOffers = [];
   const expiredContracts = [];
+  const paidPlayerIncome = [];
+  let playerIncomeCommissionEur = 0;
 
   for (let offset = 0; offset < days; offset += 1) {
     const daily = advanceCareerSimulationDay(nextSave, players);
@@ -66,12 +80,16 @@ export function advanceCareerSimulationDays(save, days, players) {
     completedReports.push(...daily.completedReports);
     expiredOffers.push(...daily.expiredOffers);
     expiredContracts.push(...daily.expiredContracts);
+    paidPlayerIncome.push(...daily.paidPlayerIncome);
+    playerIncomeCommissionEur += daily.playerIncomeCommissionEur;
   }
 
   return {
     save: nextSave,
     completedReports,
     expiredOffers,
-    expiredContracts
+    expiredContracts,
+    paidPlayerIncome,
+    playerIncomeCommissionEur
   };
 }
