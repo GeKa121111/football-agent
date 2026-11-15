@@ -479,9 +479,23 @@ test("settles player wages weekly and charges representation commission only on 
   assert.equal(monday.playerIncomeCommissionEur, 1429);
   assert.equal(monday.paidPlayerIncome.length > 0, true);
 
-  const duplicate = advanceCareerSimulationDays(monday.save, 1, PLAYERS);
+  const nextMonday = advanceCareerSimulationDays(monday.save, 7, PLAYERS);
+  assert.equal(nextMonday.save.world.currentDate, "2026-07-13");
+  const salaryEntries = nextMonday.save.world.playerIncome.ledger.filter((entry) =>
+    entry.kind === "salary" && entry.moveId === completed.move.id
+  );
+  assert.equal(salaryEntries.length, 2);
+  const secondWage = salaryEntries[1];
+  assert.equal(secondWage.periodStart, "2026-07-06");
+  assert.equal(secondWage.periodEnd, "2026-07-12");
+  assert.equal(secondWage.activeDays, 7);
+  assert.equal(secondWage.grossEur, 20000);
+  assert.equal(secondWage.agencyCommissionEur, 2000);
+  assert.equal(isValidSave(nextMonday.save), true);
+
+  const duplicate = advanceCareerSimulationDays(nextMonday.save, 1, PLAYERS);
   assert.equal(duplicate.save.world.playerIncome.ledger.filter((entry) =>
     entry.kind === "salary" && entry.moveId === completed.move.id
-  ).length, 1);
+  ).length, 2);
   assert.equal(isValidSave(duplicate.save), true);
 });
