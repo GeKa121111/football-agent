@@ -389,11 +389,15 @@ export function isValidPlayerIncomeState(state, currentDate, representation, tra
   const moves = new Map((transfers?.moves ?? []).map((move) => [move.id, move]));
   const financeEntries = new Map((transfers?.financeLedger ?? []).map((entry) => [entry.id, entry]));
   const sourceIds = new Set();
+  const entryIds = new Set();
+  const entrySequences = new Set();
   let highestSequence = 0;
   for (const entry of state.ledger) {
     const move = moves.get(entry?.moveId);
-    if (!isRecord(entry) || !sequenceOf(entry.id) || !validId(entry.sourceId) ||
-        sourceIds.has(entry.sourceId) || !INCOME_KINDS.has(entry.kind) ||
+    const entrySequence = sequenceOf(entry?.id);
+    if (!isRecord(entry) || !entrySequence || !validId(entry.sourceId) ||
+        sourceIds.has(entry.sourceId) || entryIds.has(entry.id) || entrySequences.has(entrySequence) ||
+        !INCOME_KINDS.has(entry.kind) ||
         !move || move.playerId !== entry.playerId || move.playerName !== entry.playerName ||
         !validId(entry.playerId) || !validId(entry.playerName) ||
         !isPlayerIncomeDate(entry.date) || entry.date > currentDate ||
@@ -460,7 +464,9 @@ export function isValidPlayerIncomeState(state, currentDate, representation, tra
     if (entry.agencyCommissionEur > 0 && move.commissionModel !== PLAYER_INCOME_COMMISSION_MODEL &&
         entry.kind !== "appearance-bonus" && entry.kind !== "goal-bonus") return false;
     sourceIds.add(entry.sourceId);
-    highestSequence = Math.max(highestSequence, sequenceOf(entry.id));
+    entryIds.add(entry.id);
+    entrySequences.add(entrySequence);
+    highestSequence = Math.max(highestSequence, entrySequence);
   }
   return state.nextEntrySequence > highestSequence;
 }
