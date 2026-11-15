@@ -333,7 +333,7 @@ test("rejects malformed, duplicated or financially inconsistent transfer state",
   const completed = completeTransfer(agreed.save, sentForLedger.offer.id, "2026-07-02", database);
   const legacyLedgerState = structuredClone(completed.save.world.transfers);
   const legacyMove = legacyLedgerState.moves.find((move) => move.id === completed.move.id);
-  const offer = legacyLedgerState.offers.find((item) => item.id === completed.offer.id);
+  const offer = legacyLedgerState.offers.find((item) => item.id === completed.move.offerId);
   delete legacyMove.commissionModel;
 
   const basisEur = offer.agreedTerms.weeklyWageEur *
