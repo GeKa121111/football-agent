@@ -663,14 +663,19 @@ test.describe("Desktop experience", () => {
 
     await page.locator(".transfer-status-agreed").getByRole("button", { name: "تنفيذ الصفقة" }).click();
     saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(saved.meta.version).toBe(8);
+    expect(saved.meta.version).toBe(9);
     expect(saved.world.transfers.offers[0].status).toBe("completed");
     expect(saved.world.transfers.offers[0].agreedTerms.appearanceBonus).toEqual({ appearances: 1, amountEur: 25000 });
     expect(saved.world.transfers.offers[0].agreedTerms.registrationCompetition).toBe("continental");
     expect(saved.world.transfers.moves).toHaveLength(1);
     expect(saved.world.transfers.moves[0].playerId).toBe(playerId);
-    expect(saved.world.transfers.ledger).toHaveLength(1);
-    expect(saved.world.transfers.earnedCommissionEur).toBeGreaterThan(0);
+    expect(saved.world.transfers.moves[0].commissionModel).toBe("realized-income-v1");
+    expect(saved.world.transfers.ledger).toHaveLength(0);
+    expect(saved.world.transfers.earnedCommissionEur).toBe(0);
+    expect(saved.world.playerIncome.ledger).toHaveLength(1);
+    expect(saved.world.playerIncome.ledger[0].kind).toBe("signing-bonus");
+    expect(saved.world.playerIncome.ledger[0].grossEur).toBe(50000);
+    expect(saved.world.playerIncome.ledger[0].agencyCommissionEur).toBe(7500);
     expect(saved.world.transfers.moves[0].toClubId).not.toBe(saved.world.transfers.moves[0].fromClubId);
     await expect(page.locator(".transfer-move-row")).toContainText(saved.world.transfers.offers[0].playerName);
     const destinationName = WORLD_DATABASE.clubs.find((club) =>
