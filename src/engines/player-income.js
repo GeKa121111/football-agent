@@ -50,6 +50,9 @@ export function createInitialPlayerIncomeState(currentDate = "2026-07-01", settl
     lastWageSettlementDate: settledThroughCurrentDate
       ? safeDate
       : addPlayerIncomeDays(safeDate, -1),
+    wagePaidThroughDate: settledThroughCurrentDate
+      ? safeDate
+      : addPlayerIncomeDays(safeDate, -1),
     ledger: []
   };
 }
@@ -174,10 +177,17 @@ export function settleWeeklyPlayerWages(save, currentDate) {
     return { save, entriesAdded: [], grossPaidEur: 0, agencyCommissionEur: 0 };
   }
 
-  const periodStart = addPlayerIncomeDays(lastSettlementDate, 1);
+  const paidThroughDate = isPlayerIncomeDate(state.wagePaidThroughDate)
+    ? state.wagePaidThroughDate
+    : lastSettlementDate;
+  const periodStart = addPlayerIncomeDays(paidThroughDate, 1);
   const periodEnd = addPlayerIncomeDays(currentDate, -1);
   if (periodStart > periodEnd) {
-    const next = { ...state, lastWageSettlementDate: currentDate };
+    const next = {
+      ...state,
+      lastWageSettlementDate: currentDate,
+      wagePaidThroughDate: periodEnd
+    };
     return {
       save: { ...save, world: { ...save.world, playerIncome: next } },
       entriesAdded: [],
@@ -255,7 +265,11 @@ export function settleWeeklyPlayerWages(save, currentDate) {
     }
   }
 
-  state = { ...state, lastWageSettlementDate: currentDate };
+  state = {
+    ...state,
+    lastWageSettlementDate: currentDate,
+    wagePaidThroughDate: periodEnd
+  };
   nextSave = { ...nextSave, world: { ...nextSave.world, playerIncome: state } };
   return { save: nextSave, entriesAdded, grossPaidEur, agencyCommissionEur };
 }
@@ -367,6 +381,9 @@ export function isValidPlayerIncomeState(state, currentDate, representation, tra
       !Number.isSafeInteger(state.nextEntrySequence) || state.nextEntrySequence < 1 ||
       !isPlayerIncomeDate(state.lastWageSettlementDate) ||
       state.lastWageSettlementDate > currentDate ||
+      !isPlayerIncomeDate(state.wagePaidThroughDate) ||
+      state.wagePaidThroughDate > currentDate ||
+      state.wagePaidThroughDate > state.lastWageSettlementDate ||
       !Array.isArray(state.ledger) || state.ledger.length > MAX_PLAYER_INCOME_ENTRIES) return false;
 
   const moves = new Map((transfers?.moves ?? []).map((move) => [move.id, move]));
