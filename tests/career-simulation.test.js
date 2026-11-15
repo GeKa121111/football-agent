@@ -472,6 +472,9 @@ test("settles player wages weekly and charges representation commission only on 
   const monday = advanceCareerSimulationDays(completed.save, 5, PLAYERS);
   assert.equal(monday.save.world.currentDate, "2026-07-06");
   assert.equal(isValidSave(monday.save), true);
+  const duplicateIncomeId = structuredClone(monday.save);
+  duplicateIncomeId.world.playerIncome.ledger[1].id = duplicateIncomeId.world.playerIncome.ledger[0].id;
+  assert.equal(isValidSave(duplicateIncomeId), false, "income ledger IDs must be unique");
   const wage = monday.save.world.playerIncome.ledger.find((entry) =>
     entry.kind === "salary" && entry.moveId === completed.move.id
   );
