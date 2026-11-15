@@ -436,6 +436,9 @@ test("runs one complete integrated career season and resumes it safely after a s
 
 test("settles player wages weekly and charges representation commission only on realized income", () => {
   let save = signFirstClient(createInitialSave("2026-07-01T00:00:00.000Z")).save;
+  const mandate = save.agency.representation.contracts.find((item) => item.playerId === PLAYERS[0].id);
+  assert.ok(mandate);
+  const commissionRate = mandate.commissionRate;
   const player = WORLD_DATABASE.players.find((item) => item.id === PLAYERS[0].id);
   assert.ok(player);
   const sourceClub = WORLD_DATABASE.clubs.find((club) => club.id === player.clubId);
@@ -461,7 +464,10 @@ test("settles player wages weekly and charges representation commission only on 
   assert.equal(completed.save.world.transfers.earnedCommissionEur, 0);
   assert.equal(completed.save.world.playerIncome.ledger.length, 1);
   assert.equal(completed.save.world.playerIncome.ledger[0].kind, "signing-bonus");
-  assert.equal(completed.save.world.playerIncome.ledger[0].agencyCommissionEur, 10000);
+  assert.equal(
+    completed.save.world.playerIncome.ledger[0].agencyCommissionEur,
+    Math.round(100000 * commissionRate / 100)
+  );
 
   const monday = advanceCareerSimulationDays(completed.save, 5, PLAYERS);
   assert.equal(monday.save.world.currentDate, "2026-07-06");
@@ -474,9 +480,9 @@ test("settles player wages weekly and charges representation commission only on 
   assert.equal(wage.periodEnd, "2026-07-05");
   assert.equal(wage.activeDays, 5);
   assert.equal(wage.grossEur, 14286);
-  assert.equal(wage.agencyCommissionEur, 1429);
-  assert.equal(wage.playerNetEur, 12857);
-  assert.equal(monday.playerIncomeCommissionEur, 1429);
+  assert.equal(wage.agencyCommissionEur, Math.round(wage.grossEur * commissionRate / 100));
+  assert.equal(wage.playerNetEur, wage.grossEur - wage.agencyCommissionEur);
+  assert.equal(monday.playerIncomeCommissionEur, wage.agencyCommissionEur);
   assert.equal(monday.paidPlayerIncome.length > 0, true);
 
   const nextMonday = advanceCareerSimulationDays(monday.save, 7, PLAYERS);
@@ -490,7 +496,7 @@ test("settles player wages weekly and charges representation commission only on 
   assert.equal(secondWage.periodEnd, "2026-07-12");
   assert.equal(secondWage.activeDays, 7);
   assert.equal(secondWage.grossEur, 20000);
-  assert.equal(secondWage.agencyCommissionEur, 2000);
+  assert.equal(secondWage.agencyCommissionEur, Math.round(secondWage.grossEur * commissionRate / 100));
   assert.equal(isValidSave(nextMonday.save), true);
 
   const duplicate = advanceCareerSimulationDays(nextMonday.save, 1, PLAYERS);
