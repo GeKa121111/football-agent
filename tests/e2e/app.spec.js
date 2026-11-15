@@ -434,7 +434,9 @@ test.describe("Desktop experience", () => {
     await expect(dossier.locator(".representation-dossier-hero h3")).toHaveText(contract.playerName);
     await expect(dossier.getByRole("heading", { name: "العلاقة والثقة" })).toBeVisible();
     await expect(dossier.getByRole("heading", { name: "العقد الحالي" })).toBeVisible();
-    await expect(dossier.locator(".representation-dossier-stat")).toHaveCount(7);
+    await expect(dossier.locator(".representation-dossier-stat")).toHaveCount(11);
+    await expect(dossier.getByRole("heading", { name: "دخل اللاعب والعمولات" })).toBeVisible();
+    await expect(dossier.getByText("إجمالي الدخل المسجل")).toBeVisible();
     await expect(dossier.getByText(/تمثيل حصري|تمثيل غير حصري/).first()).toBeVisible();
     await expect(dossier.getByRole("heading", { name: "الرسائل والاجتماعات" })).toBeVisible();
     await expect(dossier.getByText("بانتظار الرد").first()).toBeVisible();
@@ -673,9 +675,21 @@ test.describe("Desktop experience", () => {
     expect(saved.world.transfers.ledger).toHaveLength(0);
     expect(saved.world.transfers.earnedCommissionEur).toBe(0);
     expect(saved.world.playerIncome.ledger).toHaveLength(1);
-    expect(saved.world.playerIncome.ledger[0].kind).toBe("signing-bonus");
-    expect(saved.world.playerIncome.ledger[0].grossEur).toBe(50000);
-    expect(saved.world.playerIncome.ledger[0].agencyCommissionEur).toBe(7500);
+    const signingIncome = saved.world.playerIncome.ledger[0];
+    expect(signingIncome.kind).toBe("signing-bonus");
+    expect(signingIncome.grossEur).toBe(50000);
+    expect(signingIncome.representationContractId).toBeTruthy();
+    const activeMandate = saved.agency.representation.contracts.find((contract) =>
+      contract.id === signingIncome.representationContractId
+    );
+    expect(activeMandate).toBeTruthy();
+    expect(signingIncome.commissionRate).toBe(activeMandate.commissionRate);
+    expect(signingIncome.agencyCommissionEur).toBe(
+      Math.round(signingIncome.grossEur * signingIncome.commissionRate / 100)
+    );
+    expect(signingIncome.playerNetEur).toBe(
+      signingIncome.grossEur - signingIncome.agencyCommissionEur
+    );
     expect(saved.world.transfers.moves[0].toClubId).not.toBe(saved.world.transfers.moves[0].fromClubId);
     await expect(page.locator(".transfer-move-row")).toContainText(saved.world.transfers.offers[0].playerName);
     const destinationName = WORLD_DATABASE.clubs.find((club) =>
@@ -1126,6 +1140,10 @@ test.describe("Mobile experience", () => {
     await page.evaluate(() => {
       const save = JSON.parse(localStorage.getItem("football-agent.save"));
       save.world.currentDate = "2027-06-27";
+      // This test jumps the calendar directly; align the v9 payroll cursor too,
+      // so the next Monday does not attempt to accrue an unprocessed year.
+      save.world.playerIncome.lastWageSettlementDate = "2027-06-27";
+      save.world.playerIncome.wagePaidThroughDate = "2027-06-27";
       save.world.events = [];
       save.world.inbox = [];
       save.world.tasks = [{
