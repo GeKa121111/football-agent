@@ -151,7 +151,7 @@ test.describe("Desktop experience", () => {
     await expect(page.locator(".football-screen")).toHaveCount(0);
     await page.getByRole("button", { name: "حفظ المسيرة" }).click();
     const firstSave = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(firstSave.meta.version).toBe(8);
+    expect(firstSave.meta.version).toBe(9);
     expect(firstSave.world.football.fixtures.length).toBeGreaterThan(0);
 
     await navigateTo(page, "المباريات");
@@ -227,7 +227,7 @@ test.describe("Desktop experience", () => {
     await modal.getByRole("button", { name: "إرسال عرض التمثيل" }).click();
 
     let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(saved.meta.version).toBe(8);
+    expect(saved.meta.version).toBe(9);
     expect(saved.agency.representation.offers).toHaveLength(1);
     expect(saved.agency.representation.offers[0].status).toBe("pending");
     expect(saved.agency.clients).toHaveLength(0);
@@ -931,7 +931,7 @@ test.describe("Mobile experience", () => {
     await page.getByRole("button", { name: "تأكيد إطلاق البعثة" }).click();
 
     const started = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(started.meta.version).toBe(8);
+    expect(started.meta.version).toBe(9);
     expect(started.agency.balance).toBe(95000);
     expect(started.world.scouting.activeMissions).toHaveLength(1);
     expect(started.world.scouting.activeMissions[0].sourceId).toBe("academy");
@@ -1182,7 +1182,7 @@ test.describe("Mobile experience", () => {
 
     await page.locator(".day-advance-button").click();
     let saved = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
-    expect(saved.meta.version).toBe(8);
+    expect(saved.meta.version).toBe(9);
     expect(saved.career.day).toBe(6);
     expect(saved.career.week).toBe(1);
     expect(saved.career.season).toBe(1);
