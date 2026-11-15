@@ -625,6 +625,7 @@ test("migrates legacy v8 saves to schema v9 without replaying historical player 
   assert.equal(result.save.meta.version, 9);
   assert.deepEqual(result.save.world.playerIncome.ledger, []);
   assert.equal(result.save.world.playerIncome.lastWageSettlementDate, "2027-03-15");
+  assert.equal(result.save.world.playerIncome.wagePaidThroughDate, "2027-03-15");
   assert.equal(isValidSave(result.save), true);
   assert.equal(storage.getItem(STORAGE_KEY), raw, "migration must not rewrite the save on read");
 });
