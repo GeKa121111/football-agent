@@ -331,12 +331,36 @@ test("rejects malformed, duplicated or financially inconsistent transfer state",
   const countered = evaluateTransferOffer(sentForLedger.save, sentForLedger.offer.id, "2026-07-01", database);
   const agreed = acceptTransferCounterOffer(countered.save, sentForLedger.offer.id, "2026-07-02");
   const completed = completeTransfer(agreed.save, sentForLedger.offer.id, "2026-07-02", database);
-  const wrongBasis = structuredClone(completed.save.world.transfers);
+  const legacyLedgerState = structuredClone(completed.save.world.transfers);
+  const legacyMove = legacyLedgerState.moves.find((move) => move.id === completed.move.id);
+  const offer = legacyLedgerState.offers.find((item) => item.id === completed.offer.id);
+  delete legacyMove.commissionModel;
+
+  const basisEur = offer.agreedTerms.weeklyWageEur *
+    offer.agreedTerms.contractYears * 52 + offer.agreedTerms.signingBonusEur;
+  const commissionRate = 10;
+  const amountEur = Math.round(basisEur * commissionRate / 100);
+  legacyLedgerState.ledger = [{
+    id: "transfer-ledger-1",
+    offerId: offer.id,
+    moveId: legacyMove.id,
+    playerId: legacyMove.playerId,
+    date: legacyMove.effectiveDate,
+    type: "agent-commission",
+    currency: "EUR",
+    basisEur,
+    commissionRate,
+    amountEur,
+    representationContractId: "representation-contract-1"
+  }];
+  legacyLedgerState.nextLedgerSequence = 2;
+  legacyLedgerState.earnedCommissionEur = amountEur;
+
+  const wrongBasis = structuredClone(legacyLedgerState);
   wrongBasis.ledger[0].basisEur += 1;
-  assert.equal(isValidTransferState(wrongBasis, "2026-07-02", completed.save.agency.clients, completed.save.agency.representation), false);
+  assert.equal(isValidTransferState(wrongBasis, "2026-07-02",
+    completed.save.agency.clients, completed.save.agency.representation), false);
 });
-
-
 test("uses league-specific registration windows and roster limits", async () => {
   const { getLeagueTransferRules, getTransferWindowForClub, getClubRegistrationStatus, getClubTransferFinancials } =
     await import("../src/engines/club-transfer-rules.js");

@@ -870,6 +870,8 @@ export function advanceTransferState(save, currentDate = save?.world?.currentDat
 }
 
 export function isValidTransferState(state, currentDate, clients = [], representation = null, database = WORLD_DATABASE) {
+  if (representation !== null && representation !== undefined &&
+      (!isRecord(representation) || !Array.isArray(representation.contracts))) return false;
   if (!isRecord(state) || !isTransferCalendarDate(currentDate) || !Array.isArray(clients) ||
       !["nextOfferSequence", "nextMoveSequence", "nextHistorySequence", "nextLedgerSequence", "nextFinanceSequence"].every((key) => Number.isSafeInteger(state[key]) && state[key] >= 1) ||
       !Number.isSafeInteger(state.nextSeasonSequence ?? 1) || (state.nextSeasonSequence ?? 1) < 1 ||

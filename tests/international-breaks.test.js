@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { WORLD_DATABASE } from "../src/data/world-database.js";
-import { createInitialSave, isValidSave } from "../src/core/storage.js";
+import { SAVE_VERSION, createInitialSave, isValidSave } from "../src/core/storage.js";
 import { advanceCareerSimulationDays } from "../src/engines/career-simulation.js";
 import {
   advanceInternationalWindows,
@@ -34,11 +34,11 @@ test("defines four deterministic, bounded international windows per year", () =>
   assert.throws(() => getInternationalWindows(1899), /سنة التوقف الدولي/);
 });
 
-test("initializes a valid empty international state without requiring a save-version bump", () => {
+test("initializes a valid empty international state under the current save schema", () => {
   const save = createInitialSave();
   assert.equal(isValidNationalTeamState(save.world.nationalTeams, save.world.currentDate), true);
   assert.equal(isValidSave(save), true);
-  assert.equal(save.meta.version, 8);
+  assert.equal(save.meta.version, SAVE_VERSION);
 });
 
 test("issues one 23-player, nationality-safe call-up for every country on the window start date", () => {

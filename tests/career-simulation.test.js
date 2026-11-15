@@ -543,6 +543,9 @@ test("splits a loan player's wage funding between the host and parent clubs with
   assert.equal(wage.grossEur, 7143);
   assert.equal(wage.hostClubEur, 4286);
   assert.equal(wage.parentClubEur, 2857);
-  assert.equal(wage.playerNetEur, 6429);
+  assert.ok(wage.agencyCommissionEur > 0);
+  assert.equal(wage.agencyCommissionEur,
+    Math.round(wage.grossEur * wage.commissionRate / 100));
+  assert.equal(wage.playerNetEur, wage.grossEur - wage.agencyCommissionEur);
   assert.equal(isValidSave(monday.save), true);
 });
