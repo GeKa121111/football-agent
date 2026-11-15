@@ -94,6 +94,9 @@ import {
   openAgencyBranch as openAgencyBranchInEngine
 } from "./engines/agency-management.js";
 import {
+  getPlayerIncomeSummary
+} from "./engines/player-income.js";
+import {
   completeCareerTask as completeTaskInEngine,
   markCareerMessageRead,
   filterCareerEvents,
@@ -1643,12 +1646,14 @@ function renderMarket(context) {
   windowCard.append(node("span", "transfer-window-icon", "⇄"), windowCopy);
   windowCard.append(node("span", "transfer-window-status", windowInfo.active ? "OPEN" : "CLOSED"));
 
+  const incomeSummary = getPlayerIncomeSummary(context.save);
   const summary = node("div", "market-summary transfer-summary");
   summary.append(
     metricCard("نافذة السوق", windowInfo.active ? "مفتوحة" : "مغلقة",
       windowInfo.active ? windowInfo.openClubCount + " أندية متاحة" : "تبدأ " + formatHomeDate(windowInfo.nextWindow?.startDate ?? currentDate), "⇄", "purple"),
     metricCard("تفاوض نشط", formatHomeNumber(openOffers.length), "عروض تنتظر قرارًا", "◷", "cyan"),
-    metricCard("عمولات مكتسبة", formatEuroMoney(transferState.earnedCommissionEur), "إجمالي مسجل باليورو", "€", "gold")
+    metricCard("عمولات الوكالة", formatEuroMoney(incomeSummary.totalAgencyCommissionEur),
+      "تاريخية ومحققة · يورو", "€", "gold")
   );
 
   const proposalPanel = node("section", "surface-card transfer-proposal-panel");
@@ -2408,6 +2413,7 @@ function renderAgencyManagementPanel(context) {
   const agency = context.save.agency;
   const management = agency.management;
   const summary = getAgencyManagementSummary(context.save);
+  const playerIncome = getPlayerIncomeSummary(context.save);
   const staffModifiers = getAgencyStaffModifiers(context.save);
   const panel = node("section", "surface-card agency-management-panel");
   const heading = node("div", "representation-heading");
@@ -2431,13 +2437,18 @@ function renderAgencyManagementPanel(context) {
     ["الدين القائم", formatMoney(summary.totalDebtEgp)],
     ["قسط التمويل الأسبوعي", formatMoney(summary.weeklyCreditRepaymentEgp)],
     ["متأخرات أقساط", summary.lateCreditFacilities],
-    ["السيولة بعد الالتزامات", formatMoney(summary.cashAfterWeeklyCommitmentsEgp)]
+    ["السيولة بعد الالتزامات", formatMoney(summary.cashAfterWeeklyCommitmentsEgp)],
+    ["دخل اللاعبين المسجل", formatEuroMoney(playerIncome.grossEur)],
+    ["عمولات الدخل المحقق", formatEuroMoney(playerIncome.realizedAgencyCommissionEur)],
+    ["صافي دخل اللاعبين", formatEuroMoney(playerIncome.playerNetEur)]
   ].forEach(([label, value]) => {
     const card = node("article", "agency-operations-metric");
     card.append(node("small", "", label), node("strong", "", value));
     metrics.append(card);
   });
   panel.append(metrics);
+  panel.append(node("p", "agency-management-note",
+    "رواتب اللاعبين تُسجل يوم الاثنين من شروط العقود، والعمولة تُحتسب عند تحقق الدخل فقط. المبالغ باليورو وتظل منفصلة عن رصيد الوكالة بالجنيه لحين تنفيذ سياسة التحصيل وسعر الصرف."));
 
   const staffSection = node("section", "agency-operations-section");
   staffSection.append(
@@ -3704,6 +3715,50 @@ export function mountApp(root) {
         Math.round(offer.termDays / 365) + " سنة · " + formatHomeDate(offer.createdDate)));
     }
     content.append(termsPanel);
+
+    const playerIncome = getPlayerIncomeSummary(state.save, contract.playerId);
+    const incomePanel = node("section", "representation-dossier-section");
+    incomePanel.append(
+      node("h3", "", "دخل اللاعب والعمولات"),
+      node("div", "representation-dossier-grid")
+    );
+    const incomeGrid = incomePanel.querySelector(".representation-dossier-grid");
+    [
+      ["إجمالي الدخل المسجل", formatEuroMoney(playerIncome.grossEur)],
+      ["عمولة الوكالة المحققة", formatEuroMoney(playerIncome.realizedAgencyCommissionEur)],
+      ["صافي دخل اللاعب", formatEuroMoney(playerIncome.playerNetEur)],
+      ["عمولة تاريخية من الصفقة", formatEuroMoney(playerIncome.legacyCommissionEur)]
+    ].forEach(([label, value]) => {
+      const tile = node("div", "representation-dossier-stat");
+      tile.append(node("span", "", label), node("strong", "", value));
+      incomeGrid.append(tile);
+    });
+    if (playerIncome.entries.length === 0) {
+      incomePanel.append(node("p", "representation-empty",
+        "لم يُسجل دخل تعاقدي لهذا اللاعب حتى الآن. الرواتب والمكافآت تظهر هنا عند دفعها داخل المسيرة."));
+    } else {
+      const incomeList = node("div", "representation-history-list");
+      const incomeLabels = {
+        salary: "راتب أسبوعي",
+        "signing-bonus": "مكافأة توقيع",
+        "appearance-bonus": "مكافأة مشاركات",
+        "goal-bonus": "مكافأة أهداف"
+      };
+      playerIncome.entries.slice(-8).reverse().forEach((entry) => {
+        const row = node("div", "representation-history-row");
+        row.append(
+          node("strong", "", incomeLabels[entry.kind] ?? entry.kind),
+          node("span", "", formatHomeDate(entry.date) + " · إجمالي " + formatEuroMoney(entry.grossEur)),
+          node("small", "", "عمولة " + formatEuroMoney(entry.agencyCommissionEur) +
+            " · صافي اللاعب " + formatEuroMoney(entry.playerNetEur))
+        );
+        incomeList.append(row);
+      });
+      incomePanel.append(incomeList);
+    }
+    incomePanel.append(node("p", "representation-intro",
+      "العمولات المحققة مسجلة باليورو ولا تُضاف إلى رصيد الوكالة بالجنيه المصري تلقائيًا."));
+    content.append(incomePanel);
 
     const renewalsPanel = node("section", "representation-dossier-section");
     renewalsPanel.append(
