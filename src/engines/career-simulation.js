@@ -28,6 +28,7 @@ export function advanceCareerSimulationDay(save, players) {
   // Payroll runs against the pre-transition contract state so a contract
   // ending on Monday still pays the completed Monday-to-Sunday period.
   const wageSettlement = settleWeeklyPlayerWages(save, nextDate);
+  if (wageSettlement.error) throw new Error(wageSettlement.error);
   const calendarSave = advanceCareerDay(wageSettlement.save);
   const internationalSave = advanceInternationalWindows(calendarSave);
   const matchdaySave = advanceInternationalMatches(internationalSave);
@@ -39,6 +40,7 @@ export function advanceCareerSimulationDay(save, players) {
   }
   const bonusSettlement = settleTransferPerformanceBonuses(tournamentSave, currentDate);
   const bonusIncome = settleTransferBonusIncome(bonusSettlement.save, currentDate);
+  if (bonusIncome.error) throw new Error(bonusIncome.error);
   const scouting = advanceScoutingMissions(bonusIncome.save, dailyPlayers, currentDate);
   const representation = advanceRepresentationState(scouting.save, currentDate);
   const agencyOperations = advanceAgencyManagementDay(representation.save, currentDate, dailyPlayers);
