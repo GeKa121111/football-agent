@@ -522,6 +522,13 @@ test("pays appearance and goal bonuses once and charges the destination club", (
   assert.equal(transferState.financeLedger.filter((entry) => entry.type === "performance-bonus").length, 2);
   assert.equal(transferState.financeLedger.filter((entry) => entry.type === "performance-bonus")
     .reduce((sum, entry) => sum + entry.amountEur, 0), -65_000);
+  const realized = settleTransferBonusIncome(settled.save, "2026-07-02");
+  const performanceIncome = realized.entriesAdded.filter((entry) => entry.kind === "appearance-bonus" || entry.kind === "goal-bonus");
+  assert.equal(performanceIncome.length, 2);
+  assert.equal(performanceIncome.reduce((sum, entry) => sum + entry.grossEur, 0), 65_000);
+  assert.equal(performanceIncome.reduce((sum, entry) => sum + entry.agencyCommissionEur, 0), 6_500);
+  const duplicateIncome = settleTransferBonusIncome(realized.save, "2026-07-02");
+  assert.equal(duplicateIncome.entriesAdded.length, 0);
   const repeated = settleTransferPerformanceBonuses(settled.save, "2026-07-03", database);
   assert.equal(repeated.paidBonuses.length, 0);
   assert.equal(repeated.save.world.transfers.financeLedger.filter((entry) => entry.type === "performance-bonus").length, 2);
