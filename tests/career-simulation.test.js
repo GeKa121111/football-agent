@@ -499,3 +499,41 @@ test("settles player wages weekly and charges representation commission only on 
   ).length, 2);
   assert.equal(isValidSave(duplicate.save), true);
 });
+
+
+test("splits a loan player's wage funding between the host and parent clubs without splitting player income", () => {
+  let save = signFirstClient(createInitialSave("2026-07-01T00:00:00.000Z")).save;
+  const player = WORLD_DATABASE.players.find((item) => item.id === PLAYERS[0].id);
+  assert.ok(player);
+  const sourceClub = WORLD_DATABASE.clubs.find((club) => club.id === player.clubId);
+  const destinationClub = WORLD_DATABASE.clubs.find((club) =>
+    club.id !== sourceClub.id && club.leagueId === sourceClub.leagueId
+  );
+  const offer = createTransferOffer(save, player.id, destinationClub.id, "loan", {
+    loanFeeEur: Math.round(player.marketValueEur * 0.02),
+    weeklyWageEur: 10000,
+    signingBonusEur: 0,
+    loanMonths: 6,
+    optionToBuyEur: Math.round(player.marketValueEur * 0.5),
+    wageSharePercent: 60
+  });
+  assert.equal(offer.changed, true, offer.error);
+  const decision = evaluateTransferOffer(offer.save, offer.offer.id);
+  const agreed = decision.status === "countered"
+    ? acceptTransferCounterOffer(decision.save, offer.offer.id)
+    : decision;
+  assert.equal(agreed.status, "agreed");
+  const completed = completeTransfer(agreed.save, offer.offer.id);
+  assert.equal(completed.status, "completed", completed.error);
+
+  const monday = advanceCareerSimulationDays(completed.save, 5, PLAYERS);
+  const wage = monday.save.world.playerIncome.ledger.find((entry) =>
+    entry.kind === "salary" && entry.moveId === completed.move.id
+  );
+  assert.ok(wage);
+  assert.equal(wage.grossEur, 7143);
+  assert.equal(wage.hostClubEur, 4286);
+  assert.equal(wage.parentClubEur, 2857);
+  assert.equal(wage.playerNetEur, 6429);
+  assert.equal(isValidSave(monday.save), true);
+});
