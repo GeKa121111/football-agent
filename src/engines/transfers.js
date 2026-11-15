@@ -355,7 +355,7 @@ export function completeTransfer(save, offerId, currentDate = save?.world?.curre
     return { changed: false, save, error: "النادي لا يملك مساحة كافية في ميزانية الرواتب الأسبوعية." };
   const mandate = getActiveRepresentationContract(save, offer.playerId, currentDate);
   if (!mandate) return { changed: false, save, error: "انتهى عقد التمثيل قبل إتمام الصفقة." };
-  if (state.moves.length >= MAX_TRANSFER_MOVES || state.ledger.length >= MAX_TRANSFER_LEDGER ||
+  if (state.moves.length >= MAX_TRANSFER_MOVES ||
       state.history.length >= MAX_TRANSFER_HISTORY || state.financeLedger.length + 3 > MAX_CLUB_FINANCE_ENTRIES)
     return { changed: false, save, error: "وصل سجل الصفقات أو العمولات أو ميزانيات الأندية إلى الحد المتاح." };
   // New deals charge representation commission only when player income is actually paid.
@@ -398,6 +398,7 @@ export function completeTransfer(save, offerId, currentDate = save?.world?.curre
     (offer.type === "loan" ? "اكتملت إعارة اللاعب إلى " : "اكتمل انتقال اللاعب إلى ") + offer.toClubName + ".", { moveId });
   const completedSave = { ...save, world: { ...save.world, transfers: next } };
   const income = settleTransferBonusIncome(completedSave, currentDate);
+  if (income.error) return { changed: false, save, error: income.error };
   return {
     changed: true,
     status: "completed",
@@ -430,7 +431,7 @@ function completeLoanPurchase(save, loan, currentDate, database, mandatory = fal
     return { changed: false, save, error: "يجب أن يظل عقد تمثيل اللاعب نشطًا لتفعيل خيار الشراء." };
   }
   if (state.offers.length >= MAX_TRANSFER_OFFERS || state.moves.length >= MAX_TRANSFER_MOVES ||
-      state.history.length + 3 > MAX_TRANSFER_HISTORY || state.ledger.length >= MAX_TRANSFER_LEDGER ||
+      state.history.length + 3 > MAX_TRANSFER_HISTORY ||
       state.financeLedger.length + 3 > MAX_CLUB_FINANCE_ENTRIES) {
     return { changed: false, save, error: "وصل سجل الانتقالات أو العمولات أو الميزانيات إلى الحد المتاح." };
   }
@@ -468,6 +469,9 @@ function completeLoanPurchase(save, loan, currentDate, database, mandatory = fal
   let commissionRate = 0;
   let commissionEur = 0;
   if (!usesRealizedIncomeModel) {
+    if (state.ledger.length >= MAX_TRANSFER_LEDGER) {
+      return { changed: false, save, error: "سجل العمولات التاريخية ممتلئ." };
+    }
     commissionBasisEur = loan.weeklyWageEur * contractYears * 52;
     if (!validMoney(commissionBasisEur)) return { changed: false, save, error: "أساس احتساب العمولة غير صالح." };
     commissionRate = mandate ? getRepresentationContractCommission(mandate, currentDate) : 0;
@@ -535,6 +539,7 @@ function completeLoanPurchase(save, loan, currentDate, database, mandatory = fal
     "تحولت الإعارة إلى انتقال نهائي لصالح " + club.nameAr + ".", { moveId: permanentMoveId });
   const purchasedSave = { ...save, world: { ...save.world, transfers: next } };
   const income = settleTransferBonusIncome(purchasedSave, currentDate);
+  if (income.error) return { changed: false, save, error: income.error };
   return {
     changed: true,
     status: "completed",
