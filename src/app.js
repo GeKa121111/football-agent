@@ -2572,7 +2572,7 @@ function renderAgencyManagementPanel(context) {
     ["عمولات مستحقة للوكالة", formatEuroMoney(financialSummary.eur.commissionReceivableEur)],
     ["عمولات تاريخية غير مسوّاة", formatEuroMoney(financialSummary.eur.historicalCommissionUnreconciledEur)],
     ["عدد مستحقات العمولة", financialSummary.eur.commissionEntryCount],
-    ["صافي التدفق التشغيلي", formatMoney(financialSummary.egp.netOperatingCashFlowEgp)],
+    ["صافي التدفق النقدي الكلي", formatMoney(financialSummary.egp.totalCashFlowEgp)],
     ["صافي التدفق التمويلي", formatMoney(financialSummary.egp.netFinancingCashFlowEgp)]
   ].forEach(([label, value]) => {
     const card = node("article", "agency-operations-metric");
