@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createInitialSave, isValidSave, readSave, writeSave } from "../src/core/storage.js";
 import { getWorldPlayerProfiles, getWorldSquadPlayers, WORLD_DATABASE } from "../src/data/world-database.js";
 import { buildSimulationTeam } from "../src/engines/football-season.js";
+import { getTransferWindowForClub } from "../src/engines/club-transfer-rules.js";
 import { getTalentProspect, getTalentProspectPerformanceSummary, upsertTalentProspect } from "../src/engines/talent-pipeline.js";
 import { startScoutingMission } from "../src/engines/scouting.js";
 import {
@@ -339,11 +340,11 @@ test("survives four integrated seasons with transfers, loans, injuries, internat
   );
   const loanClub = WORLD_DATABASE.clubs.find((club) =>
     club.id !== sourceClub.id && club.id !== destinationClub?.id &&
-    club.leagueId === sourceClub.leagueId
+    getTransferWindowForClub("2027-01-05", club.id).active
   );
   assert.ok(sourceClub);
   assert.ok(destinationClub);
-  assert.ok(loanClub, "a third club in the same league must be available for the loan");
+  assert.ok(loanClub, "a third club with an active January transfer window must be available for the loan");
 
   // Seed one known injury before the opening fixture. The player must miss
   // that match and recover only after the final injured day has elapsed.
@@ -518,9 +519,9 @@ test("survives four integrated seasons with transfers, loans, injuries, internat
   advanceUntil("2027-01-05");
 
   const loanOffer = createTransferOffer(save, transferPlayer.id, loanClub.id, "loan", {
-    loanFeeEur: 50000,
-    weeklyWageEur: 10000,
-    signingBonusEur: 20000,
+    loanFeeEur: 0,
+    weeklyWageEur: 1000,
+    signingBonusEur: 0,
     loanMonths: 6,
     wageSharePercent: 75,
     optionToBuyEur: Math.max(100000, Math.round(transferPlayer.marketValueEur * 1.2))
