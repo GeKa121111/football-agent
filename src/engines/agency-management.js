@@ -1,5 +1,6 @@
 import { WORLD_DATABASE } from "../data/world-database.js";
 import { getClubTransferFinancials, getTransferWindowForClub } from "./club-transfer-rules.js";
+import { getPlayerMediaProfile } from "./player-media.js";
 const MAX_LEDGER_ENTRIES = 1000;
 const MAX_MONEY_EGP = 2000000000;
 const MAX_ACTIVE_STAFF = 6;
@@ -147,6 +148,16 @@ export function isValidAgencyManagementState(state, currentDate) {
         !validDate(interest.expiresDate) || interest.expiresDate !== addDays(interest.createdDate,14) ||
         !Number.isInteger(interest.fitScore) || interest.fitScore < 0 || interest.fitScore > 100 ||
         (interest.performanceBonus !== undefined && (!Number.isInteger(interest.performanceBonus) || interest.performanceBonus < -3 || interest.performanceBonus > 10)) ||
+        (interest.mediaBonus !== undefined && (!Number.isInteger(interest.mediaBonus) || interest.mediaBonus < 0 || interest.mediaBonus > 3)) ||
+        (interest.mediaSnapshot !== undefined &&
+          (!isRecord(interest.mediaSnapshot) ||
+            !Number.isInteger(interest.mediaSnapshot.score) || interest.mediaSnapshot.score < 0 || interest.mediaSnapshot.score > 100 ||
+            !["limited", "rising", "prominent", "star"].includes(interest.mediaSnapshot.tierKey) ||
+            !Number.isInteger(interest.mediaSnapshot.clubInterestBonus) || interest.mediaSnapshot.clubInterestBonus < 0 || interest.mediaSnapshot.clubInterestBonus > 3 ||
+            !Number.isSafeInteger(interest.mediaSnapshot.localHonorsCount) || interest.mediaSnapshot.localHonorsCount < 0 ||
+            !Number.isSafeInteger(interest.mediaSnapshot.internationalHonorsCount) || interest.mediaSnapshot.internationalHonorsCount < 0 ||
+            !Number.isSafeInteger(interest.mediaSnapshot.internationalAppearances) || interest.mediaSnapshot.internationalAppearances < 0 ||
+            interest.mediaSnapshot.clubInterestBonus !== (interest.mediaBonus ?? 0))) ||
         (interest.averageMatchRating !== undefined && interest.averageMatchRating !== null &&
           (!Number.isFinite(interest.averageMatchRating) || interest.averageMatchRating < 4 || interest.averageMatchRating > 10)) ||
         (interest.seasonAppearances !== undefined && (!Number.isSafeInteger(interest.seasonAppearances) || interest.seasonAppearances < 0)) ||
@@ -551,13 +562,25 @@ function calculateClubInterestFit(player, club, financials) {
   const budgetBonus = budgetCoverage >= 1 ? 5 : budgetCoverage >= 0.65 ? 1 : -8;
   const performanceSnapshot = createPlayerPerformanceSnapshot(player);
   const performanceBonus = performanceSnapshot.performanceBonus;
+  const mediaProfile = getPlayerMediaProfile(player);
+  const mediaSnapshot = {
+    score: mediaProfile.score,
+    tierKey: mediaProfile.tierKey,
+    clubInterestBonus: mediaProfile.clubInterestBonus,
+    localHonorsCount: mediaProfile.localHonorsCount,
+    internationalHonorsCount: mediaProfile.internationalHonorsCount,
+    internationalAppearances: mediaProfile.internationalAppearances
+  };
+  const mediaBonus = mediaSnapshot.clubInterestBonus;
   const score = Math.round((rating * 0.55) + (potential * 0.25) +
-    (baseline * 0.2) + ageBonus + youthBonus + budgetBonus + performanceBonus);
+    (baseline * 0.2) + ageBonus + youthBonus + budgetBonus + performanceBonus + mediaBonus);
   return {
     fitScore:Math.max(0,Math.min(100,score)),
     estimatedFeeEur,
     clubBudgetEur:Math.max(0,Math.round(financials.budgetEur)),
     performanceBonus,
+    mediaBonus,
+    mediaSnapshot,
     averageMatchRating:performanceSnapshot.averageMatchRating,
     seasonAppearances:performanceSnapshot.appearances,
     seasonGoals:performanceSnapshot.goals,
@@ -647,6 +670,8 @@ function advanceClubInterestAI(save,currentDate,players,state) {
       seasonAssists:selected.seasonAssists,
       honorsCount:selected.honorsCount,
       performanceSnapshot:selected.performanceSnapshot,
+      mediaBonus:selected.mediaBonus,
+      mediaSnapshot:selected.mediaSnapshot,
       status:selected.window.active ? "enquiry" : "monitoring",
       transferWindowEndDate:selected.window.window?.endDate ?? null
     };
