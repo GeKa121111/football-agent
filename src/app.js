@@ -2570,6 +2570,7 @@ function renderAgencyManagementPanel(context) {
     ["متأخرات أقساط", summary.lateCreditFacilities],
     ["السيولة بعد الالتزامات", formatMoney(summary.cashAfterWeeklyCommitmentsEgp)],
     ["عمولات مستحقة للوكالة", formatEuroMoney(financialSummary.eur.commissionReceivableEur)],
+    ["عمولات تاريخية غير مسوّاة", formatEuroMoney(financialSummary.eur.historicalCommissionUnreconciledEur)],
     ["عدد مستحقات العمولة", financialSummary.eur.commissionEntryCount],
     ["صافي التدفق التشغيلي", formatMoney(financialSummary.egp.netOperatingCashFlowEgp)],
     ["صافي التدفق التمويلي", formatMoney(financialSummary.egp.netFinancingCashFlowEgp)]
@@ -2895,7 +2896,9 @@ function renderAgencyManagementPanel(context) {
       const row = node("article", "agency-operations-ledger-row");
       const amountText = entry.currency === "EUR" ? formatEuroMoney(entry.amount) : formatMoney(entry.amount);
       const paymentText = entry.currency === "EUR"
-        ? "مستحق " + amountText + " · غير محصل"
+        ? entry.status === "receivable"
+          ? "مستحق " + amountText + " · غير محصل"
+          : "قيمة " + amountText + " · حالة التحصيل غير موثقة"
         : "المبلغ " + amountText + " · المدفوع " + formatMoney(entry.paidAmount) +
           (entry.outstandingAmount > 0 ? " · المتبقي " + formatMoney(entry.outstandingAmount) : "");
       row.append(
