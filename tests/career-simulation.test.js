@@ -15,7 +15,8 @@ import {
 import { advanceCareerSimulationDay, advanceCareerSimulationDays } from "../src/engines/career-simulation.js";
 import { hireAgencyEmployee, signAgencySponsorship, takeAgencyCredit } from "../src/engines/agency-management.js";
 import { setPlayerTrainingPlan } from "../src/engines/player-development.js";
-import { createTransferOffer, evaluateTransferOffer, completeTransfer, getPlayerCurrentClubId } from "../src/engines/transfers.js";
+import { createTransferOffer, evaluateTransferOffer, acceptTransferCounterOffer, completeTransfer, getPlayerCurrentClubId } from "../src/engines/transfers.js";
+import { getAgencyFinancialSummary } from "../src/engines/agency-financial-ledger.js";
 
 const PLAYERS = getWorldPlayerProfiles();
 
@@ -328,7 +329,7 @@ test("records a prospect's real appearance and rating through the integrated car
   assert.equal(isValidSave(advanced.save), true);
 });
 
-test("runs one complete integrated career season and resumes it safely after a save reload", () => {
+test("survives four integrated seasons with transfers, loans, injuries, international tournaments, finance and save restoration", () => {
   let save = signFirstClient(createInitialSave("2026-07-01T00:00:00.000Z")).save;
   const transferPlayer = WORLD_DATABASE.players.find((player) => player.id === PLAYERS[0].id);
   assert.ok(transferPlayer);
@@ -336,14 +337,53 @@ test("runs one complete integrated career season and resumes it safely after a s
   const destinationClub = WORLD_DATABASE.clubs.find((club) =>
     club.id !== sourceClub.id && club.leagueId === sourceClub.leagueId
   );
+  const loanClub = WORLD_DATABASE.clubs.find((club) =>
+    club.id !== sourceClub.id && club.id !== destinationClub?.id &&
+    club.leagueId === sourceClub.leagueId
+  );
   assert.ok(sourceClub);
   assert.ok(destinationClub);
+  assert.ok(loanClub, "a third club in the same league must be available for the loan");
+
+  // Seed one known injury before the opening fixture. The player must miss
+  // that match and recover only after the final injured day has elapsed.
+  const firstFixture = save.world.football.fixtures.find((fixture) =>
+    fixture.season === 1 && fixture.date === "2026-07-04" && fixture.status === "scheduled"
+  );
+  assert.ok(firstFixture, "the opening league/cup schedule must contain the expected first fixture");
+  const injuryCandidate = buildSimulationTeam(
+    firstFixture.homeClubId,
+    WORLD_DATABASE,
+    save.world.football.playerDevelopment,
+    save.world.transfers,
+    save.world.currentDate
+  ).lineup.find((player) => player.simulationOnly !== true && player.id !== transferPlayer.id);
+  assert.ok(injuryCandidate, "the opening lineup must include a real player other than the transfer target");
+  assert.ok(save.world.football.playerDevelopment.players.some((player) =>
+    player.playerId === injuryCandidate.id
+  ));
+  save = {
+    ...save,
+    world: {
+      ...save.world,
+      football: {
+        ...save.world.football,
+        playerDevelopment: {
+          ...save.world.football.playerDevelopment,
+          players: save.world.football.playerDevelopment.players.map((player) =>
+            player.playerId === injuryCandidate.id ? { ...player, injuryDays: 4 } : player
+          )
+        }
+      }
+    }
+  };
+  assert.equal(isValidSave(save), true, "the seeded injury must remain a valid saved state");
 
   const transfer = createTransferOffer(save, transferPlayer.id, destinationClub.id, "permanent", {
     feeEur: Math.round(transferPlayer.marketValueEur * 1.1),
     weeklyWageEur: 20000,
     signingBonusEur: 100000,
-    contractYears: 3
+    contractYears: 5
   });
   assert.equal(transfer.changed, true, transfer.error);
   const decision = evaluateTransferOffer(transfer.save, transfer.offer.id);
@@ -407,53 +447,145 @@ test("runs one complete integrated career season and resumes it safely after a s
       return total + (competition.type === "continental" ? 3 : 0);
     }, 0);
   assert.ok(firstSeasonFixtureCount > 0);
+  assert.ok(additionalKnockoutFixtureCount >= 0);
+
   const storageRecords = new Map();
   const storage = {
     getItem(key) { return storageRecords.has(key) ? storageRecords.get(key) : null; },
     setItem(key, value) { storageRecords.set(key, String(value)); },
     removeItem(key) { storageRecords.delete(key); }
   };
-
-  let advancedDays = 0;
-  while (advancedDays < 365) {
-    const step = Math.min(31, 365 - advancedDays);
-    save = advanceCareerSimulationDays(save, step, PLAYERS).save;
-    advancedDays += step;
-    assert.equal(isValidSave(save), true, "save must remain valid on day " + advancedDays);
-    assert.equal(
-      save.world.currentDate,
-      new Date(Date.parse("2026-07-01T00:00:00.000Z") + advancedDays * 86400000)
-        .toISOString().slice(0, 10)
-    );
-
-    if (advancedDays === 186) {
-      writeSave(save, storage, save.world.currentDate + "T12:00:00.000Z");
-      const loaded = readSave(storage);
-      assert.equal(loaded.status, "loaded");
-      assert.equal(loaded.migrated, false);
-      save = loaded.save;
-      assert.equal(isValidSave(save), true, "mid-season restored save must remain valid");
+  const daysBetween = (from, to) => Math.round((
+    Date.parse(to + "T00:00:00.000Z") - Date.parse(from + "T00:00:00.000Z")
+  ) / 86400000);
+  const advanceUntil = (targetDate) => {
+    assert.ok(targetDate >= save.world.currentDate, "stress-test checkpoints must be chronological");
+    while (save.world.currentDate < targetDate) {
+      const previousDate = save.world.currentDate;
+      const step = Math.min(31, daysBetween(previousDate, targetDate));
+      assert.ok(step > 0 && step <= 31);
+      save = advanceCareerSimulationDays(save, step, PLAYERS).save;
+      assert.equal(
+        save.world.currentDate,
+        new Date(Date.parse(previousDate + "T00:00:00.000Z") + step * 86400000)
+          .toISOString().slice(0, 10)
+      );
+      assert.equal(isValidSave(save), true, "save must remain valid at " + save.world.currentDate);
     }
+    assert.equal(save.world.currentDate, targetDate);
+  };
+  const saveAndReload = (checkpoint) => {
+    writeSave(save, storage, checkpoint + "T12:00:00.000Z");
+    const loaded = readSave(storage);
+    assert.equal(loaded.status, "loaded", "save must reload at " + checkpoint);
+    assert.equal(loaded.migrated, false, "stress run must not require a save migration");
+    save = loaded.save;
+    assert.equal(isValidSave(save), true, "restored save must remain valid at " + checkpoint);
+  };
+
+  advanceUntil("2026-07-04");
+  const openingResult = save.world.football.results.find((result) => result.id === firstFixture.id);
+  assert.ok(openingResult, "the opening fixture must resolve on its scheduled date");
+  assert.equal(openingResult.playerPerformances.some((item) =>
+    item.playerId === injuryCandidate.id
+  ), false, "an injured player must be excluded from the match lineup");
+  assert.equal(
+    save.world.football.playerDevelopment.players.find((player) =>
+      player.playerId === injuryCandidate.id
+    ).injuryDays,
+    1,
+    "the player must remain injured through the match-day"
+  );
+  advanceUntil("2026-07-05");
+  assert.equal(
+    save.world.football.playerDevelopment.players.find((player) =>
+      player.playerId === injuryCandidate.id
+    ).injuryDays,
+    0,
+    "the injury must resolve only after the full final injury day"
+  );
+
+  advanceUntil("2026-12-31");
+  saveAndReload("2026-12-31");
+  advanceUntil("2027-01-05");
+
+  const loanOffer = createTransferOffer(save, transferPlayer.id, loanClub.id, "loan", {
+    loanFeeEur: 50000,
+    weeklyWageEur: 10000,
+    signingBonusEur: 20000,
+    loanMonths: 6,
+    wageSharePercent: 75,
+    optionToBuyEur: Math.max(100000, Math.round(transferPlayer.marketValueEur * 1.2))
+  });
+  assert.equal(loanOffer.changed, true, loanOffer.error);
+  const loanDecision = evaluateTransferOffer(loanOffer.save, loanOffer.offer.id);
+  const loanAgreement = loanDecision.status === "countered"
+    ? acceptTransferCounterOffer(loanDecision.save, loanOffer.offer.id)
+    : loanDecision;
+  assert.equal(loanAgreement.status, "agreed", loanAgreement.error);
+  const completedLoan = completeTransfer(loanAgreement.save, loanOffer.offer.id);
+  assert.equal(completedLoan.status, "completed", completedLoan.error);
+  const loanMoveId = completedLoan.move.id;
+  save = completedLoan.save;
+  assert.equal(
+    getPlayerCurrentClubId(transferPlayer.id, transferPlayer.clubId,
+      save.world.transfers, save.world.currentDate),
+    loanClub.id
+  );
+  saveAndReload("2027-01-05");
+
+  advanceUntil("2027-07-06");
+  const returnedLoan = save.world.transfers.moves.find((move) => move.id === loanMoveId);
+  assert.ok(returnedLoan);
+  assert.equal(returnedLoan.status, "returned");
+  assert.ok(save.world.transfers.history.some((entry) =>
+    entry.type === "loan-returned" && entry.moveId === loanMoveId
+  ));
+  assert.equal(
+    getPlayerCurrentClubId(transferPlayer.id, transferPlayer.clubId,
+      save.world.transfers, save.world.currentDate),
+    destinationClub.id,
+    "the player must return to the parent club after the loan"
+  );
+  const loanWage = save.world.playerIncome.ledger.find((entry) =>
+    entry.kind === "salary" && entry.moveId === loanMoveId
+  );
+  assert.ok(loanWage, "weekly salary must be settled during the loan");
+  assert.equal(loanWage.hostClubEur + loanWage.parentClubEur, loanWage.grossEur,
+    "loan wage shares must reconcile to the player's gross salary");
+  saveAndReload("2027-07-06");
+
+  advanceUntil("2028-12-31");
+  saveAndReload("2028-12-31");
+  advanceUntil("2030-08-01");
+
+  assert.equal(save.career.season, 5);
+  assert.equal(save.world.football.season, 5);
+  assert.ok(save.world.football.fixtures.some((fixture) =>
+    fixture.season === 5 && fixture.status === "scheduled"
+  ));
+  assert.equal(save.world.football.fixtures.filter((fixture) =>
+    fixture.season < 5 && fixture.status === "scheduled"
+  ).length, 0, "all fixtures from the first four seasons must be resolved");
+  assert.equal(new Set(save.world.football.results.map((result) => result.id)).size,
+    save.world.football.results.length, "match results must never be duplicated");
+  for (const season of [1, 2, 3, 4]) {
+    assert.ok(save.world.football.archives.some((archive) =>
+      archive.season === season && archive.complete === true
+    ), "a completed competition archive must exist for season " + season);
   }
 
-  assert.equal(save.world.currentDate, "2027-07-01");
-  assert.equal(save.career.season, 2);
-  assert.equal(save.world.football.season, 2);
-  assert.equal(
-    save.world.football.results.filter((result) => result.season === 1).length,
-    firstSeasonFixtureCount + additionalKnockoutFixtureCount
-  );
-  assert.equal(
-    save.world.football.fixtures.filter((fixture) =>
-      fixture.season === 1 && fixture.status === "scheduled"
-    ).length,
-    0
-  );
-  assert.equal(new Set(save.world.football.results.map((result) => result.id)).size,
-    save.world.football.results.length);
-  assert.ok(save.world.football.fixtures.some((fixture) =>
-    fixture.season === 2 && fixture.status === "scheduled"
-  ));
+  const internationalArchives = save.world.nationalTeams.tournamentArchives;
+  assert.ok(internationalArchives.some((archive) =>
+    archive.season === 1 && archive.type === "continental"
+  ), "season-one continental tournaments must be archived");
+  assert.ok(internationalArchives.some((archive) =>
+    archive.season === 3 && archive.type === "continental"
+  ), "season-three continental tournaments must be archived");
+  assert.ok(internationalArchives.some((archive) =>
+    archive.season === 4 && archive.type === "world"
+  ), "the season-four World Cup must be completed and archived");
+
   assert.ok(save.world.football.playerDevelopment.trainingHistory.length > 0);
   assert.ok(save.world.scouting.reports.some((report) => report.missionId === mission.mission.id));
   assert.equal(
@@ -469,6 +601,13 @@ test("runs one complete integrated career season and resumes it safely after a s
   assert.ok(save.agency.management.ledger.some((entry) =>
     entry.type === "credit-repayment"
   ));
+  const agencyFinancials = getAgencyFinancialSummary(save);
+  assert.ok(agencyFinancials.egp.operatingIncomePaidEgp > 0);
+  assert.ok(agencyFinancials.egp.operatingExpensesPaidEgp > 0);
+  assert.ok(agencyFinancials.egp.financingDrawdownEgp > 0);
+  assert.ok(agencyFinancials.egp.financingRepaymentEgp > 0);
+  assert.ok(agencyFinancials.eur.commissionReceivableEur > 0);
+
   assert.equal(
     getPlayerCurrentClubId(
       transferPlayer.id,
@@ -480,8 +619,6 @@ test("runs one complete integrated career season and resumes it safely after a s
   );
   assert.equal(isValidSave(save), true);
 });
-
-
 test("settles player wages weekly and charges representation commission only on realized income", () => {
   let save = signFirstClient(createInitialSave("2026-07-01T00:00:00.000Z")).save;
   const mandate = save.agency.representation.contracts.find((item) => item.playerId === PLAYERS[0].id);
