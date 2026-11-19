@@ -557,7 +557,7 @@ test("survives four integrated seasons with transfers, loans, injuries, internat
 
   advanceUntil("2028-12-31");
   saveAndReload("2028-12-31");
-  advanceUntil("2030-08-01");
+  advanceUntil("2030-12-01");
 
   assert.equal(save.career.season, 5);
   assert.equal(save.world.football.season, 5);
@@ -574,6 +574,12 @@ test("survives four integrated seasons with transfers, loans, injuries, internat
       archive.season === season && archive.complete === true
     ), "a completed competition archive must exist for season " + season);
   }
+  const seasonOneArchiveMatchCount = save.world.football.archives
+    .filter((archive) => archive.season === 1)
+    .reduce((total, archive) => total + archive.matchesTotal, 0);
+  assert.equal(seasonOneArchiveMatchCount,
+    firstSeasonFixtureCount + additionalKnockoutFixtureCount,
+    "the season archive must reconcile all league, cup and continental fixtures");
 
   const internationalArchives = save.world.nationalTeams.tournamentArchives;
   assert.ok(internationalArchives.some((archive) =>
@@ -619,6 +625,7 @@ test("survives four integrated seasons with transfers, loans, injuries, internat
   );
   assert.equal(isValidSave(save), true);
 });
+
 test("settles player wages weekly and charges representation commission only on realized income", () => {
   let save = signFirstClient(createInitialSave("2026-07-01T00:00:00.000Z")).save;
   const mandate = save.agency.representation.contracts.find((item) => item.playerId === PLAYERS[0].id);
