@@ -1764,11 +1764,17 @@ test.describe("Agency operations management", () => {
     expect(saved.agency.balance).toBe(131000);
     expect(saved.agency.management.creditFacilities[0].totalRepaymentEgp).toBe(56000);
 
-    await expect(panel).toContainText("إجمالي الإيرادات");
+    await expect(panel).toContainText("إيرادات التشغيل المحصلة");
+    await expect(panel).toContainText("مصروفات التشغيل المدفوعة");
+    await expect(panel).toContainText("صافي التدفق التشغيلي");
+    await expect(panel).toContainText("تمويل جديد محصل");
+    await expect(panel).toContainText("سداد التمويل");
     await expect(panel).toContainText("دخل الرعايات أسبوعيًا");
     await expect(panel).toContainText("الدين القائم");
+    await expect(panel).toContainText("عمولات مستحقة للوكالة");
+    await expect(panel).toContainText("عمولات تاريخية غير مسوّاة");
     await expect(panel).toContainText("اهتمامات الأندية بعملائك");
-    await expect(panel).toContainText("سجل مصروفات الإدارة");
+    await expect(panel).toContainText("السجل المالي الموحد");
     await hasNoHorizontalOverflow(page);
   });
 });
