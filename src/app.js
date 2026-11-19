@@ -1189,7 +1189,8 @@ function renderFootball(context) {
     const knockoutFixtures = football.fixtures
       .filter((fixture) => fixture.competitionId === competition?.id &&
         fixture.season === football.season &&
-        (competition?.type === "cup" || fixture.stage === "knockout" || !fixture.groupId))
+        (competition?.type === "cup" ||
+          (competition?.type === "continental" && (fixture.stage === "knockout" || !fixture.groupId))))
       .sort((a, b) => a.round - b.round || a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
     if (knockoutFixtures.length > 0) {
       const bracket = node("div", "football-knockout-bracket");
