@@ -38,13 +38,14 @@ test("combines international awards and appearances into a bounded profile", () 
     internationalTournamentStats: [
       { tournamentId: "continental-1", tournamentName: "بطولة قارية", season: 3, appearances: 5 },
       { tournamentId: "continental-1", tournamentName: "بطولة قارية", season: 3, appearances: 5 },
+      { tournamentId: "continental-1", tournamentName: "بطولة قارية", season: 4, appearances: 3 },
       { tournamentId: "world-cup-1", tournamentName: "كأس العالم", season: 4, appearances: 4 }
     ]
   };
   const profile = getPlayerMediaProfile(player);
   assert.equal(profile.internationalHonorsCount, 2);
-  assert.equal(profile.internationalAppearances, 16);
-  assert.equal(profile.score, 43);
+  assert.equal(profile.internationalAppearances, 19);
+  assert.equal(profile.score, 44);
   assert.equal(profile.clubInterestBonus, 0);
   assert.ok(profile.headlines.some((item) => item.title.includes("إنجاز دولي")));
   assert.ok(profile.headlines.some((item) => item.title.includes("16 مشاركة دولية")));
