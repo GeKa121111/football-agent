@@ -100,6 +100,7 @@ import {
   getPlayerIncomeSummary
 } from "./engines/player-income.js";
 import { getAgencyFinancialSummary } from "./engines/agency-financial-ledger.js";
+import { getPlayerMediaProfile } from "./engines/player-media.js";
 import {
   completeCareerTask as completeTaskInEngine,
   markCareerMessageRead,
@@ -127,7 +128,7 @@ function getCurrentWorldPlayers(save) {
   const tournamentStatsById = new Map();
   const addTournamentStat = (record, tournamentId, tournamentName, season) => {
     const entries = tournamentStatsById.get(record.playerId) ?? new Map();
-    entries.set(tournamentId, { ...record, tournamentId, tournamentName, season });
+    entries.set(tournamentId + "|" + season, { ...record, tournamentId, tournamentName, season });
     tournamentStatsById.set(record.playerId, entries);
   };
   for (const seasonRecord of nationalTeamState.tournamentSeasons ?? []) {
@@ -193,7 +194,21 @@ function getCurrentWorldPlayers(save) {
           competitionName: archive.competitionName,
           season: archive.season,
           awardType,
-          value: awards[awardType].value
+          value: awards[awardType].value,
+          completedDate: archive.completedDate ?? null
+        }));
+    }).slice(-10);
+    const internationalTournamentHonors = (nationalTeamState.tournamentArchives ?? []).flatMap((archive) => {
+      const awards = archive.awards ?? {};
+      return ["topScorer", "topAssists", "bestPlayer"]
+        .filter((awardType) => awards[awardType]?.playerId === player.id)
+        .map((awardType) => ({
+          tournamentId: archive.tournamentId,
+          competitionName: archive.nameAr,
+          season: archive.season,
+          awardType,
+          value: awards[awardType].value,
+          completedDate: archive.completedDate ?? null
         }));
     }).slice(-10);
     return {
@@ -208,7 +223,9 @@ function getCurrentWorldPlayers(save) {
       averageMatchRating: development?.averageMatchRating ?? null,
       competitionStats,
       seasonPerformance,
+      currentSeason,
       honors,
+      internationalTournamentHonors,
       internationalFriendlyStats: friendlyStatsById.get(player.id) ?? null,
       internationalTournamentStats: [...(tournamentStatsById.get(player.id)?.values() ?? [])]
         .sort((left, right) => right.season - left.season || String(left.tournamentName).localeCompare(String(right.tournamentName), "ar")),
@@ -2842,6 +2859,13 @@ function renderAgencyManagementPanel(context) {
       const copy = node("div", "representation-copy");
       const club = WORLD_DATABASE.clubs.find((item) => item.id === interest.clubId);
       const performanceSnapshot = interest.performanceSnapshot ?? null;
+      const mediaSnapshot = interest.mediaSnapshot ?? null;
+      const mediaTierLabels = {
+        limited: "حضور محدود",
+        rising: "صاعد",
+        prominent: "بارز",
+        star: "نجم إعلامي"
+      };
       const seasonAppearances = performanceSnapshot?.appearances ?? interest.seasonAppearances ?? 0;
       const seasonGoals = performanceSnapshot?.goals ?? interest.seasonGoals ?? 0;
       const seasonAssists = performanceSnapshot?.assists ?? interest.seasonAssists ?? 0;
@@ -2859,6 +2883,9 @@ function renderAgencyManagementPanel(context) {
           seasonAssists + " صناعة · " +
           (averageMatchRating === null ? "لا يوجد متوسط تقييم" : averageMatchRating + "/10") +
           (awardLabels.length > 0 ? " · " + awardLabels.join("، ") : ""))] : []),
+        ...(mediaSnapshot ? [node("small", "", "السمعة الإعلامية: " +
+          mediaSnapshot.score + "/100 · " + (mediaTierLabels[mediaSnapshot.tierKey] ?? "حضور محدود") +
+          " · تأثير +" + mediaSnapshot.clubInterestBonus + " على الملاءمة")] : []),
         node("small", "", "ميزانية انتقال النادي " + formatEuroMoney(interest.clubBudgetEur) +
           " · قيمة تقديرية للاعب " + formatEuroMoney(interest.estimatedFeeEur)),
         node("small", "", interest.status === "enquiry"
@@ -5040,6 +5067,44 @@ export function mountApp(root) {
     growthTrack.append(growthFill);
     growth.append(growthHeading, growthTrack);
 
+    const mediaProfile = getPlayerMediaProfile(player);
+    const mediaSection = node("section", "player-profile-growth player-profile-media");
+    const mediaHeading = node("div", "player-profile-growth-heading");
+    mediaHeading.append(
+      node("strong", "", "السمعة الإعلامية"),
+      node("span", "", mediaProfile.score + "/100 · " + mediaProfile.tierLabel)
+    );
+    mediaSection.append(mediaHeading);
+    const mediaGrid = node("div", "player-profile-stats");
+    [
+      ["جوائز محلية", mediaProfile.localHonorsCount, "AWD"],
+      ["جوائز دولية", mediaProfile.internationalHonorsCount, "AWD"],
+      ["مشاركات دولية", mediaProfile.internationalAppearances, "APP"],
+      ["أثر اهتمام الأندية", "+" + mediaProfile.clubInterestBonus, "FIT"]
+    ].forEach(([label, value, suffix]) => {
+      const item = node("article", "player-profile-stat");
+      item.append(node("small", "", label), node("strong", "", String(value)), node("span", "", suffix));
+      mediaGrid.append(item);
+    });
+    mediaSection.append(mediaGrid);
+    if (mediaProfile.headlines.length > 0) {
+      const mediaHighlights = node("div", "player-profile-details player-profile-honors");
+      mediaProfile.headlines.forEach((headline) => {
+        const sourceLabel = headline.source === "international" ? "إنجاز دولي"
+          : headline.source === "local" ? "إنجاز محلي"
+            : headline.source === "international-record" ? "سجل المنتخب" : "أداء النادي";
+        const row = node("div", "player-profile-detail");
+        row.append(
+          node("small", "", sourceLabel + (headline.season ? " · الموسم " + headline.season : "")),
+          node("strong", "", headline.title)
+        );
+        mediaHighlights.append(row);
+      });
+      mediaSection.append(mediaHighlights);
+    } else {
+      mediaSection.append(node("p", "modal-note", "لا توجد إنجازات أو مشاركات كافية مسجلة لبناء حضور إعلامي حتى الآن."));
+    }
+
     const seasonPerformance = player.seasonPerformance ?? null;
     const performanceSection = node("section", "player-profile-growth player-profile-performance");
     const performanceHeading = node("div", "player-profile-growth-heading");
@@ -5118,7 +5183,7 @@ export function mountApp(root) {
     }
 
     const content = node("div", "player-profile-content");
-    content.append(hero, ratingCards, details, growth, performanceSection, internationalSection,
+    content.append(hero, ratingCards, details, growth, performanceSection, mediaSection, internationalSection,
       node("p", "player-profile-disclaimer", "هذا ملف لاعب خيالي من قاعدة العالم التجريبية. القيمة السوقية تقدير داخل اللعبة وليست عرض انتقال رسميًا.")
     );
 

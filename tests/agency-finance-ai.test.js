@@ -249,7 +249,16 @@ test("clubs independently monitor agency clients and raise enquiries during open
       assists: 4,
       averageMatchRating: 7.8
     },
-    honors: [{ competitionId: "competition-test", season: 1, awardType: "bestPlayer" }]
+    honors: [{ competitionId: "competition-test", season: 1, awardType: "bestPlayer", competitionName: "الدوري التجريبي" }],
+    internationalTournamentHonors: [
+      { tournamentId: "continental-test", season: 1, awardType: "bestPlayer", competitionName: "بطولة قارية" },
+      { tournamentId: "world-test", season: 1, awardType: "topScorer", competitionName: "كأس العالم" }
+    ],
+    internationalFriendlyStats: { appearances: 18 },
+    internationalTournamentStats: [
+      { tournamentId: "continental-test", tournamentName: "بطولة قارية", season: 1, appearances: 8 },
+      { tournamentId: "world-test", tournamentName: "كأس العالم", season: 1, appearances: 9 }
+    ]
   } : item);
   const monday = advanceCareerSimulationDays(signedSave,5,performancePlayers);
   const summary = getAgencyClubInterestSummary(monday.save);
@@ -276,6 +285,13 @@ test("clubs independently monitor agency clients and raise enquiries during open
   assert.deepEqual(firstInterest.performanceSnapshot.awardLabels, ["player-of-season"]);
   assert.equal(firstInterest.performanceSnapshot.awardCount,1);
   assert.ok(firstInterest.performanceSnapshot.performanceBonus > 0);
+  assert.equal(firstInterest.mediaBonus,1);
+  assert.equal(firstInterest.mediaSnapshot.score,58);
+  assert.equal(firstInterest.mediaSnapshot.tierKey,"rising");
+  assert.equal(firstInterest.mediaSnapshot.clubInterestBonus,1);
+  assert.equal(firstInterest.mediaSnapshot.localHonorsCount,1);
+  assert.equal(firstInterest.mediaSnapshot.internationalHonorsCount,2);
+  assert.equal(firstInterest.mediaSnapshot.internationalAppearances,35);
   assert.equal(isValidSave(monday.save),true);
 
   const nextWeek = advanceCareerSimulationDays(monday.save,7,PLAYERS);
