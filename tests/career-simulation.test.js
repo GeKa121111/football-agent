@@ -347,17 +347,25 @@ test("survives four integrated seasons with transfers, loans, injuries, internat
 
   // Seed one known injury before the opening fixture. The player must miss
   // that match and recover only after the final injured day has elapsed.
-  const firstFixture = save.world.football.fixtures.find((fixture) =>
-    fixture.season === 1 && fixture.date === "2026-07-04" && fixture.status === "scheduled"
-  );
-  assert.ok(firstFixture, "the opening league/cup schedule must contain the expected first fixture");
-  const injuryCandidate = buildSimulationTeam(
-    firstFixture.homeClubId,
-    WORLD_DATABASE,
-    save.world.football.playerDevelopment,
-    save.world.transfers,
-    save.world.currentDate
-  ).lineup.find((player) => player.simulationOnly !== true && player.id !== transferPlayer.id);
+  const openingFixtureAndPlayer = save.world.football.fixtures
+    .filter((fixture) => fixture.season === 1 &&
+      fixture.date === "2026-07-04" && fixture.status === "scheduled")
+    .map((fixture) => ({
+      fixture,
+      player: buildSimulationTeam(
+        fixture.homeClubId,
+        WORLD_DATABASE,
+        save.world.football.playerDevelopment,
+        save.world.transfers,
+        save.world.currentDate
+      ).lineup.find((player) =>
+        player.simulationOnly !== true && player.id !== transferPlayer.id
+      )
+    }))
+    .find((item) => item.player);
+  const firstFixture = openingFixtureAndPlayer?.fixture;
+  const injuryCandidate = openingFixtureAndPlayer?.player;
+  assert.ok(firstFixture, "an opening fixture with a real player must exist on the expected date");
   assert.ok(injuryCandidate, "the opening lineup must include a real player other than the transfer target");
   assert.ok(save.world.football.playerDevelopment.players.some((player) =>
     player.playerId === injuryCandidate.id
