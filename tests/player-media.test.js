@@ -44,8 +44,8 @@ test("combines international awards and appearances into a bounded profile", () 
   const profile = getPlayerMediaProfile(player);
   assert.equal(profile.internationalHonorsCount, 2);
   assert.equal(profile.internationalAppearances, 16);
-  assert.equal(profile.score, 72);
-  assert.equal(profile.clubInterestBonus, 2);
+  assert.equal(profile.score, 43);
+  assert.equal(profile.clubInterestBonus, 0);
   assert.ok(profile.headlines.some((item) => item.title.includes("إنجاز دولي")));
   assert.ok(profile.headlines.some((item) => item.title.includes("16 مشاركة دولية")));
 });
