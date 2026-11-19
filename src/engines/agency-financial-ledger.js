@@ -99,13 +99,13 @@ function legacyCommissionEntry(entry) {
     sourceId: entry.id,
     date: entry.date,
     description: "عمولة تمثيل تاريخية" + (entry.playerName ? " · " + entry.playerName : ""),
-    direction: "income",
-    category: "representation-commission",
+    direction: "unreconciled",
+    category: "historical-commission-unreconciled",
     currency: "EUR",
     amount: entry.amountEur,
-    paidAmount: 0,
-    outstandingAmount: entry.amountEur,
-    status: "receivable",
+    paidAmount: null,
+    outstandingAmount: null,
+    status: "historical-unreconciled",
     referenceId: entry.moveId ?? entry.offerId ?? null,
     playerId: entry.playerId ?? null,
     playerName: entry.playerName ?? null,
@@ -145,6 +145,9 @@ export function getAgencyFinancialSummary(save) {
   const eurCommissionEntries = ledger.filter((entry) =>
     entry.currency === "EUR" && entry.category === "representation-commission"
   );
+  const historicalCommissionEntries = ledger.filter((entry) =>
+    entry.currency === "EUR" && entry.category === "historical-commission-unreconciled"
+  );
 
   const sum = (entries, selector) => entries.reduce((total, entry) => total + selector(entry), 0);
   const operatingIncomePaidEgp = sum(
@@ -180,7 +183,9 @@ export function getAgencyFinancialSummary(save) {
     eur: {
       commissionReceivableEur,
       commissionEntryCount: eurCommissionEntries.length,
-      commissionCollectedEur: 0
+      commissionCollectedEur: 0,
+      historicalCommissionUnreconciledEur: sum(historicalCommissionEntries, (entry) => entry.amount),
+      historicalCommissionUnreconciledCount: historicalCommissionEntries.length
     },
     ledger
   };
