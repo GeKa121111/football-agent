@@ -48,7 +48,7 @@ test("combines international awards and appearances into a bounded profile", () 
   assert.equal(profile.score, 44);
   assert.equal(profile.clubInterestBonus, 0);
   assert.ok(profile.headlines.some((item) => item.title.includes("إنجاز دولي")));
-  assert.ok(profile.headlines.some((item) => item.title.includes("16 مشاركة دولية")));
+  assert.ok(profile.headlines.some((item) => item.title.includes("19 مشاركة دولية")));
 });
 
 test("recent form adds a limited signal without dominating media reputation", () => {
