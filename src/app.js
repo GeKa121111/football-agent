@@ -128,7 +128,7 @@ function getCurrentWorldPlayers(save) {
   const tournamentStatsById = new Map();
   const addTournamentStat = (record, tournamentId, tournamentName, season) => {
     const entries = tournamentStatsById.get(record.playerId) ?? new Map();
-    entries.set(tournamentId, { ...record, tournamentId, tournamentName, season });
+    entries.set(tournamentId + "|" + season, { ...record, tournamentId, tournamentName, season });
     tournamentStatsById.set(record.playerId, entries);
   };
   for (const seasonRecord of nationalTeamState.tournamentSeasons ?? []) {
