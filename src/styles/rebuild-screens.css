@@ -954,3 +954,20 @@
  .international-award-row span,.international-award-row small{font-size:8px}
  .international-award-row strong{font-size:9px}
 }
+
+
+/* Phase 9.6 — player match performance history */
+.talent-performance-summary { display: grid; gap: 5px; padding: 12px; border: 1px solid var(--fa-border); border-radius: 11px; background: rgba(49,124,157,.1); }
+.talent-performance-summary strong { color: var(--fa-text); font-size: 11px; }
+.talent-performance-summary span { color: var(--fa-text); font-size: 10px; font-variant-numeric: tabular-nums; }
+.talent-performance-summary small { color: var(--fa-muted); font-size: 10px; line-height: 1.6; }
+.football-knockout-bracket, .football-archive-list { display: grid; gap: 9px; min-width: 0; }
+.football-knockout-bracket > h3 { margin: 7px 0 0; color: var(--fa-text); font-size: 12px; }
+.football-knockout-round { display: grid; gap: 7px; padding: 10px; border: 1px solid var(--fa-border); border-radius: 11px; }
+.football-knockout-round > h3 { margin: 0; color: var(--fa-text-soft); font-size: 11px; }
+.football-knockout-match { display: grid; gap: 4px; padding: 8px; border-radius: 8px; background: rgba(255,255,255,.025); }
+.football-knockout-match span { color: var(--fa-text); font-size: 11px; font-weight: 600; }
+.football-knockout-match small { color: var(--fa-muted); font-size: 10px; }
+.football-archive-card { display: grid; gap: 5px; padding: 10px; border: 1px solid var(--fa-border); border-radius: 10px; }
+.football-archive-card strong { color: var(--fa-text); font-size: 11px; }
+.football-archive-card span, .football-archive-card small { color: var(--fa-muted); font-size: 10px; line-height: 1.6; }
