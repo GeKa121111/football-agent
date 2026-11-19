@@ -99,6 +99,7 @@ import {
 import {
   getPlayerIncomeSummary
 } from "./engines/player-income.js";
+import { getAgencyFinancialSummary } from "./engines/agency-financial-ledger.js";
 import {
   completeCareerTask as completeTaskInEngine,
   markCareerMessageRead,
@@ -2541,7 +2542,7 @@ function renderAgencyManagementPanel(context) {
   const agency = context.save.agency;
   const management = agency.management;
   const summary = getAgencyManagementSummary(context.save);
-  const playerIncome = getPlayerIncomeSummary(context.save);
+  const financialSummary = getAgencyFinancialSummary(context.save);
   const staffModifiers = getAgencyStaffModifiers(context.save);
   const panel = node("section", "surface-card agency-management-panel");
   const heading = node("div", "representation-heading");
@@ -2566,9 +2567,10 @@ function renderAgencyManagementPanel(context) {
     ["قسط التمويل الأسبوعي", formatMoney(summary.weeklyCreditRepaymentEgp)],
     ["متأخرات أقساط", summary.lateCreditFacilities],
     ["السيولة بعد الالتزامات", formatMoney(summary.cashAfterWeeklyCommitmentsEgp)],
-    ["دخل اللاعبين المسجل", formatEuroMoney(playerIncome.grossEur)],
-    ["عمولات الدخل المحقق", formatEuroMoney(playerIncome.realizedAgencyCommissionEur)],
-    ["صافي دخل اللاعبين", formatEuroMoney(playerIncome.playerNetEur)]
+    ["عمولات مستحقة للوكالة", formatEuroMoney(financialSummary.eur.commissionReceivableEur)],
+    ["عدد مستحقات العمولة", financialSummary.eur.commissionEntryCount],
+    ["صافي التدفق التشغيلي", formatMoney(financialSummary.egp.netOperatingCashFlowEgp)],
+    ["صافي التدفق التمويلي", formatMoney(financialSummary.egp.netFinancingCashFlowEgp)]
   ].forEach(([label, value]) => {
     const card = node("article", "agency-operations-metric");
     card.append(node("small", "", label), node("strong", "", value));
@@ -2576,7 +2578,7 @@ function renderAgencyManagementPanel(context) {
   });
   panel.append(metrics);
   panel.append(node("p", "agency-management-note",
-    "رواتب اللاعبين تُسجل يوم الاثنين من شروط العقود، والعمولة تُحتسب عند تحقق الدخل فقط. المبالغ باليورو وتظل منفصلة عن رصيد الوكالة بالجنيه لحين تنفيذ سياسة التحصيل وسعر الصرف."));
+    "الدفتر المالي يجمع حركات التشغيل والتمويل وعمولات التمثيل في سجل واحد. الجنيه واليورو يظلان منفصلين؛ عمولات اللاعبين تظهر كمستحقات غير محصلة ولا تدخل في رصيد الوكالة أو السيولة."));
 
   const staffSection = node("section", "agency-operations-section");
   staffSection.append(
@@ -2881,25 +2883,23 @@ function renderAgencyManagementPanel(context) {
   clubInterestSection.append(interestList);
 
   const ledgerPanel = node("section", "agency-operations-section");
-  ledgerPanel.append(node("h3", "", "سجل مصروفات الإدارة"));
-  const entries = management.ledger.slice(0, 8);
+  ledgerPanel.append(node("h3", "", "السجل المالي الموحد"));
+  const entries = financialSummary.ledger.slice(0, 12);
   if (entries.length === 0) {
-    ledgerPanel.append(node("p", "representation-empty", "أي تعيين أو افتتاح فرع أو تسوية أسبوعية هتظهر هنا."));
+    ledgerPanel.append(node("p", "representation-empty", "أي حركة رعاية أو تشغيل أو تمويل أو عمولة مستحقة هتظهر هنا."));
   } else {
     const list = node("div", "agency-operations-list");
     entries.forEach((entry) => {
       const row = node("article", "agency-operations-ledger-row");
-      const label = entry.direction === "income" ? (entry.incomeKind === "signing" ? "مكافأة رعاية" : "دخل رعاية أسبوعي") :
-        entry.direction === "financing" ? "صرف تمويل" :
-        entry.type === "credit-repayment" ? "سداد قسط تمويل" :
-        entry.type === "hiring" ? "تكلفة تعيين" :
-        entry.type === "branch-opening" ? "افتتاح فرع" : "رواتب وإيجارات أسبوعية";
+      const amountText = entry.currency === "EUR" ? formatEuroMoney(entry.amount) : formatMoney(entry.amount);
+      const paymentText = entry.currency === "EUR"
+        ? "مستحق " + amountText + " · غير محصل"
+        : "المبلغ " + amountText + " · المدفوع " + formatMoney(entry.paidAmount) +
+          (entry.outstandingAmount > 0 ? " · المتبقي " + formatMoney(entry.outstandingAmount) : "");
       row.append(
-        node("strong", "", label),
-        node("span", "", formatHomeDate(entry.date)),
-        node("small", "", "المستحق " + formatMoney(entry.amountEgp) +
-          " · المدفوع " + formatMoney(entry.paidEgp) +
-          (entry.arrearsAfterEgp > 0 ? " · المتأخرات " + formatMoney(entry.arrearsAfterEgp) : ""))
+        node("strong", "", entry.description),
+        node("span", "", formatHomeDate(entry.date) + " · " + (entry.currency === "EUR" ? "يورو" : "جنيه")),
+        node("small", "", paymentText)
       );
       list.append(row);
     });
