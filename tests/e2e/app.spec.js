@@ -895,7 +895,7 @@ test.describe("Mobile experience", () => {
 
     const dossier = page.getByRole("dialog", { name: "ملف اللاعب" });
     await expect(dossier.locator(".player-profile-identity h3")).toHaveText("ياسين عادل");
-    await expect(dossier.locator(".player-profile-stats")).toContainText("OVR");
+    await expect(dossier.locator(".player-profile-stats").first()).toContainText("OVR");
     await expect(dossier.locator(".player-profile-details")).toContainText("الأهلي");
     await expect(dossier.locator(".player-profile-details")).toContainText("الدوري المصري الممتاز");
     const mediaSection = dossier.locator(".player-profile-media");
