@@ -898,6 +898,11 @@ test.describe("Mobile experience", () => {
     await expect(dossier.locator(".player-profile-stats")).toContainText("OVR");
     await expect(dossier.locator(".player-profile-details")).toContainText("الأهلي");
     await expect(dossier.locator(".player-profile-details")).toContainText("الدوري المصري الممتاز");
+    const mediaSection = dossier.locator(".player-profile-media");
+    await expect(mediaSection).toBeVisible();
+    await expect(mediaSection).toContainText("السمعة الإعلامية");
+    await expect(mediaSection).toContainText("جوائز محلية");
+    await expect(mediaSection).toContainText("مشاركات دولية");
     await dossier.getByRole("button", { name: "بدء عرض تمثيل" }).click();
     await expect(page.getByRole("dialog", { name: "عرض تمثيل جديد" })).toBeVisible();
     await expect(page.getByLabel("نسبة العمولة")).toBeVisible();
