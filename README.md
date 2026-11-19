@@ -16,6 +16,7 @@
 - [مراجعة المرحلة الثامنة — تدقيق الإصدار وخطة الإغلاق](docs/REBUILD-PHASE-8-RELEASE-AUDIT.md)
 - [المراجعة الشاملة بعد 10.6 — نتائج التدقيق وخطة المرحلة 11](docs/POST-10-6-AUDIT.md)
 - [المرحلة 11.1 — دخل اللاعبين والعمولات المحققة](docs/PHASE-11-1-PLAYER-INCOME.md)
+- [المرحلة 11.2 — الدفتر المالي الموحد للوكالة](docs/PHASE-11-2-AGENCY-LEDGER.md)
 - [قرارات المعمارية](docs/ARCHITECTURE.md)
 - [تعليمات النشر](docs/DEPLOYMENT.md)
 
