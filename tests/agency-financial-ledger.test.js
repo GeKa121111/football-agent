@@ -59,13 +59,19 @@ test("builds one chronological journal while preserving original currencies", ()
 
 test("keeps commissions as receivables, not agency cash", () => {
   const summary = getAgencyFinancialSummary(buildSave());
-  assert.equal(summary.eur.commissionReceivableEur, 520);
-  assert.equal(summary.eur.commissionEntryCount, 2);
+  assert.equal(summary.eur.commissionReceivableEur, 120);
+  assert.equal(summary.eur.commissionEntryCount, 1);
+  assert.equal(summary.eur.historicalCommissionUnreconciledEur, 400);
+  assert.equal(summary.eur.historicalCommissionUnreconciledCount, 1);
   assert.equal(summary.eur.commissionCollectedEur, 0);
   const commission = summary.ledger.find((entry) => entry.category === "representation-commission");
   assert.equal(commission.status, "receivable");
   assert.equal(commission.paidAmount, 0);
   assert.equal(commission.outstandingAmount, commission.amount);
+  const legacy = summary.ledger.find((entry) => entry.category === "historical-commission-unreconciled");
+  assert.equal(legacy.status, "historical-unreconciled");
+  assert.equal(legacy.paidAmount, null);
+  assert.equal(legacy.outstandingAmount, null);
 });
 
 test("excludes financing from operating revenue and separates debt repayment", () => {
