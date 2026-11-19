@@ -6,10 +6,12 @@ import {
   writeWatchlist
 } from "./core/storage.js";
 import { WORLD_DATABASE, getWorldPlayerProfiles, getWorldSummary } from "./data/world-database.js";
+import { buildCompetitionGroups } from "./data/competition-rules.js";
 import {
   getUpcomingFootballFixtures,
   getRecentFootballResults,
-  getCompetitionStandings
+  getCompetitionStandings,
+  getCompetitionSeasonHistory
 } from "./engines/football-season.js";
 import {
   TRAINING_FOCUSES,
@@ -34,6 +36,7 @@ import { createPlayerPortrait } from "./ui/player-portrait.js";
 import { getInternationalTournamentOverview } from "./engines/international-tournament-simulation.js";
 import {
   getTalentProspect,
+  getTalentProspectPerformanceSummary,
   upsertTalentProspect,
   recordTalentProspectContact,
   completeTalentProspectFollowUp,
@@ -1110,6 +1113,8 @@ function renderFootball(context) {
   const standingsTitle = node("h2", "", "جدول الترتيب");
   const competitionSelect = node("select", "filter-select");
   competitionSelect.setAttribute("aria-label", "اختيار المسابقة للترتيب");
+  const groupSelect = node("select", "filter-select");
+  groupSelect.setAttribute("aria-label", "اختيار المجموعة");
   [...WORLD_DATABASE.competitions]
     .sort((a, b) => a.nameAr.localeCompare(b.nameAr, "ar"))
     .forEach((competition) => {
@@ -1117,41 +1122,164 @@ function renderFootball(context) {
       option.value = competition.id;
       competitionSelect.append(option);
     });
-  standingsHeading.append(standingsTitle, competitionSelect);
+  standingsHeading.append(standingsTitle, competitionSelect, groupSelect);
   standingsPanel.append(standingsHeading);
   const standingsTable = node("div", "football-standings-table");
   const renderStandings = () => {
-    const standings = getCompetitionStandings(football, competitionSelect.value);
-    const header = node("div", "football-standings-row is-header");
-    ["#", "النادي", "لعب", "ف", "ت", "خ", "له", "عليه", "النقاط"].forEach((label) => {
-      header.append(node("span", "", label));
-    });
-    const rows = standings.map((club) => {
-      const row = node("div", "football-standings-row");
-      [
-        club.position,
-        club.clubName,
-        club.played,
-        club.wins,
-        club.draws,
-        club.losses,
-        club.goalsFor,
-        club.goalsAgainst,
-        club.points
-      ].forEach((value, index) => {
-        row.append(node("span", index === 1 ? "football-standings-club" : "",
-          index === 1 ? String(value) : formatHomeNumber(value)));
+    const competition = WORLD_DATABASE.competitions.find((item) => item.id === competitionSelect.value);
+    const groups = competition?.type === "continental"
+      ? buildCompetitionGroups(competition, WORLD_DATABASE)
+      : [];
+    groupSelect.replaceChildren();
+    if (groups.length > 0) {
+      groups.forEach((group) => {
+        const option = node("option", "", group.nameAr);
+        option.value = group.id;
+        groupSelect.append(option);
       });
-      return row;
-    });
-    standingsTable.replaceChildren(header, ...rows);
-    if (standings.every((club) => club.played === 0)) {
-      standingsTable.append(node("p", "representation-empty", "الترتيب هيتحدث تلقائيًا بعد لعب أول مباراة في المسابقة."));
+      groupSelect.style.display = "";
+      if (!groups.some((group) => group.id === groupSelect.value)) {
+        groupSelect.value = groups[0].id;
+      }
+    } else {
+      groupSelect.style.display = "none";
     }
+
+    const standings = competition?.type === "cup"
+      ? []
+      : getCompetitionStandings(
+        football,
+        competitionSelect.value,
+        WORLD_DATABASE,
+        football.season,
+        groups.length > 0 ? groupSelect.value : null
+      );
+    const children = [];
+    if (competition?.type === "cup") {
+      children.push(node("p", "representation-empty", "بطولة خروج مغلوب — الفائز يتقدم تلقائيًا للدور التالي."));
+    } else {
+      const header = node("div", "football-standings-row is-header");
+      ["#", "النادي", "لعب", "ف", "ت", "خ", "له", "عليه", "النقاط"].forEach((label) => {
+        header.append(node("span", "", label));
+      });
+      children.push(header);
+      standings.forEach((club) => {
+        const row = node("div", "football-standings-row");
+        [
+          club.position,
+          club.clubName,
+          club.played,
+          club.wins,
+          club.draws,
+          club.losses,
+          club.goalsFor,
+          club.goalsAgainst,
+          club.points
+        ].forEach((value, index) => {
+          row.append(node("span", index === 1 ? "football-standings-club" : "",
+            index === 1 ? String(value) : formatHomeNumber(value)));
+        });
+        children.push(row);
+      });
+      if (standings.every((club) => club.played === 0)) {
+        children.push(node("p", "representation-empty", "الترتيب هيتحدث تلقائيًا بعد لعب أول مباراة في المسابقة."));
+      }
+    }
+
+    const knockoutFixtures = football.fixtures
+      .filter((fixture) => fixture.competitionId === competition?.id &&
+        fixture.season === football.season &&
+        (competition?.type === "cup" ||
+          (competition?.type === "continental" && (fixture.stage === "knockout" || !fixture.groupId))))
+      .sort((a, b) => a.round - b.round || a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+    if (knockoutFixtures.length > 0) {
+      const bracket = node("div", "football-knockout-bracket");
+      bracket.append(node("h3", "", competition?.type === "cup" ? "مراحل الكأس" : "الأدوار الإقصائية"));
+      const rounds = [...new Set(knockoutFixtures.map((fixture) => fixture.round))].sort((a, b) => a - b);
+      rounds.forEach((roundNumber) => {
+        const roundPanel = node("section", "football-knockout-round");
+        const roundFixtures = knockoutFixtures.filter((fixture) => fixture.round === roundNumber);
+        const phaseName = roundFixtures.find((fixture) => fixture.phaseNameAr)?.phaseNameAr ??
+          (roundFixtures.some((fixture) => fixture.phase === "final") ? "النهائي" :
+            roundFixtures.some((fixture) => fixture.phase === "semi-final") ? "نصف النهائي" :
+              "الدور " + formatHomeNumber(roundNumber));
+        roundPanel.append(node("h3", "", phaseName));
+        roundFixtures.forEach((fixture) => {
+          const match = node("article", "football-knockout-match");
+          const result = football.results.find((item) => item.id === fixture.id);
+          const home = clubById.get(fixture.homeClubId);
+          const away = clubById.get(fixture.awayClubId);
+          const score = result ? result.home.goals + " - " + result.away.goals : "VS";
+          const winnerId = result?.knockoutDecision?.winnerClubId;
+          const winner = winnerId
+            ? clubById.get(winnerId)?.nameAr ?? winnerId
+            : null;
+          const decision = result?.knockoutDecision?.decidedBy;
+          const method = decision === "penalties" ? " · حُسمت بركلات الترجيح"
+            : decision === "extra-time" ? " · حُسمت بعد الوقت الإضافي"
+              : "";
+          match.append(
+            node("span", "", (home?.shortName ?? fixture.homeClubId) + "  " + score + "  " +
+              (away?.shortName ?? fixture.awayClubId)),
+            node("small", "", winner ? "المتأهل: " + winner + method : "الموعد: " + formatHomeDate(fixture.date))
+          );
+          roundPanel.append(match);
+        });
+        bracket.append(roundPanel);
+      });
+      children.push(bracket);
+    } else if (competition?.type === "continental") {
+      children.push(node("p", "representation-empty", "نصف النهائي هيتحدد تلقائيًا بعد اكتمال مباريات المجموعات."));
+    }
+    standingsTable.replaceChildren(...children);
   };
   competitionSelect.addEventListener("change", renderStandings);
+  groupSelect.addEventListener("change", renderStandings);
   renderStandings();
   standingsPanel.append(standingsTable);
+
+  const archivePanel = node("section", "surface-card football-panel football-archive-panel");
+  const archiveHeading = node("div", "football-panel-heading");
+  archiveHeading.append(
+    node("h2", "", "أرشيف المواسم والجوائز"),
+    node("span", "representation-count", "البطولات المكتملة")
+  );
+  archivePanel.append(archiveHeading);
+  const archivedCompetitions = WORLD_DATABASE.competitions
+    .flatMap((competition) => getCompetitionSeasonHistory(football, competition.id, WORLD_DATABASE)
+      .filter((archive) => archive.complete && archive.season < football.season)
+      .map((archive) => ({ competition, archive })))
+    .sort((a, b) => b.archive.season - a.archive.season ||
+      a.archive.competitionName.localeCompare(b.archive.competitionName, "ar"))
+    .slice(0, 12);
+  if (archivedCompetitions.length === 0) {
+    archivePanel.append(node("p", "representation-empty", "أول موسم مكتمل هيظهر هنا مع البطل وجوائز اللاعبين."));
+  } else {
+    const archiveList = node("div", "football-archive-list");
+    archivedCompetitions.forEach(({ archive }) => {
+      const card = node("article", "football-archive-card");
+      card.append(
+        node("strong", "", archive.competitionName),
+        node("span", "", "موسم " + formatHomeNumber(archive.season) +
+          " · البطل " + (archive.championName ?? "لم يُحسم"))
+      );
+      const awards = archive.awards ?? {};
+      const awardLines = [
+        ["أفضل لاعب", awards.bestPlayer ?? awards.playerOfSeason],
+        ["الهداف", awards.topScorer ?? awards.goldenBoot],
+        ["الأكثر صناعة", awards.topAssists]
+      ].filter(([, award]) => award);
+      if (awardLines.length > 0) {
+        card.append(node("small", "", awardLines.map(([label, award]) =>
+          label + ": " + award.playerName + " · " + award.clubName
+        ).join(" | ")));
+      } else {
+        card.append(node("small", "", "لا توجد جوائز فردية كافية في السجل."));
+      }
+      archiveList.append(card);
+    });
+    archivePanel.append(archiveList);
+  }
 
   const resultsPanel = node("section", "surface-card football-panel");
   const resultsHeading = node("div", "football-panel-heading");
@@ -1351,7 +1479,7 @@ function renderFootball(context) {
     context.updatePlayerTrainingPlan(playerSelect.value, focusSelect.value, intensitySelect.value);
   });
   trainingPanel.append(form, savePlanButton, playerDetails);
-  page.append(summary, schedulePanel, standingsPanel, resultsPanel, trainingPanel, renderInternationalTournamentPanel(context));
+  page.append(summary, schedulePanel, standingsPanel, archivePanel, resultsPanel, trainingPanel, renderInternationalTournamentPanel(context));
   return page;
 }
 
@@ -2708,14 +2836,24 @@ function renderAgencyManagementPanel(context) {
       const row = node("article", "agency-operations-row agency-club-interest-row");
       const copy = node("div", "representation-copy");
       const club = WORLD_DATABASE.clubs.find((item) => item.id === interest.clubId);
+      const performanceSnapshot = interest.performanceSnapshot ?? null;
+      const seasonAppearances = performanceSnapshot?.appearances ?? interest.seasonAppearances ?? 0;
+      const seasonGoals = performanceSnapshot?.goals ?? interest.seasonGoals ?? 0;
+      const seasonAssists = performanceSnapshot?.assists ?? interest.seasonAssists ?? 0;
+      const averageMatchRating = performanceSnapshot?.averageMatchRating ?? interest.averageMatchRating ?? null;
+      const awardLabels = (performanceSnapshot?.awardLabels ?? []).map((award) => ({
+        "player-of-season": "أفضل لاعب",
+        "golden-boot": "هداف البطولة",
+        "top-assists": "الأكثر صناعة"
+      }[award] ?? award));
       copy.append(
         node("strong", "", interest.clubName + " · " + interest.playerName),
         node("span", "", (club?.nameAr ?? "نادي") + " · " + interest.position + " · ملاءمة " + interest.fitScore + "/100"),
-        ...(interest.seasonAppearances > 0 ? [node("small", "", "أداء الموسم: " +
-          interest.seasonAppearances + " مشاركة · " + interest.seasonGoals + " أهداف · " +
-          interest.seasonAssists + " صناعة · " +
-          (interest.averageMatchRating === null ? "لا يوجد متوسط تقييم" : interest.averageMatchRating + "/10") +
-          (interest.honorsCount > 0 ? " · " + interest.honorsCount + " جائزة فردية" : ""))] : []),
+        ...(seasonAppearances > 0 ? [node("small", "", "أداء الموسم: " +
+          seasonAppearances + " مشاركة · " + seasonGoals + " أهداف · " +
+          seasonAssists + " صناعة · " +
+          (averageMatchRating === null ? "لا يوجد متوسط تقييم" : averageMatchRating + "/10") +
+          (awardLabels.length > 0 ? " · " + awardLabels.join("، ") : ""))] : []),
         node("small", "", "ميزانية انتقال النادي " + formatEuroMoney(interest.clubBudgetEur) +
           " · قيمة تقديرية للاعب " + formatEuroMoney(interest.estimatedFeeEur)),
         node("small", "", interest.status === "enquiry"
@@ -3404,6 +3542,20 @@ export function mountApp(root) {
     const staffRoster = getScoutingRoster(state.save.world.scouting, state.save.world.currentDate);
     const staffName = (staffId) => staffRoster.find((scout) => scout.id === staffId)?.name ?? "عضو سابق";
     const body = node("div", "talent-activity-history");
+    const performanceSummary = getTalentProspectPerformanceSummary(entry);
+    if (performanceSummary.appearances > 0) {
+      const performancePanel = node("section", "talent-performance-summary");
+      performancePanel.append(
+        node("strong", "", "ملخص الأداء داخل الملعب"),
+        node("span", "", performanceSummary.appearances + " مشاركة · " +
+          performanceSummary.minutesPlayed + " دقيقة · متوسط " +
+          performanceSummary.averageMatchRating.toFixed(2) + "/10"),
+        node("small", "", performanceSummary.goals + " هدف · " +
+          performanceSummary.assists + " صناعة · آخر ظهور " +
+          formatHomeDate(performanceSummary.lastAppearanceDate))
+      );
+      body.append(performancePanel);
+    }
     if (!entry || activity.length === 0) {
       body.append(node("p", "representation-empty", "لا يوجد نشاط مسجل لهذا اللاعب حتى الآن."));
     } else {
@@ -3416,9 +3568,11 @@ export function mountApp(root) {
               " ← " + (event.toScoutId ? staffName(event.toScoutId) : "بدون مسؤول")
             : event.type === "follow-up-reviewed"
               ? "إتمام مراجعة المتابعة"
-              : event.type === "contact"
-                ? "تواصل " + kindLabels[event.kind] + " · " + outcomeLabels[event.outcome]
-                : "نشاط الوكالة";
+              : event.type === "match-performance"
+                ? "مشاركة في " + event.competitionName + " · " + event.clubName
+                : event.type === "contact"
+                  ? "تواصل " + kindLabels[event.kind] + " · " + outcomeLabels[event.outcome]
+                  : "نشاط الوكالة";
         row.append(
           node("strong", "", title),
           node("small", "", formatHomeDate(event.date))

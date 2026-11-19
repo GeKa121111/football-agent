@@ -268,6 +268,14 @@ test("clubs independently monitor agency clients and raise enquiries during open
   assert.equal(firstInterest.seasonGoals,8);
   assert.equal(firstInterest.seasonAssists,4);
   assert.equal(firstInterest.honorsCount,1);
+  assert.equal(firstInterest.performanceSnapshot.appearances,12);
+  assert.equal(firstInterest.performanceSnapshot.minutesPlayed,980);
+  assert.equal(firstInterest.performanceSnapshot.goals,8);
+  assert.equal(firstInterest.performanceSnapshot.assists,4);
+  assert.equal(firstInterest.performanceSnapshot.averageMatchRating,7.8);
+  assert.deepEqual(firstInterest.performanceSnapshot.awardLabels, ["player-of-season"]);
+  assert.equal(firstInterest.performanceSnapshot.awardCount,1);
+  assert.ok(firstInterest.performanceSnapshot.performanceBonus > 0);
   assert.equal(isValidSave(monday.save),true);
 
   const nextWeek = advanceCareerSimulationDays(monday.save,7,PLAYERS);
