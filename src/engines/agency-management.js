@@ -146,13 +146,38 @@ export function isValidAgencyManagementState(state, currentDate) {
         !validDate(interest.updatedDate) || interest.updatedDate < interest.createdDate || interest.updatedDate > currentDate ||
         !validDate(interest.expiresDate) || interest.expiresDate !== addDays(interest.createdDate,14) ||
         !Number.isInteger(interest.fitScore) || interest.fitScore < 0 || interest.fitScore > 100 ||
-        (interest.performanceBonus !== undefined && (!Number.isInteger(interest.performanceBonus) || interest.performanceBonus < -3 || interest.performanceBonus > 9)) ||
+        (interest.performanceBonus !== undefined && (!Number.isInteger(interest.performanceBonus) || interest.performanceBonus < -3 || interest.performanceBonus > 10)) ||
         (interest.averageMatchRating !== undefined && interest.averageMatchRating !== null &&
           (!Number.isFinite(interest.averageMatchRating) || interest.averageMatchRating < 4 || interest.averageMatchRating > 10)) ||
         (interest.seasonAppearances !== undefined && (!Number.isSafeInteger(interest.seasonAppearances) || interest.seasonAppearances < 0)) ||
         (interest.seasonGoals !== undefined && (!Number.isSafeInteger(interest.seasonGoals) || interest.seasonGoals < 0)) ||
         (interest.seasonAssists !== undefined && (!Number.isSafeInteger(interest.seasonAssists) || interest.seasonAssists < 0)) ||
         (interest.honorsCount !== undefined && (!Number.isSafeInteger(interest.honorsCount) || interest.honorsCount < 0 || interest.honorsCount > 10)) ||
+        (interest.performanceSnapshot !== undefined &&
+          (!isRecord(interest.performanceSnapshot) ||
+            !Number.isSafeInteger(interest.performanceSnapshot.appearances) ||
+            interest.performanceSnapshot.appearances < 0 ||
+            !Number.isSafeInteger(interest.performanceSnapshot.minutesPlayed) ||
+            interest.performanceSnapshot.minutesPlayed < 0 ||
+            !Number.isSafeInteger(interest.performanceSnapshot.goals) ||
+            interest.performanceSnapshot.goals < 0 ||
+            !Number.isSafeInteger(interest.performanceSnapshot.assists) ||
+            interest.performanceSnapshot.assists < 0 ||
+            (interest.performanceSnapshot.averageMatchRating !== null &&
+              (!Number.isFinite(interest.performanceSnapshot.averageMatchRating) ||
+               interest.performanceSnapshot.averageMatchRating < 4 ||
+               interest.performanceSnapshot.averageMatchRating > 10)) ||
+            !Array.isArray(interest.performanceSnapshot.awardLabels) ||
+            !interest.performanceSnapshot.awardLabels.every((award) =>
+              ["player-of-season", "golden-boot", "top-assists"].includes(award)) ||
+            !Number.isSafeInteger(interest.performanceSnapshot.awardCount) ||
+            interest.performanceSnapshot.awardCount !== interest.performanceSnapshot.awardLabels.length ||
+            !Number.isInteger(interest.performanceSnapshot.awardBonus) ||
+            interest.performanceSnapshot.awardBonus < 0 ||
+            interest.performanceSnapshot.awardBonus > 4 ||
+            !Number.isInteger(interest.performanceSnapshot.performanceBonus) ||
+            interest.performanceSnapshot.performanceBonus < 0 ||
+            interest.performanceSnapshot.performanceBonus > 10)) ||
         !Number.isSafeInteger(interest.clubBudgetEur) || interest.clubBudgetEur < 0 ||
         !Number.isSafeInteger(interest.estimatedFeeEur) || interest.estimatedFeeEur < 0 ||
         !["monitoring","enquiry","expired","window-closed","withdrawn"].includes(interest.status) ||
@@ -463,6 +488,58 @@ export function getAgencyClubInterestSummary(save) {
   };
 }
 
+function createPlayerPerformanceSnapshot(player) {
+  const performance = player?.seasonPerformance ?? {};
+  const appearances = Number.isSafeInteger(performance.appearances)
+    ? performance.appearances
+    : Number.isSafeInteger(player?.appearances) ? player.appearances : 0;
+  const minutesPlayed = Number.isSafeInteger(performance.minutesPlayed)
+    ? performance.minutesPlayed
+    : Number.isSafeInteger(player?.minutesPlayed) ? player.minutesPlayed : 0;
+  const goals = Number.isSafeInteger(performance.goals)
+    ? performance.goals
+    : Number.isSafeInteger(player?.goals) ? player.goals : 0;
+  const assists = Number.isSafeInteger(performance.assists)
+    ? performance.assists
+    : Number.isSafeInteger(player?.assists) ? player.assists : 0;
+  const averageMatchRatingValue = Number.isFinite(performance.averageMatchRating)
+    ? performance.averageMatchRating
+    : Number.isFinite(player?.averageMatchRating) ? player.averageMatchRating : null;
+  const averageMatchRating = averageMatchRatingValue === null
+    ? null
+    : Math.max(4, Math.min(10, averageMatchRatingValue));
+  const awardTypeToLabel = {
+    bestPlayer: "player-of-season",
+    topScorer: "golden-boot",
+    goldenBoot: "golden-boot",
+    topAssists: "top-assists"
+  };
+  const awardLabels = [...new Set((player?.honors ?? [])
+    .map((award) => awardTypeToLabel[award?.awardType])
+    .filter(Boolean))];
+  const appearanceBonus = appearances >= 10 ? 3 : appearances >= 5 ? 2 : appearances >= 3 ? 1 : 0;
+  const formBonus = appearances >= 3 && averageMatchRating !== null
+    ? averageMatchRating >= 8 ? 5 : averageMatchRating >= 7.5 ? 3 : averageMatchRating >= 7 ? 1 : 0
+    : 0;
+  const contributionBonus = appearances >= 5 ? Math.min(2, Math.floor((goals + assists) / 4)) : 0;
+  const awardBonus = Math.min(4,
+    (awardLabels.includes("player-of-season") ? 2 : 0) +
+    (awardLabels.includes("golden-boot") ? 2 : 0) +
+    (awardLabels.includes("top-assists") ? 1 : 0)
+  );
+  return {
+    appearances,
+    minutesPlayed,
+    goals,
+    assists,
+    averageMatchRating,
+    awardLabels,
+    awardCount: awardLabels.length,
+    awardBonus,
+    performanceBonus: Math.min(10, appearanceBonus + formBonus + contributionBonus + awardBonus)
+  };
+}
+
 function calculateClubInterestFit(player, club, financials) {
   const baseline = Number.isInteger(club?.simulationProfile) ? club.simulationProfile : 60;
   const rating = Number(player?.rating) || 50;
@@ -472,22 +549,8 @@ function calculateClubInterestFit(player, club, financials) {
   const estimatedFeeEur = Math.round(Math.pow((rating * 0.55) + (potential * 0.45),2) * 8500);
   const budgetCoverage = estimatedFeeEur > 0 ? financials.budgetEur / estimatedFeeEur : 0;
   const budgetBonus = budgetCoverage >= 1 ? 5 : budgetCoverage >= 0.65 ? 1 : -8;
-  const performance = player?.seasonPerformance ?? {};
-  const seasonAppearances = Number.isSafeInteger(performance.appearances) ? performance.appearances : 0;
-  const averageMatchRating = Number.isFinite(performance.averageMatchRating)
-    ? Math.max(4, Math.min(10, performance.averageMatchRating))
-    : null;
-  const formBonus = seasonAppearances >= 3 && averageMatchRating !== null
-    ? Math.max(-3, Math.min(4, Math.round((averageMatchRating - 6.5) * 2)))
-    : 0;
-  const goals = Number.isSafeInteger(performance.goals) ? performance.goals : 0;
-  const assists = Number.isSafeInteger(performance.assists) ? performance.assists : 0;
-  const contributionBonus = seasonAppearances > 0
-    ? Math.max(0, Math.min(3, Math.round(((goals + assists) / seasonAppearances) * 2)))
-    : 0;
-  const honorsCount = Array.isArray(player?.honors) ? Math.min(10, player.honors.length) : 0;
-  const honorsBonus = Math.min(2, honorsCount);
-  const performanceBonus = formBonus + contributionBonus + honorsBonus;
+  const performanceSnapshot = createPlayerPerformanceSnapshot(player);
+  const performanceBonus = performanceSnapshot.performanceBonus;
   const score = Math.round((rating * 0.55) + (potential * 0.25) +
     (baseline * 0.2) + ageBonus + youthBonus + budgetBonus + performanceBonus);
   return {
@@ -495,11 +558,12 @@ function calculateClubInterestFit(player, club, financials) {
     estimatedFeeEur,
     clubBudgetEur:Math.max(0,Math.round(financials.budgetEur)),
     performanceBonus,
-    averageMatchRating,
-    seasonAppearances,
-    seasonGoals:goals,
-    seasonAssists:assists,
-    honorsCount
+    averageMatchRating:performanceSnapshot.averageMatchRating,
+    seasonAppearances:performanceSnapshot.appearances,
+    seasonGoals:performanceSnapshot.goals,
+    seasonAssists:performanceSnapshot.assists,
+    honorsCount:performanceSnapshot.awardCount,
+    performanceSnapshot
   };
 }
 
@@ -582,6 +646,7 @@ function advanceClubInterestAI(save,currentDate,players,state) {
       seasonGoals:selected.seasonGoals,
       seasonAssists:selected.seasonAssists,
       honorsCount:selected.honorsCount,
+      performanceSnapshot:selected.performanceSnapshot,
       status:selected.window.active ? "enquiry" : "monitoring",
       transferWindowEndDate:selected.window.window?.endDate ?? null
     };
