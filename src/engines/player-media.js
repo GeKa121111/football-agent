@@ -71,9 +71,10 @@ export function getPlayerMediaProfile(player) {
   const tournamentById = new Map();
   for (const stat of tournamentStats) {
     if (!stat || typeof stat !== "object" || Array.isArray(stat)) continue;
-    const key = typeof stat.tournamentId === "string" && stat.tournamentId
+    const tournamentId = typeof stat.tournamentId === "string" && stat.tournamentId
       ? stat.tournamentId
-      : String(stat.season ?? "") + "|" + String(stat.tournamentName ?? "");
+      : String(stat.tournamentName ?? "");
+    const key = tournamentId + "|" + String(stat.season ?? "");
     const appearances = positiveInteger(stat.appearances);
     if (appearances > 0) tournamentById.set(key, appearances);
   }
