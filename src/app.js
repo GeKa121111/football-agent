@@ -2861,6 +2861,8 @@ function renderAgencyManagementPanel(context) {
       const club = WORLD_DATABASE.clubs.find((item) => item.id === interest.clubId);
       const performanceSnapshot = interest.performanceSnapshot ?? null;
       const mediaSnapshot = interest.mediaSnapshot ?? null;
+      const needsSnapshot = interest.needsSnapshot ?? null;
+      const needLevelLabels = { critical: "احتياج حرج", high: "احتياج مرتفع", normal: "احتياج طبيعي" };
       const mediaTierLabels = {
         limited: "حضور محدود",
         rising: "صاعد",
@@ -2887,6 +2889,10 @@ function renderAgencyManagementPanel(context) {
         ...(mediaSnapshot ? [node("small", "", "السمعة الإعلامية: " +
           mediaSnapshot.score + "/100 · " + (mediaTierLabels[mediaSnapshot.tierKey] ?? "حضور محدود") +
           " · تأثير +" + mediaSnapshot.clubInterestBonus + " على الملاءمة")] : []),
+        ...(needsSnapshot ? [node("small", "", (needLevelLabels[needsSnapshot.level] ?? "احتياج النادي") +
+          " في " + needsSnapshot.positionLabel + " · " + needsSnapshot.availableDepth + "/" +
+          needsSnapshot.targetDepth + " متاح · " + needsSnapshot.injuredDepth + " مصاب · " +
+          needsSnapshot.summary)] : []),
         node("small", "", "ميزانية انتقال النادي " + formatEuroMoney(interest.clubBudgetEur) +
           " · قيمة تقديرية للاعب " + formatEuroMoney(interest.estimatedFeeEur)),
         node("small", "", interest.status === "enquiry"
