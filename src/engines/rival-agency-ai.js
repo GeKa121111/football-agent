@@ -105,8 +105,8 @@ export function getRivalAgencyStrategy(agencyOrId) {
  */
 export function scoreRivalAgencyTarget(agency, player) {
   const strategy = getRivalAgencyStrategy(agency);
-  const rating = Number(player?.rating);
-  const potential = Number(player?.potential);
+  const rating = player?.rating;
+  const potential = player?.potential;
   if (!player || !Number.isInteger(rating) || rating < 1 || rating > 99 ||
       !Number.isInteger(potential) || potential < rating || potential > 99) {
     return {
