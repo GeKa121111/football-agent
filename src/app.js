@@ -2806,6 +2806,7 @@ function renderAgencyManagementPanel(context) {
     card.append(
       node("strong", "", competitor.name),
       node("p", "", competitor.region + " · " + competitor.focus),
+      node("small", "", competitor.strategyLabel + " — " + competitor.strategyDescription),
       node("small", "", "السمعة " + competitor.reputation + "/100"),
       node("small", "", competitor.clients + " عميل · " + competitor.pendingOffers + " عرض قيد الرد"),
       node("small", "", "ميزانية النشاط " + formatMoney(competitor.budgetEgp))
