@@ -66,10 +66,10 @@ function positionBonus(player, focus) {
   const combined = position + " " + role;
 
   if (focus === "attack") {
-    return /(^|\\b)(st|cf|fw|lw|rw|am)(\\b|$)|مهاجم|هجوم|جناح|صانع لعب/.test(combined) ? 4 : 0;
+    return /(^|\b)(st|cf|fw|lw|rw|am)(\b|$)|مهاجم|هجوم|جناح|صانع لعب/.test(combined) ? 4 : 0;
   }
   if (focus === "youth-defense") {
-    return /(^|\\b)(cb|lb|rb|def)(\\b|$)|مدافع|دفاع|ظهير/.test(combined) ? 5 : 0;
+    return /(^|\b)(cb|lb|rb|def)(\b|$)|مدافع|دفاع|ظهير/.test(combined) ? 5 : 0;
   }
   return 0;
 }
@@ -124,12 +124,16 @@ export function scoreRivalAgencyTarget(agency, player) {
   const form = formBonus(player) * strategy.formWeight;
   const mediaScore = getPlayerMediaProfile(player).score;
   const media = mediaScore * strategy.mediaWeight;
-  const score = roundScore(baseScore + age + position + form + media);
+  const eliteBonus = strategy.key === "elite-collector"
+    ? rating >= 85 ? 6 : rating >= 80 ? 3 : 0
+    : 0;
+  const score = roundScore(baseScore + age + position + form + media + eliteBonus);
   const reasons = [];
   if (age > 0) reasons.push("العمر مناسب لاستراتيجية الوكالة");
   if (position > 0) reasons.push("المركز يطابق تخصص الوكالة");
   if (form > 0) reasons.push("الأداء الأخير يدعم التعاقد");
   if (media > 3) reasons.push("الحضور الإعلامي يعزز القيمة");
+  if (eliteBonus > 0) reasons.push("التقييم يؤهل اللاعب لفئة النخبة");
   if (reasons.length === 0) reasons.push("التقييم الفني والإمكانات مناسبان");
 
   return {
