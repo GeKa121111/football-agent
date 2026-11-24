@@ -1,5 +1,5 @@
 import { WORLD_DATABASE, getWorldSquadPlayers } from "../data/world-database.js";
-import { getPlayerCurrentClubId } from "./transfers.js";
+import { getPlayerCurrentClubIdFromState } from "./club-transfer-rules.js";
 
 const POSITION_GROUPS = Object.freeze({
   goalkeeper: Object.freeze({ key:"goalkeeper", label:"حراسة المرمى", targetDepth:2 }),
@@ -108,7 +108,7 @@ export function getClubNeedSnapshot(clubId, candidate, save, database = WORLD_DA
   const developmentById = new Map((save?.world?.football?.playerDevelopment?.players ?? [])
     .map((item) => [item.playerId, item]));
   const roster = getWorldSquadPlayers(database).filter((player) =>
-    getPlayerCurrentClubId(
+    getPlayerCurrentClubIdFromState(
       player.id,
       player.clubId,
       save?.world?.transfers,
