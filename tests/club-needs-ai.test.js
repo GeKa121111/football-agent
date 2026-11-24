@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createInitialSave } from "../src/core/storage.js";
-import { WORLD_DATABASE, getWorldSquadPlayers } from "../src/data/world-database.js";
+import { WORLD_DATABASE, getWorldPlayerProfiles, getWorldSquadPlayers } from "../src/data/world-database.js";
+import { advanceAgencyManagementDay } from "../src/engines/agency-management.js";
 import {
   getClubNeedFitBonus,
   getClubNeedSnapshot,
@@ -91,4 +92,54 @@ test("missing clubs return a safe, non-mutating fallback snapshot", () => {
   assert.equal(snapshot.needScore, 0);
   assert.match(snapshot.summary, /غير موجود/);
   assert.equal(save.world.currentDate, "2026-07-01");
+});
+
+test("existing club interest is recalculated weekly after injuries change positional depth", () => {
+  const player = getWorldPlayerProfiles()[0];
+  let save = createInitialSave();
+  save = {
+    ...save,
+    agency: { ...save.agency, clients: [player.id] },
+    world: { ...save.world, currentDate: "2026-07-06" }
+  };
+
+  const firstTick = advanceAgencyManagementDay(save, "2026-07-06", [player]);
+  assert.equal(firstTick.error, undefined);
+  const firstInterest = firstTick.save.agency.management.clubInterests.find((interest) =>
+    interest.playerId === player.id && ["monitoring", "enquiry"].includes(interest.status)
+  );
+  assert.ok(firstInterest);
+  const targetRoster = getWorldSquadPlayers(WORLD_DATABASE).filter((item) =>
+    item.clubId === firstInterest.clubId &&
+    getPlayerPositionGroup(item).key === firstInterest.needsSnapshot.positionKey
+  );
+  assert.ok(targetRoster.length > 0);
+
+  const injuredIds = new Set(targetRoster.map((item) => item.id));
+  save = {
+    ...firstTick.save,
+    world: {
+      ...firstTick.save.world,
+      currentDate: "2026-07-13",
+      football: {
+        ...firstTick.save.world.football,
+        playerDevelopment: {
+          ...firstTick.save.world.football.playerDevelopment,
+          players: firstTick.save.world.football.playerDevelopment.players.map((item) =>
+            injuredIds.has(item.playerId) ? { ...item, injuryDays: 10 } : item
+          )
+        }
+      }
+    }
+  };
+  const secondTick = advanceAgencyManagementDay(save, "2026-07-13", [player]);
+  assert.equal(secondTick.error, undefined);
+  const refreshed = secondTick.save.agency.management.clubInterests.find((interest) =>
+    interest.id === firstInterest.id
+  );
+  assert.ok(refreshed);
+  assert.equal(refreshed.needsSnapshot.injuredDepth, targetRoster.length);
+  assert.equal(refreshed.needsSnapshot.availableDepth, 0);
+  assert.equal(refreshed.needsSnapshot.level, "critical");
+  assert.ok(refreshed.clubNeedBonus > firstInterest.clubNeedBonus);
 });
