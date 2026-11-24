@@ -647,6 +647,26 @@ function advanceClubInterestAI(save,currentDate,players,state) {
     financials:getClubTransferFinancials(club.id,save.world.transfers,currentDate,WORLD_DATABASE),
     window:getTransferWindowForClub(currentDate,club.id,WORLD_DATABASE)
   }]));
+
+  // Refresh existing active interest snapshots once each Monday so injuries,
+  // transfers, budget changes and recent form can change club priorities.
+  const refreshedInterests = next.clubInterests.map((interest) => {
+    if (!["monitoring","enquiry"].includes(interest.status)) return interest;
+    const player = playerById.get(interest.playerId);
+    const club = clubs.find((item) => item.id === interest.clubId);
+    const clubContext = clubContextById.get(interest.clubId);
+    if (!player || !club || !clubContext) return interest;
+    const updatedFit = calculateClubInterestFit(player,club,clubContext.financials,save);
+    return {
+      ...interest,
+      ...updatedFit,
+      updatedDate:currentDate,
+      status:clubContext.window.active ? "enquiry" : "monitoring",
+      transferWindowEndDate:clubContext.window.window?.endDate ?? null
+    };
+  });
+  next = {...next,clubInterests:refreshedInterests};
+
   const reserved = new Set(next.clubInterests.filter((item) =>
     ["monitoring","enquiry"].includes(item.status)
   ).map((item) => item.playerId + "::" + item.clubId));
