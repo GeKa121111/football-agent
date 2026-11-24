@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createInitialSave } from "../src/core/storage.js";
+import { getWorldPlayerProfiles } from "../src/data/world-database.js";
+import { advanceCareerSimulationDays } from "../src/engines/career-simulation.js";
 import {
   evaluateRivalAgencyOffer,
   getRivalAgencyCommissionRate,
@@ -111,4 +114,22 @@ test("offer decisions account for player protection, legal staff, budget and cli
 
   const full = evaluateRivalAgencyOffer({ ...northStar, clients: Array.from({ length: 24 }, () => ({})) }, offer);
   assert.equal(full.reason, "capacity");
+});
+
+test("the weekly career tick applies rival strategies and records target explanations", () => {
+  const players = getWorldPlayerProfiles();
+  const monday = advanceCareerSimulationDays(createInitialSave(), 5, players);
+  const competitors = monday.save.agency.management.competitors;
+  const offers = competitors.flatMap((agency) => agency.pendingOffers.filter((offer) => offer.status === "pending"));
+
+  assert.ok(offers.length > 0);
+  assert.ok(offers.every((offer) =>
+    Number.isFinite(offer.targetScore) && typeof offer.strategyKey === "string"
+  ));
+  assert.equal(new Set(offers.map((offer) => offer.playerId)).size, offers.length);
+
+  const sentEvents = monday.save.agency.management.competitiveHistory
+    .filter((entry) => entry.type === "offer-sent");
+  assert.ok(sentEvents.length > 0);
+  assert.ok(sentEvents.every((entry) => /التقييم/.test(entry.note)));
 });
