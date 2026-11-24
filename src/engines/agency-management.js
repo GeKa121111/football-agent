@@ -7,6 +7,7 @@ import {
   getRivalAgencyStrategy,
   scoreRivalAgencyTarget
 } from "./rival-agency-ai.js";
+import { getClubNeedFitBonus, getClubNeedSnapshot } from "./club-needs-ai.js";
 const MAX_LEDGER_ENTRIES = 1000;
 const MAX_MONEY_EGP = 2000000000;
 const MAX_ACTIVE_STAFF = 6;
@@ -155,6 +156,22 @@ export function isValidAgencyManagementState(state, currentDate) {
             !Number.isSafeInteger(interest.mediaSnapshot.internationalHonorsCount) || interest.mediaSnapshot.internationalHonorsCount < 0 ||
             !Number.isSafeInteger(interest.mediaSnapshot.internationalAppearances) || interest.mediaSnapshot.internationalAppearances < 0 ||
             interest.mediaSnapshot.clubInterestBonus !== (interest.mediaBonus ?? 0))) ||
+        (interest.needsSnapshot !== undefined &&
+          (!isRecord(interest.needsSnapshot) ||
+            !["goalkeeper","centreBack","fullBack","defensiveMidfield","centralMidfield","attackingMidfield","winger","striker","defense","midfield","attack","unknown"].includes(interest.needsSnapshot.positionKey) ||
+            typeof interest.needsSnapshot.positionLabel !== "string" || !interest.needsSnapshot.positionLabel.trim() ||
+            !["critical","high","normal"].includes(interest.needsSnapshot.level) ||
+            !Number.isSafeInteger(interest.needsSnapshot.needScore) || interest.needsSnapshot.needScore < 0 || interest.needsSnapshot.needScore > 100 ||
+            !Number.isSafeInteger(interest.needsSnapshot.availableDepth) || interest.needsSnapshot.availableDepth < 0 || interest.needsSnapshot.availableDepth > 100 ||
+            !Number.isSafeInteger(interest.needsSnapshot.targetDepth) || interest.needsSnapshot.targetDepth < 1 || interest.needsSnapshot.targetDepth > 100 ||
+            !Number.isSafeInteger(interest.needsSnapshot.injuredDepth) || interest.needsSnapshot.injuredDepth < 0 || interest.needsSnapshot.injuredDepth > 100 ||
+            (interest.needsSnapshot.averageRating !== null && (!Number.isFinite(interest.needsSnapshot.averageRating) || interest.needsSnapshot.averageRating < 1 || interest.needsSnapshot.averageRating > 99)) ||
+            !Number.isSafeInteger(interest.needsSnapshot.recentMatches) || interest.needsSnapshot.recentMatches < 0 || interest.needsSnapshot.recentMatches > 5 ||
+            !Number.isSafeInteger(interest.needsSnapshot.recentPoints) || interest.needsSnapshot.recentPoints < 0 || interest.needsSnapshot.recentPoints > 15 ||
+            !Number.isSafeInteger(interest.needsSnapshot.recentPointsAvailable) || interest.needsSnapshot.recentPointsAvailable !== interest.needsSnapshot.recentMatches * 3 ||
+            !Number.isSafeInteger(interest.needsSnapshot.formBonus) || interest.needsSnapshot.formBonus < 0 || interest.needsSnapshot.formBonus > 3 ||
+            typeof interest.needsSnapshot.summary !== "string" || !interest.needsSnapshot.summary.trim() ||
+            !Number.isSafeInteger(interest.clubNeedBonus) || interest.clubNeedBonus < 0 || interest.clubNeedBonus > 11)) ||
         (interest.averageMatchRating !== undefined && interest.averageMatchRating !== null &&
           (!Number.isFinite(interest.averageMatchRating) || interest.averageMatchRating < 4 || interest.averageMatchRating > 10)) ||
         (interest.seasonAppearances !== undefined && (!Number.isSafeInteger(interest.seasonAppearances) || interest.seasonAppearances < 0)) ||
@@ -548,7 +565,7 @@ function createPlayerPerformanceSnapshot(player) {
   };
 }
 
-function calculateClubInterestFit(player, club, financials) {
+function calculateClubInterestFit(player, club, financials, save) {
   const baseline = Number.isInteger(club?.simulationProfile) ? club.simulationProfile : 60;
   const rating = Number(player?.rating) || 50;
   const potential = Number(player?.potential) || rating;
@@ -569,8 +586,11 @@ function calculateClubInterestFit(player, club, financials) {
     internationalAppearances: mediaProfile.internationalAppearances
   };
   const mediaBonus = mediaSnapshot.clubInterestBonus;
+  const needsSnapshot = getClubNeedSnapshot(club.id,player,save,WORLD_DATABASE);
+  const clubNeedBonus = getClubNeedFitBonus(needsSnapshot);
   const score = Math.round((rating * 0.55) + (potential * 0.25) +
-    (baseline * 0.2) + ageBonus + youthBonus + budgetBonus + performanceBonus + mediaBonus);
+    (baseline * 0.2) + ageBonus + youthBonus + budgetBonus +
+    performanceBonus + mediaBonus + clubNeedBonus);
   return {
     fitScore:Math.max(0,Math.min(100,score)),
     estimatedFeeEur,
@@ -578,6 +598,8 @@ function calculateClubInterestFit(player, club, financials) {
     performanceBonus,
     mediaBonus,
     mediaSnapshot,
+    clubNeedBonus,
+    needsSnapshot,
     averageMatchRating:performanceSnapshot.averageMatchRating,
     seasonAppearances:performanceSnapshot.appearances,
     seasonGoals:performanceSnapshot.goals,
@@ -640,7 +662,7 @@ function advanceClubInterestAI(save,currentDate,players,state) {
       !reserved.has(player.id + "::" + club.id))
       .map((club) => {
         const clubContext = clubContextById.get(club.id);
-        const fit = calculateClubInterestFit(player,club,clubContext.financials);
+        const fit = calculateClubInterestFit(player,club,clubContext.financials,save);
         return {club,...fit,window:clubContext.window};
       })
       .filter((item) => item.fitScore >= 69 && item.clubBudgetEur > 0)
