@@ -711,6 +711,8 @@ function advanceClubInterestAI(save,currentDate,players,state) {
       performanceSnapshot:selected.performanceSnapshot,
       mediaBonus:selected.mediaBonus,
       mediaSnapshot:selected.mediaSnapshot,
+      clubNeedBonus:selected.clubNeedBonus,
+      needsSnapshot:selected.needsSnapshot,
       status:selected.window.active ? "enquiry" : "monitoring",
       transferWindowEndDate:selected.window.window?.endDate ?? null
     };
