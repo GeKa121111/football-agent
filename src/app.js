@@ -243,39 +243,11 @@ function getCurrentWorldPlayers(save) {
 
 import { NAV_ITEMS } from "./ui/layout/navigation.js";
 import { createAppShell } from "./ui/layout/app-shell.js";
+import { node, actionButton } from "./ui/dom.js";
+import { formatMoney, formatEuroMoney } from "./ui/format.js";
+import { attachDialogBehavior } from "./ui/dialog.js";
 
 let modalSequence = 0;
-
-function node(tag, className = "", text) {
-  const element = document.createElement(tag);
-  if (className) element.className = className;
-  if (text !== undefined && text !== null) element.textContent = String(text);
-  return element;
-}
-
-function actionButton(label, className, callback, title = "") {
-  const button = node("button", className, label);
-  button.type = "button";
-  if (title) button.title = title;
-  button.addEventListener("click", callback);
-  return button;
-}
-
-function formatMoney(amount) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "EGP",
-    maximumFractionDigits: 0
-  }).format(Number(amount) || 0);
-}
-
-function formatEuroMoney(amount) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0
-  }).format(Number(amount) || 0);
-}
 
 function playerArt(player, featured = false) {
   return createPlayerPortrait(player, { featured });
@@ -4977,12 +4949,12 @@ export function mountApp(root) {
   }
 
   function openModal(title, children, closeLabel = "إغلاق") {
-    const previousFocus = document.activeElement;
     const overlay = node("div", "modal-overlay");
+    let restoreFocus = () => {};
     const close = () => {
       if (!overlay.isConnected) return;
       overlay.remove();
-      if (previousFocus && typeof previousFocus.focus === "function") previousFocus.focus();
+      restoreFocus();
     };
     overlay.addEventListener("click", (event) => {
       if (event.target === overlay) close();
@@ -4994,31 +4966,7 @@ export function mountApp(root) {
     const titleId = "modal-title-" + (++modalSequence);
     dialog.setAttribute("aria-labelledby", titleId);
     dialog.setAttribute("tabindex", "-1");
-    dialog.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        close();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const focusable = [...dialog.querySelectorAll(
-        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
-      )];
-      if (focusable.length === 0) {
-        event.preventDefault();
-        dialog.focus();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    });
+    restoreFocus = attachDialogBehavior(dialog, { onClose: close });
 
     const head = node("div", "modal-heading");
     const titleElement = node("h2", "", title);
