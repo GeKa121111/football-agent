@@ -1739,7 +1739,7 @@ function renderFreeAgentsPanel(context) {
     panel.append(node("p", "", "لا يوجد لاعبون أحرار حاليًا. تظهر هنا أسماء اللاعبين الذين انتهت عقودهم."));
     return panel;
   }
-  const byId = new Map(WORLD_PLAYERS.map((player) => [player.id, player]));
+  const byId = new Map((context.players ?? []).map((player) => [player.id, player]));
   const list = node("div", "free-agents-list");
   records
     .map((record) => ({ record, player: byId.get(record.playerId) }))
