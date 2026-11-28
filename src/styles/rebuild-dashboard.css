@@ -203,8 +203,8 @@
   .rebuild-dashboard { gap: 16px; }
   .dashboard-intro { align-items: flex-start; flex-direction: column; gap: 13px; padding-top: 2px; }
   .dashboard-heading { font-size: 25px; }
-  .dashboard-intro-actions { width: 100%; }
-  .dashboard-intro-actions button { flex: 1; }
+  .dashboard-intro-actions { width: 100%; flex-wrap: wrap; }
+  .dashboard-intro-actions button { flex: 1 1 40%; }
   .dashboard-agency-card, .dashboard-day-card { padding: 15px; }
   .dashboard-agency-top { gap: 10px; }
   .dashboard-agency-monogram { width: 45px; height: 45px; border-radius: 13px; }

@@ -491,7 +491,9 @@ test.describe("Desktop experience", () => {
       assetVersion: element.dataset.portraitVersion,
       paths: element.querySelectorAll("svg path").length
     })));
-    expect(new Set(profiles.map((profile) => profile.face)).size).toBe(4);
+    // المرحلة 3: 5 أشكال وجه (أضيف «long») و8 قصات شعر — التوقع القديم (4)
+    // كان مثبّتًا على كتالوج المرحلة 1.
+    expect(new Set(profiles.map((profile) => profile.face)).size).toBe(5);
     expect(new Set(profiles.map((profile) => profile.hair)).size).toBeGreaterThanOrEqual(4);
     expect(new Set(profiles.map((profile) => profile.kit)).size).toBe(4);
     expect(new Set(profiles.map((profile) => profile.assetId)).size).toBe(48);

@@ -3,15 +3,15 @@
 // (football-agent.wakil-ui) — لا تلمس محركات المحاكاة ولا حفظ v9.
 // كل القيم الجديدة هنا «مشتقة» حتميًا من بيانات موجودة (الثقة والولاء
 // ونطاق الإمكانات وStar Plan)، فلا حقل حفظ جديد ولا migration.
-// الاستثناء الوحيد لحالة جديدة: لوحة TransferRoom تُحفظ في مفتاح
-// localStorage منفصل (football-agent.transfer-room) على نمط قائمة
-// المتابعة، لا داخل الحفظ — حتى تبقى v9 سليمة 100%.
+// الاستثناء الوحيد لحالة جديدة: لوحة TransferRoom تُحفظ داخل الحفظ
+// نفسه (world.transferRoom — حقل اختياري في v9) منذ المرحلة 3، مع
+// ترحيل تلقائي لمرة واحدة من المفتاح المنفصل القديم عند تحميل الحفظ.
 // لا صور لاعبين حقيقيين مرخّصين إطلاقًا؛ البورتريهات SVG الحتمية
 // من src/ui/player-portrait.js كما في المرحلة 1.
 import { node, actionButton } from "./dom.js";
 import { createPlayerPortrait } from "./player-portrait.js";
 import { formatMoney, formatEuroMoney } from "./format.js";
-import { getTodaySummary } from "./wakil.js";
+import { getTodaySummary, toggleWakilTheme, resolveWakilTheme } from "./wakil.js";
 import {
   getPlayerRepresentationProfile,
   getRepresentationContractCommission,
@@ -27,6 +27,12 @@ import {
 } from "../engines/agency-management.js";
 import { getUpcomingCareerEvents } from "../engines/career-calendar.js";
 import { getTransferWindow } from "../engines/transfers.js";
+import { getUpcomingFootballFixtures } from "../engines/football-season.js";
+import {
+  getPlayerDevelopmentRecord,
+  setPlayerTrainingPlan,
+  TRAINING_FOCUSES
+} from "../engines/player-development.js";
 import { WORLD_DATABASE } from "../data/world-database.js";
 
 export const TRANSFER_ROOM_KEY = "football-agent.transfer-room";
@@ -555,9 +561,18 @@ export function getStaffEffects(save = {}) {
 // 9) لوحة TransferRoom (UXUI §2.3 — فكرة FM24)
 // ---------------------------------------------------------------------------
 
-export function readTransferRoomListings(storage) {
+export function readTransferRoomListings(source, storage) {
+  // source: حفظ (كائن له world) أو storage قديم — التوقيع القديم
+  // readTransferRoomListings(storage) ما زال يعمل كما هو.
+  if (source && typeof source === "object" && "world" in source) {
+    const fromSave = getTransferRoomFromSave(source);
+    if (fromSave !== null) return fromSave;
+  }
+  const store = (source && typeof source.getItem === "function")
+    ? source
+    : (storage ?? globalThis.localStorage);
   try {
-    const raw = (storage ?? globalThis.localStorage)?.getItem(TRANSFER_ROOM_KEY);
+    const raw = store?.getItem(TRANSFER_ROOM_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -565,17 +580,57 @@ export function readTransferRoomListings(storage) {
   }
 }
 
-export function writeTransferRoomListings(listings, storage) {
+export function writeTransferRoomListings(listings, source, storage) {
+  if (source && typeof source === "object" && "world" in source) {
+    if (!source.world || typeof source.world !== "object") source.world = {};
+    source.world.transferRoom = Array.isArray(listings) ? [...listings] : [];
+    try {
+      (storage ?? globalThis.localStorage)?.removeItem(TRANSFER_ROOM_KEY);
+    } catch {
+      // إزالة المفتاح القديم أفضل جهد — فشلها لا يمنع الحفظ داخل الحفظ.
+    }
+    return true;
+  }
+  const store = (source && typeof source.setItem === "function")
+    ? source
+    : (storage ?? globalThis.localStorage);
   try {
-    (storage ?? globalThis.localStorage)?.setItem(TRANSFER_ROOM_KEY, JSON.stringify(listings));
+    store?.setItem(TRANSFER_ROOM_KEY, JSON.stringify(listings));
     return true;
   } catch {
     return false;
   }
 }
 
+// القوائم المخزنة داخل الحفظ نفسه (world.transferRoom) — حقل اختياري،
+// فحفظ v9 قديم بلا الحقل يبقى صالحًا تمامًا (isValidSave يتجاهل الحقول
+// الإضافية، وreadSave لا يملأ قيمًا افتراضية).
+export function getTransferRoomFromSave(save = {}) {
+  const listings = save.world?.transferRoom;
+  return Array.isArray(listings) ? listings : null;
+}
+
+// ترحيل لمرة واحدة من المفتاح المنفصل إلى داخل الحفظ — يُستدعى عند تحميل
+// الحفظ في app.js. يعدّل كائن الحفظ في الذاكرة فقط، ويُحفظ مع أول writeSave
+// تالٍ؛ فلا كتابة مباشرة ولا تغيير إصدار هنا.
+export function migrateTransferRoomToSave(save = {}, storage) {
+  if (!save || typeof save !== "object") return { migrated: false, count: 0, reason: "invalid-save" };
+  if (Array.isArray(save.world?.transferRoom)) return { migrated: false, count: 0, reason: "already-in-save" };
+  const legacy = readTransferRoomListings(storage);
+  if (legacy.length === 0) return { migrated: false, count: 0, reason: "nothing-to-migrate" };
+  if (!save.world || typeof save.world !== "object") save.world = {};
+  save.world.transferRoom = legacy;
+  try {
+    (storage ?? globalThis.localStorage)?.removeItem(TRANSFER_ROOM_KEY);
+  } catch {
+    // المفتاح القديم قد يبقى إن تعذرت إزالته — القراءة من الحفظ أولًا
+    // على أي حال، فلا ازدواج في العرض.
+  }
+  return { migrated: true, count: legacy.length };
+}
+
 export function createTransferRoomListing(save = {}, playerId, clubIds = []) {
-  const listings = readTransferRoomListings();
+  const listings = readTransferRoomListings(save);
   const listing = {
     id: "transfer-room-" + (listings.length + 1) + "-" + String(playerId ?? "unknown"),
     playerId,
@@ -611,6 +666,289 @@ export function resolveTransferRoomResponses(listing = {}, players = []) {
         : "النادي مش مهتم دلوقتي — الفريق مكتمل في المركز ده"
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// 10) Pre-Match Hub وDevelopment Hub وStar Plan الكامل ولوحة المسيرة
+// و«سنة في مراجعة» — المرحلة 3 (UXUI §5).
+// كلها مشتقة حتميًا من بيانات موجودة؛ لا حقل حفظ جديد ولا migration.
+// الاستثناء الوحيد لحالة جديدة: «قرار المباراة» قرار جلسة فقط
+// (module-level Map) — لا يُحفظ ولا يغيّر المحاكاة، ويُعلن ذلك في الواجهة.
+// ---------------------------------------------------------------------------
+
+// أقرب مباراة قادمة لنادي اللاعب من جدول الموسم.
+export function getNextFixtureForPlayer(player = {}, save = {}) {
+  const football = save.world?.football ?? {};
+  const currentDate = save.world?.currentDate ?? null;
+  const clubId = player.clubId;
+  if (typeof clubId !== "string" || !currentDate || !Array.isArray(football.fixtures)) return null;
+  let upcoming = [];
+  try {
+    upcoming = getUpcomingFootballFixtures(football, currentDate, 10);
+  } catch {
+    return null;
+  }
+  const fixture = upcoming.find((item) => item.homeClubId === clubId || item.awayClubId === clubId);
+  if (!fixture) return null;
+  const isHome = fixture.homeClubId === clubId;
+  const opponentId = isHome ? fixture.awayClubId : fixture.homeClubId;
+  const opponent = WORLD_DATABASE.clubs.find((club) => club.id === opponentId) ?? null;
+  const ownClub = WORLD_DATABASE.clubs.find((club) => club.id === clubId) ?? null;
+  return {
+    fixtureId: fixture.id ?? null,
+    date: fixture.date ?? null,
+    daysUntil: daysBetween(currentDate, fixture.date),
+    isHome,
+    competitionName: fixture.competitionName ?? "",
+    round: fixture.round ?? null,
+    opponentId,
+    opponentName: opponent?.nameAr ?? opponentId,
+    opponentProfile: asInt(opponent?.simulationProfile, 80),
+    ownProfile: asInt(ownClub?.simulationProfile, 80)
+  };
+}
+
+// توقع إعلامي حتمي من فرق قوة الفريقين (simulationProfile) — رأي صحفي
+// معروض، لا تنبؤ محاكاة ولا نتيجة مضمونة.
+export function getMediaPrediction(nextFixture) {
+  if (!nextFixture) return null;
+  const diff = asInt(nextFixture.opponentProfile, 80) - asInt(nextFixture.ownProfile, 80);
+  if (diff >= 6) return "الصحافة بترشح الخصم بقوة — فريقك داخل المباراة دي كطرف أضعف على الورق.";
+  if (diff >= 2) return "الخصم مرشح بفارق بسيط — مباراة ممكن تتقلب بتفصيلة واحدة.";
+  if (diff <= -6) return "فريقك مرشح بقوة — الصحافة مستنية فوز مريح.";
+  if (diff <= -2) return "فريقك مرشح بفارق بسيط — المطلوب التركيز عشان الفوز ما يضيعش.";
+  return "مباراة متكافئة على الورق — أي نتيجة واردة.";
+}
+
+export function getAgentMatchAdvice(player = {}, nextFixture) {
+  if (!nextFixture) return null;
+  const perf = player.seasonPerformance ?? {};
+  const goals = asInt(perf.goals, 0);
+  const appearances = asInt(perf.appearances, 0);
+  const diff = asInt(nextFixture.opponentProfile, 80) - asInt(nextFixture.ownProfile, 80);
+  if (diff >= 6) return "الخصم أقوى بكتير — نصيحة الوكيل: العب بحذر، ركّز على التمرير الآمن، وأي نقطة مكسب.";
+  if (diff >= 2) return "الخصم أقوى شوية — فرصتك تثبت نفسك: اضغط في أول ربع ساعة قبل ما الخصم يفرض إيقاعه.";
+  if (goals >= 5 && appearances > 0) return "إنت في فورمة تهديفية — دي مباراتك: اطلب الكرة في المناطق الخطرة.";
+  if (appearances < 5) return "لسه ما لعبتش كتير الموسم ده — المباراة دي فرصتك تثبت للمدرب إنك تستحق مكان أساسي.";
+  return "مباراة في المتناول — العب لعبك الطبيعي وخلي تركيزك على تنفيذ الخطة.";
+}
+
+export const MATCH_DECISION_OPTIONS = Object.freeze(["confident", "patient", "rest"]);
+export const MATCH_DECISION_LABELS = Object.freeze({
+  confident: "العب بثقة وهجوم",
+  patient: "العب بحذر وصبر",
+  rest: "اطلب الراحة من المدرب"
+});
+const MATCH_DECISIONS = new Map();
+
+export function setMatchDecision(playerId, decision) {
+  if (typeof playerId !== "string" || !MATCH_DECISION_OPTIONS.includes(decision)) return false;
+  MATCH_DECISIONS.set(playerId, decision);
+  return true;
+}
+
+export function getMatchDecision(playerId) {
+  return MATCH_DECISIONS.get(playerId) ?? null;
+}
+
+export function clearMatchDecisions() {
+  MATCH_DECISIONS.clear();
+}
+
+export function getPreMatchBrief(player = {}, save = {}) {
+  const next = getNextFixtureForPlayer(player, save);
+  if (!next) {
+    return { hasFixture: false, next: null, mediaPrediction: null, advice: null, decision: getMatchDecision(player.id) };
+  }
+  return {
+    hasFixture: true,
+    next,
+    mediaPrediction: getMediaPrediction(next),
+    advice: getAgentMatchAdvice(player, next),
+    decision: getMatchDecision(player.id)
+  };
+}
+
+// تركيز التدريب المقترح: أضعف مهارة في سجل التطوير حسب المركز.
+// حارس → حراسة المرمى دائمًا (المحرك يرفض غيرها للحراس).
+export function recommendTrainingFocus(player = {}, record = null) {
+  const role = String(player.role ?? player.position ?? "");
+  if (/حراسة|حارس|goalkeeper/i.test(role)) return "goalkeeping";
+  const skills = record?.skills ?? null;
+  if (!skills || typeof skills !== "object") return "balanced";
+  const focusBySkill = {
+    finishing: "attacking",
+    passing: "technical",
+    dribbling: "technical",
+    defending: "defending",
+    pace: "physical",
+    stamina: "physical"
+  };
+  let weakest = null;
+  let lowest = Infinity;
+  for (const key of Object.keys(focusBySkill)) {
+    const value = asNumber(skills[key], 99);
+    if (value < lowest) {
+      lowest = value;
+      weakest = key;
+    }
+  }
+  return focusBySkill[weakest] ?? "balanced";
+}
+
+export function recommendLoanOrStay(player = {}) {
+  const age = asInt(player.age, 99);
+  const appearances = asInt(player.seasonPerformance?.appearances, 0);
+  const rating = asInt(player.rating, 0);
+  if (age <= 21 && appearances < 8) {
+    return { verdict: "loan", title: "إعارة أفضل", detail: "عمره " + age + " سنة ولعب " + appearances + " مباريات بس — الإعارة لنادٍ أصغر تضمن له دقائق." };
+  }
+  if (appearances >= 20) {
+    return { verdict: "stay", title: "البقاء أفضل", detail: "لعب " + appearances + " مباراة — أساسي في فريقه، والإعارة هتضيع الاستقرار ده." };
+  }
+  if (rating >= 75 && appearances < 15) {
+    return { verdict: "stay-ask", title: "البقاء مع طلب دقائق", detail: "موهبته أعلى من دقائقه — اطلب من المدرب دور أكبر قبل التفكير في إعارة." };
+  }
+  return { verdict: "stay", title: "البقاء أفضل", detail: "الموسم لسه في أوله — قيّم بعد 10 مباريات." };
+}
+
+export function getDevelopmentHub(player = {}, save = {}) {
+  const devState = save.world?.football?.playerDevelopment ?? null;
+  const record = devState ? getPlayerDevelopmentRecord(devState, player.id) : null;
+  const currentFocus = record?.trainingFocus ?? "balanced";
+  const recommended = recommendTrainingFocus(player, record);
+  return {
+    hasRecord: record !== null,
+    currentFocus,
+    currentFocusLabel: TRAINING_FOCUSES[currentFocus]?.label ?? currentFocus,
+    currentIntensity: record?.trainingIntensity ?? "normal",
+    recommendedFocus: recommended,
+    recommendedFocusLabel: TRAINING_FOCUSES[recommended]?.label ?? recommended,
+    focusChanged: recommended !== currentFocus,
+    fitness: record ? asInt(record.fitness, 100) : null,
+    fatigue: record ? asInt(record.fatigue, 0) : null,
+    injuryDays: record ? asInt(record.injuryDays, 0) : 0,
+    appearances: record ? asInt(record.appearances, 0) : asInt(player.seasonPerformance?.appearances, 0),
+    averageMatchRating: record?.averageMatchRating ?? null,
+    loan: recommendLoanOrStay(player)
+  };
+}
+
+// تطبيق خطة تدريب على الحفظ — يعيد حفظًا جديدًا، ولا يعدّل الأصلي.
+// يُستدعى من app.js (setTrainingPlan) ثم يُحفظ بـ writeSave.
+export function applyTrainingPlan(save = {}, playerId, focus, intensity = "normal") {
+  const devState = save.world?.football?.playerDevelopment;
+  if (!devState) return { save, changed: false, reason: "no-development-state" };
+  const result = setPlayerTrainingPlan(devState, playerId, focus, intensity);
+  if (!result.changed) return { save, changed: false, reason: result.reason };
+  return {
+    save: {
+      ...save,
+      world: {
+        ...save.world,
+        football: { ...save.world.football, playerDevelopment: result.state }
+      }
+    },
+    changed: true,
+    reason: null
+  };
+}
+
+// Star Plan الكامل: الأهداف الثلاثة + مكافأة معنوية لكل هدف مكتمل
+// (عرض رعاية / تجديد أفضل / سمعة أعلى) — تقدير عرضي، لا قيد في الدفتر.
+export function getStarPlanRewards(player = {}) {
+  const plan = getStarPlan(player);
+  return plan.map((goal) => ({
+    ...goal,
+    reward: goal.done
+      ? (goal.id === "goals"
+        ? "جاهز لعرض رعاية — هداف الفريق في الواجهة"
+        : goal.id === "assists"
+          ? "صانع اللعب الأول — يستحق التفاوض على عقد أفضل"
+          : "لاعب أساسي ثابت — سمعته في السوق ارتفعت")
+      : null
+  }));
+}
+
+export function getStarPlanSummary(player = {}) {
+  const plan = getStarPlanRewards(player);
+  const done = plan.filter((goal) => goal.done).length;
+  return { total: plan.length, done, allDone: done === plan.length, plan };
+}
+
+// لوحة مسيرة العملاء: كل عميل في سطر — النادي، التقييم، Star Plan،
+// الثقة وخطر المغادرة، وأيام العقد المتبقية.
+export function getCareerBoard(save = {}, players = []) {
+  const currentDate = save.world?.currentDate ?? null;
+  const clients = (save.agency?.clients ?? [])
+    .map((id) => players.find((player) => player.id === id))
+    .filter(Boolean);
+  return clients.map((player) => {
+    const contract = (save.agency?.representation?.contracts ?? [])
+      .find((item) => item.playerId === player.id && item.status === "active") ?? null;
+    const summary = getStarPlanSummary(player);
+    const trust = getPlayerTrust(player, contract, currentDate);
+    return {
+      playerId: player.id,
+      name: player.name,
+      club: player.club ?? "لاعب حر",
+      rating: asInt(player.rating, 0),
+      potential: asInt(player.potential, 0),
+      age: asInt(player.age, 0),
+      starPlanDone: summary.done,
+      starPlanTotal: summary.total,
+      trust: trust.trust,
+      departureRisk: trust.departureRisk,
+      contractDaysLeft: trust.daysToExpiry,
+      timelineCount: getPlayerTimeline(player).length
+    };
+  }).sort((a, b) => b.potential - a.potential || b.rating - a.rating);
+}
+
+// «سنة في مراجعة»: أرشيف الموسم الماضي (الأبطال)، وStar Plan لكل العملاء،
+// وأفضل عميل (ألقاب الموسم الماضي ثم أكبر قفزة محتملة)، وملخص العمولات
+// التراكمي من الدفتر — معلنًا أنه تراكمي لا موسمي، لأن الدفتر لا يفصل
+// العمولات حسب الموسم.
+export function getSeasonReview(save = {}, players = []) {
+  const season = asInt(save.career?.season, 1);
+  const lastSeason = season - 1;
+  const archives = (save.world?.football?.archives ?? [])
+    .filter((archive) => asInt(archive.season, 0) === lastSeason);
+  const clients = (save.agency?.clients ?? [])
+    .map((id) => players.find((player) => player.id === id))
+    .filter(Boolean);
+  const plans = clients.map((player) => getStarPlanSummary(player));
+  const goalsDone = plans.reduce((sum, item) => sum + item.done, 0);
+  const goalsTotal = plans.reduce((sum, item) => sum + item.total, 0);
+  const bestClient = [...clients].sort((a, b) => {
+    const honorsA = (a.honors ?? []).filter((honor) => asInt(honor.season, 0) === lastSeason).length;
+    const honorsB = (b.honors ?? []).filter((honor) => asInt(honor.season, 0) === lastSeason).length;
+    return honorsB - honorsA ||
+      ((b.potential - b.rating) - (a.potential - a.rating)) ||
+      b.rating - a.rating;
+  })[0] ?? null;
+  let finance = null;
+  try {
+    const summary = getAgencyFinancialSummary(save);
+    finance = {
+      commissionReceivableEur: summary.eur.commissionReceivableEur,
+      commissionEntryCount: summary.eur.commissionEntryCount,
+      netOperatingCashFlowEgp: summary.egp.netOperatingCashFlowEgp
+    };
+  } catch {
+    finance = null;
+  }
+  return {
+    season: lastSeason,
+    hasLastSeason: lastSeason >= 1,
+    archives,
+    clientsCount: clients.length,
+    goalsDone,
+    goalsTotal,
+    bestClientId: bestClient?.id ?? null,
+    bestClientName: bestClient?.name ?? null,
+    finance
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -694,10 +1032,25 @@ export function renderWakilToday(context) {
     () => context.openInbox(),
     "صندوق الوارد — " + unread + " رسائل غير مقروءة"
   );
+  // زر Dark Mode — المرحلة 3 (UXUI §1.2): يبدّل بين الفاتح والداكن فورًا
+  // (الكلاس على documentElement يقلب المتغيرات)، ويحدّث نصه بنفسه.
+  const isDarkNow = resolveWakilTheme() === "dark";
+  const themeButton = actionButton(
+    isDarkNow ? "الوضع الفاتح" : "الوضع الداكن",
+    "button-outline wakil-theme-button",
+    () => {
+      const next = toggleWakilTheme();
+      const dark = next === "dark";
+      themeButton.textContent = dark ? "الوضع الفاتح" : "الوضع الداكن";
+      themeButton.setAttribute("aria-label", dark ? "التبديل إلى الوضع الفاتح" : "التبديل إلى الوضع الداكن");
+    },
+    isDarkNow ? "التبديل إلى الوضع الفاتح" : "التبديل إلى الوضع الداكن"
+  );
   introActions.append(
     actionButton("ابدأ يوم جديد", "day-advance-button", context.advanceDay),
     actionButton("تقدم أسبوعًا", "week-advance-button", context.advanceWeek),
-    inboxButton
+    inboxButton,
+    themeButton
   );
   intro.append(introCopy, introActions);
 
@@ -888,7 +1241,8 @@ export function renderWakilToday(context) {
 
 // ---------------------------------------------------------------------------
 // 2.2 ملف اللاعب — قصة مش رقم (يُلحق بمودال ملف اللاعب الحالي في app.js).
-// تبويبات: القصة (نطاق + ثقة + Star Plan + عقد مزدوج) | المسيرة | المحادثات.
+// تبويبات: القصة (نطاق + ثقة + Star Plan + عقد مزدوج) | المسيرة | المحادثات
+// | المباراة الجاية (Pre-Match Hub) | التطوير (Development Hub) — المرحلة 3.
 // ---------------------------------------------------------------------------
 
 export function buildPlayerStorySection(player, save = {}, actions = {}) {
@@ -899,7 +1253,7 @@ export function buildPlayerStorySection(player, save = {}, actions = {}) {
   const range = getPotentialRange(player, 0);
   const commission = getDualCommission(contract ?? {}, currentDate);
   const timeline = getPlayerTimeline(player);
-  const starPlan = getStarPlan(player);
+  const starPlan = getStarPlanRewards(player);
   const interactions = (save.agency?.representation?.interactions ?? [])
     .filter((item) => item.playerId === player.id).slice(-6).reverse();
 
@@ -914,7 +1268,9 @@ export function buildPlayerStorySection(player, save = {}, actions = {}) {
   const tabDefs = [
     ["story", "القصة"],
     ["career", "المسيرة"],
-    ["talks", "المحادثات"]
+    ["talks", "المحادثات"],
+    ["prematch", "المباراة الجاية"],
+    ["development", "التطوير"]
   ];
   tabDefs.forEach(([id, label], index) => {
     const button = actionButton(label, "wakil-tab-button" + (index === 0 ? " is-active" : ""), () => {
@@ -979,6 +1335,10 @@ export function buildPlayerStorySection(player, save = {}, actions = {}) {
       node("span", "", goal.title + ": " + goal.current + " من " + goal.target + " " + goal.unit),
       meterBar(goal.progressPct, goal.done ? "success" : "")
     );
+    // مكافأة الهدف المكتمل (المرحلة 3) — تقدير عرضي، لا قيد في الدفتر.
+    if (goal.done && goal.reward) {
+      row.append(node("small", "wakil-star-reward", "✓ اكتمل — " + goal.reward));
+    }
     planBlock.append(row);
   });
   story.append(planBlock);
@@ -1023,7 +1383,70 @@ export function buildPlayerStorySection(player, save = {}, actions = {}) {
   }
   panels.talks = talksPanel;
 
-  tabs.append(story, careerPanel, talksPanel);
+  // — تبويب المباراة الجاية — Pre-Match Hub (المرحلة 3) —
+  const brief = getPreMatchBrief(player, save);
+  const prematchPanel = node("div", "wakil-tab-panel");
+  prematchPanel.hidden = true;
+  if (!brief.hasFixture) {
+    prematchPanel.append(node("p", "wakil-note", "مفيش مباراة قادمة مجدولة لفريق اللاعب ده حاليًا."));
+  } else {
+    const next = brief.next;
+    prematchPanel.append(
+      node("strong", "", "المباراة الجاية: ضد " + next.opponentName + (next.isHome ? " (على أرضك)" : " (خارج أرضك)")),
+      node("span", "", next.competitionName + (next.round ? " · الجولة " + next.round : "") + " · " + formatHomeDate(next.date) + " · بعد " + next.daysUntil + " يوم"),
+      node("p", "", "قوة الخصم " + next.opponentProfile + " مقابل قوة فريقك " + next.ownProfile),
+      node("p", "", brief.mediaPrediction),
+      node("p", "wakil-note", "نصيحة الوكيل: " + brief.advice)
+    );
+    const decisionNote = node("small", "", "قرارك كوكيل قبل المباراة — يُسجَّل في الجلسة دي بس، ولا يغيّر المحاكاة ولا يُحفظ.");
+    const decisionRow = node("div", "wakil-decision-row");
+    MATCH_DECISION_OPTIONS.forEach((option) => {
+      const decisionButton = actionButton(
+        MATCH_DECISION_LABELS[option],
+        "button-outline" + (brief.decision === option ? " is-active" : ""),
+        () => {
+          setMatchDecision(player.id, option);
+          decisionRow.querySelectorAll("button").forEach((item) => item.classList.remove("is-active"));
+          decisionButton.classList.add("is-active");
+          decisionNote.textContent = "قرارك: " + MATCH_DECISION_LABELS[option] + " — يُسجَّل في الجلسة دي بس، ولا يغيّر المحاكاة ولا يُحفظ.";
+        },
+        "قرار المباراة: " + MATCH_DECISION_LABELS[option]
+      );
+      decisionRow.append(decisionButton);
+    });
+    prematchPanel.append(decisionRow, decisionNote);
+  }
+  panels.prematch = prematchPanel;
+
+  // — تبويب التطوير — Development Hub (المرحلة 3) —
+  const dev = getDevelopmentHub(player, save);
+  const devPanel = node("div", "wakil-tab-panel");
+  devPanel.hidden = true;
+  devPanel.append(node("strong", "", "التطوير والتدريب"));
+  if (!dev.hasRecord) {
+    devPanel.append(node("p", "wakil-note", "لسه مفيش سجل تطوير للاعب ده في الموسم ده."));
+  } else {
+    devPanel.append(
+      node("span", "", "التركيز الحالي: " + dev.currentFocusLabel + " · الشدة: " + dev.currentIntensity),
+      node("span", "", "اللياقة " + dev.fitness + "% · الإرهاق " + dev.fatigue + "%" + (dev.injuryDays > 0 ? " · مصاب — يرجع بعد " + dev.injuryDays + " يوم" : "")),
+      node("span", "", "مشاركات الموسم: " + dev.appearances + (dev.averageMatchRating !== null ? " · متوسط تقييم المباريات " + dev.averageMatchRating : ""))
+    );
+    if (dev.focusChanged) {
+      devPanel.append(node("p", "wakil-note", "المقترح: غيّر التركيز لـ " + dev.recommendedFocusLabel + " — أضعف مهارة عنده حسب سجل التطوير."));
+      if (actions.onSetTrainingPlan) {
+        devPanel.append(actionButton("طبّق تركيز " + dev.recommendedFocusLabel, "button-primary", () => actions.onSetTrainingPlan(player, dev.recommendedFocus)));
+      }
+    } else {
+      devPanel.append(node("p", "", "التركيز الحالي هو المقترح — كمل عليه."));
+    }
+  }
+  devPanel.append(
+    node("strong", "", "إعارة ولا بقاء؟"),
+    node("p", "", dev.loan.title + " — " + dev.loan.detail)
+  );
+  panels.development = devPanel;
+
+  tabs.append(story, careerPanel, talksPanel, prematchPanel, devPanel);
   section.append(tabs);
 
   const actionsRow = node("div", "wakil-player-actions");
@@ -1239,8 +1662,8 @@ export function renderWakilMarket(context) {
         const chosen = [...clubSelect.selectedOptions].map((option) => option.value).slice(0, 3);
         if (chosen.length === 0) { context.toast("اختار نادي واحد على الأقل."); return; }
         const listing = createTransferRoomListing(save, playerSelect.value, chosen);
-        const next = [...readTransferRoomListings(), listing];
-        writeTransferRoomListings(next);
+        const next = [...readTransferRoomListings(save), listing];
+        writeTransferRoomListings(next, save);
         context.toast("تم عرض العميل على " + chosen.length + " أندية — الردود هتوصل في البريد.");
         renderRoomList();
       })
@@ -1250,7 +1673,7 @@ export function renderWakilMarket(context) {
     roomSection.append(roomList);
     const renderRoomList = () => {
       roomList.replaceChildren();
-      const current = readTransferRoomListings();
+      const current = readTransferRoomListings(save);
       if (current.length === 0) {
         roomList.append(node("p", "wakil-note", "لسه مفيش عروض معروضة — أول عرض هيظهر هنا."));
         return;
@@ -1265,9 +1688,9 @@ export function renderWakilMarket(context) {
         if (listing.status !== "answered") {
           item.append(actionButton("شوف ردود الأندية", "button-outline", () => {
             const responses = resolveTransferRoomResponses(listing, context.players ?? []);
-            const updated = readTransferRoomListings().map((entry) =>
+            const updated = readTransferRoomListings(save).map((entry) =>
               entry.id === listing.id ? { ...entry, status: "answered", responses } : entry);
-            writeTransferRoomListings(updated);
+            writeTransferRoomListings(updated, save);
             renderRoomList();
           }));
         } else {
@@ -1542,6 +1965,32 @@ export function renderWakilCalendar(context) {
   }
   page.append(contractsSection);
 
+  // — سنة في مراجعة — (المرحلة 3) —
+  const review = getSeasonReview(context.save ?? {}, context.players ?? []);
+  const reviewSection = node("section", "wakil-season-review");
+  reviewSection.append(sectionHeading("سنة في مراجعة", "ملخص الموسم اللي فات — أبطال، أهداف، وأفضل عميل"));
+  if (!review.hasLastSeason) {
+    reviewSection.append(node("p", "wakil-note", "لسه الموسم الأول مخلصش — المراجعة هتظهر هنا مع نهاية أول موسم."));
+  } else {
+    if (review.archives.length === 0) {
+      reviewSection.append(node("p", "wakil-note", "الموسم " + review.season + " خلص، بس لسه مفيش أرشيف بطولات مسجل له."));
+    } else {
+      const list = node("div", "wakil-review-list");
+      review.archives.forEach((archive) => {
+        list.append(node("p", "", "الموسم " + archive.season + " — " + archive.competitionName + ": البطل " + archive.champion));
+      });
+      reviewSection.append(list);
+    }
+    reviewSection.append(node("p", "", "Star Plan لكل العملاء: " + review.goalsDone + " من " + review.goalsTotal + " أهداف مكتملة."));
+    if (review.bestClientName) {
+      reviewSection.append(node("p", "", "أفضل عميل في الموسم: " + review.bestClientName + "."));
+    }
+    if (review.finance) {
+      reviewSection.append(node("p", "wakil-note", "عمولات مستحقة (تراكمي من الدفتر، مش موسمي): " + formatEuroMoney(review.finance.commissionReceivableEur) + " · " + review.finance.commissionEntryCount + " قيد عمولة."));
+    }
+  }
+  page.append(reviewSection);
+
   const archiveSection = node("section", "wakil-archive");
   archiveSection.append(sectionHeading("أرشيف المواسم", "المواسم اللي فاتت"));
   if (data.archives.length === 0) {
@@ -1576,7 +2025,7 @@ export function renderWakilAgencyTabs(context) {
     Object.values(panels).forEach((panel) => { panel.hidden = true; });
     panels[id].hidden = false;
   };
-  const tabDefs = [["finance", "المالية"], ["staff", "الموظفون"], ["office", "المكتب والرخص"]];
+  const tabDefs = [["finance", "المالية"], ["staff", "الموظفون"], ["office", "المكتب والرخص"], ["board", "مسيرة العملاء"]];
   tabDefs.forEach(([id, label], index) => {
     const button = actionButton(label, "wakil-tab-button" + (index === 0 ? " is-active" : ""), () => switchTab(id, button));
     button.setAttribute("aria-label", "تبويب الوكالة: " + label);
@@ -1673,9 +2122,34 @@ export function renderWakilAgencyTabs(context) {
     branches.append(card);
   });
   officePanel.append(branches);
-  officePanel.append(node("p", "wakil-note", "شجرة مهارات الوكيل (التفاوض / الكشافة / العلاقات) — نقاطها بتيجي من الإنجازات، وهتتفعل في المرحلة 3 مع Dark Mode."));
+  officePanel.append(node("p", "wakil-note", "شجرة مهارات الوكيل (التفاوض / الكشافة / العلاقات) — نقاطها بتيجي من الإنجازات، ومؤجلة لمرحلة لاحقة بعد المرحلة 3."));
   panels.office = officePanel;
 
-  section.append(financePanel, staffPanel, officePanel);
+  // — لوحة مسيرة العملاء — (المرحلة 3) —
+  const boardPanel = node("div", "wakil-tab-panel");
+  boardPanel.hidden = true;
+  const board = getCareerBoard(save, context.players ?? []);
+  if (board.length === 0) {
+    boardPanel.append(node("p", "wakil-note", "لسه مفيش عملاء — وقّع مع أول عميل من السوق أو الكشافة، ومسيرته هتظهر هنا."));
+  } else {
+    const list = node("div", "wakil-board-list");
+    board.forEach((entry) => {
+      const row = node("article", "wakil-board-row");
+      row.append(
+        node("strong", "", entry.name + " — " + entry.club),
+        node("span", "", "التقييم " + entry.rating + " · الإمكانات " + entry.potential + " · العمر " + entry.age),
+        node("span", "", "Star Plan: " + entry.starPlanDone + " من " + entry.starPlanTotal + " أهداف · الثقة " + entry.trust + "/100 · خطر المغادرة " + entry.departureRisk),
+        node("small", "", entry.contractDaysLeft !== null
+          ? (entry.contractDaysLeft <= 0 ? "عقد التمثيل انتهى — جدّد فورًا" : "عقد التمثيل ينتهي خلال " + entry.contractDaysLeft + " يوم")
+          : "بلا عقد تمثيل نشط")
+      );
+      row.append(actionButton("افتح ملف اللاعب", "button-outline", () => context.openPlayer(entry.playerId)));
+      list.append(row);
+    });
+    boardPanel.append(list);
+  }
+  panels.board = boardPanel;
+
+  section.append(financePanel, staffPanel, officePanel, boardPanel);
   return section;
 }

@@ -253,7 +253,9 @@ import {
   renderWakilCalendar,
   renderWakilAgencyTabs,
   buildPlayerStorySection,
-  openWakilNegotiation
+  openWakilNegotiation,
+  applyTrainingPlan,
+  migrateTransferRoomToSave
 } from "./ui/wakil-screens.js";
 
 let modalSequence = 0;
@@ -3327,6 +3329,10 @@ function roadmapRow(title, detail, active) {
 export function mountApp(root) {
   const loaded = readSave();
   const save = loaded.status === "loaded" ? loaded.save : createInitialSave();
+  // المرحلة 3: ترحيل TransferRoom من المفتاح المنفصل إلى داخل الحفظ
+  // (world.transferRoom) — لمرة واحدة عند التحميل، في الذاكرة فقط،
+  // ويُحفظ مع أول writeSave تالٍ. حفظ v9 قديم بلا الحقل لا يتأثر.
+  migrateTransferRoomToSave(save);
   const loadedWatchlist = readWatchlist();
   const state = {
     view: "dashboard",
@@ -4541,6 +4547,26 @@ export function mountApp(root) {
     }
   }
 
+  // خطة تدريب جديدة من Development Hub (المرحلة 3): تطبيق حتمي عبر
+  // المحرك (setPlayerTrainingPlan) على نسخة جديدة من الحفظ، ثم حفظ
+  // وإعادة رسم — والمودال بيتقفل من الأكشن نفسه قبل النداء.
+  function setTrainingPlan(playerId, focus) {
+    if (!state.canWrite) {
+      toast("ملف الحفظ غير قابل للتعديل؛ لا يمكن تغيير خطة التدريب.");
+      return;
+    }
+    const result = applyTrainingPlan(state.save, playerId, focus);
+    if (!result.changed) {
+      toast("تعذر تغيير خطة التدريب: " + (result.reason ?? "غير معروف"));
+      return;
+    }
+    state.save = result.save;
+    if (saveCareer()) {
+      toast("تم تطبيق خطة التدريب الجديدة — هتظهر في ملف اللاعب.");
+      render();
+    }
+  }
+
   function advanceWeek() {
     if (!state.canWrite) {
       toast(loaded.status === "unsupported"
@@ -5197,6 +5223,10 @@ export function mountApp(root) {
         root.querySelector(".modal-overlay .icon-button")?.click();
         if (activeContract) openRepresentationClientDossier(activeContract.id);
         else toast("مفيش عقد تمثيل نشط مع اللاعب ده.");
+      },
+      onSetTrainingPlan: (target, focus) => {
+        root.querySelector(".modal-overlay .icon-button")?.click();
+        setTrainingPlan(target.id, focus);
       }
     }) : null;
     content.append(hero, ratingCards, details, growth,
@@ -5249,6 +5279,7 @@ export function mountApp(root) {
       saveCareer,
       advanceDay,
       advanceWeek,
+      setTrainingPlan,
       completeTask,
       markMessageRead,
       toast,

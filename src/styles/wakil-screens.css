@@ -27,7 +27,7 @@
 }
 
 .wakil-section-head p {
-  color: var(--wakil-ink-soft, #5c6b64);
+  color: var(--wakil-ink-soft, var(--wakil-ink-soft));
   font-size: 13px;
   line-height: 1.6;
   margin: 4px 0 0;
@@ -43,10 +43,10 @@
 .wakil-contracts-planner,
 .wakil-archive,
 .wakil-transfer-room {
-  background: var(--wakil-surface, #ffffff);
-  border: 1px solid var(--wakil-border, #dde3de);
+  background: var(--wakil-surface, var(--wakil-surface));
+  border: 1px solid var(--wakil-border, var(--wakil-border));
   border-radius: 16px;
-  box-shadow: 0 1px 3px rgba(26, 36, 32, 0.08);
+  box-shadow: 0 1px 3px var(--wakil-shadow-soft);
   padding: 16px;
   margin-top: 12px;
 }
@@ -63,7 +63,7 @@
   flex-direction: column;
   gap: 8px;
   padding: 12px 0;
-  border-top: 1px solid var(--wakil-border, #dde3de);
+  border-top: 1px solid var(--wakil-border, var(--wakil-border));
 }
 
 .wakil-decision-row:first-child,
@@ -73,7 +73,7 @@
 
 .wakil-decision-row.is-overdue,
 .wakil-contract-row.is-urgent {
-  border-inline-start: 4px solid var(--wakil-danger, #b91c1c);
+  border-inline-start: 4px solid var(--wakil-danger, var(--wakil-danger));
   padding-inline-start: 12px;
 }
 
@@ -92,7 +92,7 @@
 .wakil-offer-copy small,
 .wakil-market-copy span,
 .wakil-star-copy span {
-  color: var(--wakil-ink-soft, #5c6b64);
+  color: var(--wakil-ink-soft, var(--wakil-ink-soft));
   font-size: 13px;
 }
 
@@ -113,13 +113,13 @@
 }
 
 .wakil-danger-button {
-  color: var(--wakil-danger, #b91c1c);
-  border-color: var(--wakil-danger, #b91c1c);
+  color: var(--wakil-danger, var(--wakil-danger));
+  border-color: var(--wakil-danger, var(--wakil-danger));
 }
 
 .wakil-alert {
-  background: #fee2e2;
-  color: #7f1d1d;
+  background: var(--wakil-danger-bg);
+  color: var(--wakil-danger-dark);
   border-radius: 12px;
   padding: 12px;
   font-size: 14px;
@@ -127,7 +127,7 @@
 }
 
 .wakil-note {
-  color: var(--wakil-ink-soft, #5c6b64);
+  color: var(--wakil-ink-soft, var(--wakil-ink-soft));
   font-size: 13px;
   line-height: 1.6;
 }
@@ -142,7 +142,7 @@
 }
 
 .wakil-empty p {
-  color: var(--wakil-ink-soft, #5c6b64);
+  color: var(--wakil-ink-soft, var(--wakil-ink-soft));
   font-size: 14px;
   line-height: 1.6;
 }
@@ -156,17 +156,17 @@
 }
 
 .wakil-star.is-filled {
-  color: var(--wakil-gold, #c9972b);
+  color: var(--wakil-gold, var(--wakil-gold));
 }
 
 .wakil-star:not(.is-filled) {
-  color: #b9c2bb;
+  color: var(--wakil-border-strong);
 }
 
 /* أشرطة القياس: بتبدأ من اليمين في RTL. */
 .wakil-meter-track {
   height: 8px;
-  background: var(--wakil-surface-muted, #eef0ec);
+  background: var(--wakil-surface-muted, var(--wakil-surface-muted));
   border-radius: 999px;
   overflow: hidden;
   direction: rtl;
@@ -175,20 +175,20 @@
 .wakil-meter-fill {
   display: block;
   height: 100%;
-  background: var(--wakil-green, #0e7a4d);
+  background: var(--wakil-green, var(--wakil-green));
   border-radius: 999px;
 }
 
 .wakil-meter-track.tone-success .wakil-meter-fill {
-  background: var(--wakil-success, #15803d);
+  background: var(--wakil-success, var(--wakil-success));
 }
 
 .wakil-meter-track.tone-warning .wakil-meter-fill {
-  background: var(--wakil-warning, #b45309);
+  background: var(--wakil-warning, var(--wakil-warning));
 }
 
 .wakil-meter-track.tone-danger .wakil-meter-fill {
-  background: var(--wakil-danger, #b91c1c);
+  background: var(--wakil-danger, var(--wakil-danger));
 }
 
 /* الشارات: لون + نص دايمًا. */
@@ -203,23 +203,23 @@
 }
 
 .wakil-chip.tone-success {
-  background: #dcfce7;
-  color: #14532d;
+  background: var(--wakil-success-bg);
+  color: var(--wakil-success-dark);
 }
 
 .wakil-chip.tone-warning {
-  background: #fef3c7;
-  color: #78350f;
+  background: var(--wakil-warning-bg);
+  color: var(--wakil-warning-dark);
 }
 
 .wakil-chip.tone-danger {
-  background: #fee2e2;
-  color: #7f1d1d;
+  background: var(--wakil-danger-bg);
+  color: var(--wakil-danger-dark);
 }
 
 .wakil-chip.tone-info {
-  background: #dbeafe;
-  color: #1e3a8a;
+  background: var(--wakil-info-bg);
+  color: var(--wakil-info-dark);
 }
 
 /* التبويبات والفلاتر. */
@@ -232,10 +232,10 @@
 
 .wakil-tab-button {
   min-height: 40px;
-  border: 1px solid var(--wakil-border, #dde3de);
+  border: 1px solid var(--wakil-border, var(--wakil-border));
   border-radius: 999px;
-  background: var(--wakil-surface, #ffffff);
-  color: var(--wakil-ink, #1a2420);
+  background: var(--wakil-surface, var(--wakil-surface));
+  color: var(--wakil-ink, var(--wakil-ink));
   font-family: "Tajawal", "Cairo", Tahoma, Arial, sans-serif;
   font-size: 14px;
   padding: 8px 16px;
@@ -244,9 +244,9 @@
 }
 
 .wakil-tab-button.is-active {
-  background: var(--wakil-green, #0e7a4d);
-  border-color: var(--wakil-green, #0e7a4d);
-  color: #ffffff;
+  background: var(--wakil-green, var(--wakil-green));
+  border-color: var(--wakil-green, var(--wakil-green));
+  color: var(--wakil-surface);
 }
 
 .wakil-filter-bar {
@@ -265,9 +265,9 @@
 
 .wakil-chip-filter {
   min-height: 40px;
-  border: 1px solid var(--wakil-border, #dde3de);
+  border: 1px solid var(--wakil-border, var(--wakil-border));
   border-radius: 999px;
-  background: var(--wakil-surface, #ffffff);
+  background: var(--wakil-surface, var(--wakil-surface));
   padding: 8px 14px;
   font-size: 13px;
   cursor: pointer;
@@ -275,9 +275,9 @@
 }
 
 .wakil-chip-filter.is-active {
-  background: var(--wakil-green, #0e7a4d);
-  border-color: var(--wakil-green, #0e7a4d);
-  color: #ffffff;
+  background: var(--wakil-green, var(--wakil-green));
+  border-color: var(--wakil-green, var(--wakil-green));
+  color: var(--wakil-surface);
 }
 
 .wakil-market-card {
@@ -308,7 +308,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  background: var(--wakil-surface-muted, #eef0ec);
+  background: var(--wakil-surface-muted, var(--wakil-surface-muted));
   border-radius: 12px;
   padding: 12px;
   font-size: 13px;
@@ -336,7 +336,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: var(--wakil-surface-muted, #eef0ec);
+  background: var(--wakil-surface-muted, var(--wakil-surface-muted));
   border-radius: 12px;
   padding: 12px;
   font-size: 13px;
@@ -359,7 +359,7 @@
   list-style: none;
   margin: 12px 0 0;
   padding: 0;
-  border-inline-start: 3px solid var(--wakil-green, #0e7a4d);
+  border-inline-start: 3px solid var(--wakil-green, var(--wakil-green));
 }
 
 .wakil-timeline-item {
@@ -401,24 +401,24 @@
 .wakil-segment {
   flex: 1;
   min-height: 48px;
-  border: 1px solid var(--wakil-border, #dde3de);
+  border: 1px solid var(--wakil-border, var(--wakil-border));
   border-radius: 12px;
-  background: var(--wakil-surface, #ffffff);
+  background: var(--wakil-surface, var(--wakil-surface));
   font-size: 14px;
   cursor: pointer;
 }
 
 .wakil-segment.is-active {
-  background: var(--wakil-green-light, #e6f4ec);
-  border-color: var(--wakil-green, #0e7a4d);
-  color: var(--wakil-green-deep, #0a5c3a);
+  background: var(--wakil-green-light, var(--wakil-green-light));
+  border-color: var(--wakil-green, var(--wakil-green));
+  color: var(--wakil-green-deep, var(--wakil-green-deep));
   font-weight: 700;
 }
 
 .wakil-range {
   width: 100%;
   min-height: 48px;
-  accent-color: var(--wakil-green, #0e7a4d);
+  accent-color: var(--wakil-green, var(--wakil-green));
 }
 
 .wakil-range-value {
@@ -435,21 +435,21 @@
 }
 
 .wakil-risk-block.tone-low {
-  background: #dcfce7;
+  background: var(--wakil-success-bg);
 }
 
 .wakil-risk-block.tone-medium {
-  background: #fef3c7;
+  background: var(--wakil-warning-bg);
 }
 
 .wakil-risk-block.tone-high {
-  background: #fee2e2;
+  background: var(--wakil-danger-bg);
 }
 
 .wakil-negotiation-log p {
   margin: 4px 0;
   font-size: 13px;
-  color: var(--wakil-ink-soft, #5c6b64);
+  color: var(--wakil-ink-soft, var(--wakil-ink-soft));
 }
 
 .wakil-checkbox-label {
@@ -464,13 +464,13 @@
 .wakil-checkbox-label input {
   width: 20px;
   height: 20px;
-  accent-color: var(--wakil-green, #0e7a4d);
+  accent-color: var(--wakil-green, var(--wakil-green));
 }
 
 /* الوكالة: تبويبات فوق الصفحة الحالية. */
 .wakil-agency-tabs {
-  background: var(--wakil-surface, #ffffff);
-  border: 1px solid var(--wakil-border, #dde3de);
+  background: var(--wakil-surface, var(--wakil-surface));
+  border: 1px solid var(--wakil-border, var(--wakil-border));
   border-radius: 16px;
   padding: 16px;
   margin-bottom: 16px;
@@ -483,14 +483,14 @@
   flex-direction: column;
   gap: 6px;
   padding: 12px 0;
-  border-top: 1px solid var(--wakil-border, #dde3de);
+  border-top: 1px solid var(--wakil-border, var(--wakil-border));
   font-size: 14px;
   line-height: 1.6;
 }
 
 .wakil-monogram {
-  background: var(--wakil-green, #0e7a4d);
-  color: #ffffff;
+  background: var(--wakil-green, var(--wakil-green));
+  color: var(--wakil-surface);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -500,4 +500,39 @@
     transition: none !important;
     animation: none !important;
   }
+}
+
+/* المرحلة 3: Pre-Match Hub وDevelopment Hub ولوحة المسيرة و«سنة في مراجعة». */
+.wakil-star-reward {
+  color: var(--wakil-success);
+  font-size: 13px;
+}
+
+.wakil-season-review,
+.wakil-board-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wakil-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.wakil-board-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: var(--wakil-surface);
+  border: 1px solid var(--wakil-border);
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.wakil-board-row strong {
+  font-size: 15px;
 }

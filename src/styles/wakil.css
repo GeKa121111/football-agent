@@ -16,9 +16,19 @@
   --wakil-ink-soft: #5c6b64;
   --wakil-border: #dde3de;
   --wakil-success: #15803d;
+  --wakil-success-dark: #14532d;
+  --wakil-success-bg: #dcfce7;
   --wakil-warning: #b45309;
+  --wakil-warning-dark: #78350f;
+  --wakil-warning-bg: #fef3c7;
   --wakil-danger: #b91c1c;
+  --wakil-danger-dark: #7f1d1d;
+  --wakil-danger-bg: #fee2e2;
   --wakil-info: #1d4ed8;
+  --wakil-info-dark: #1e3a8a;
+  --wakil-info-bg: #dbeafe;
+  --wakil-border-strong: #b9c2bb;
+  --wakil-shadow-soft: rgba(26, 36, 32, 0.08);
   --wakil-position-goalkeeper: #b45309;
   --wakil-position-defence: #1d4ed8;
   --wakil-position-midfield: #0e7a4d;
@@ -69,6 +79,56 @@
   font-family: "Cairo", "Tajawal", Tahoma, Arial, sans-serif;
 }
 
+/* Dark Mode — المرحلة 3 (UXUI §1.2): توكنز الوضع الداكن الجاهزة من
+   المرحلة 1 تُفعَّل هنا. كل ألوان شاشات وكيل تمر عبر متغيرات --wakil-*
+   (wakil-screens.css)، فتجاوز واحد يكفي لقلب الواجهة كلها.
+   التباينات محسوبة على سطح #182420: نص #edf2ee ‏13:1، صامت #9aa8a0
+   ‏5.9:1، أخضر #2fbf7f ‏7:1، ذهبي #e3b94e ‏7.5:1، أحمر #f87171 ‏5.5:1
+   — كلها فوق حد WCAG AA ‏4.5:1. */
+.wakil-ui.wakil-dark {
+  --fa-bg: #0f1713;
+  --fa-bg-soft: #182420;
+  --fa-surface: #182420;
+  --fa-surface-raised: #223129;
+  --fa-surface-hover: #223129;
+  --fa-border: #2e3d34;
+  --fa-border-strong: #43564a;
+  --fa-text: #edf2ee;
+  --fa-text-soft: #9aa8a0;
+  --fa-muted: #9aa8a0;
+  --fa-accent: #2fbf7f;
+  --fa-accent-strong: #57d99a;
+  --fa-accent-ink: #0f1713;
+  --fa-gold: #e3b94e;
+  --fa-danger: #f87171;
+  --wakil-green: #2fbf7f;
+  --wakil-green-deep: #7ee2ae;
+  --wakil-green-light: #1d3a2c;
+  --wakil-gold: #e3b94e;
+  --wakil-gold-light: #3a2f10;
+  --wakil-paper: #0f1713;
+  --wakil-surface: #182420;
+  --wakil-surface-muted: #223129;
+  --wakil-ink: #edf2ee;
+  --wakil-ink-soft: #9aa8a0;
+  --wakil-border: #2e3d34;
+  --wakil-border-strong: #43564a;
+  --wakil-success: #4ade80;
+  --wakil-success-dark: #86efac;
+  --wakil-success-bg: #14331f;
+  --wakil-warning: #fbbf24;
+  --wakil-warning-dark: #fcd34d;
+  --wakil-warning-bg: #3a2a10;
+  --wakil-danger: #f87171;
+  --wakil-danger-dark: #fca5a5;
+  --wakil-danger-bg: #3f1d1d;
+  --wakil-info: #60a5fa;
+  --wakil-info-dark: #93c5fd;
+  --wakil-info-bg: #17233f;
+  --wakil-shadow-soft: rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+}
+
 /* الأرقام والعملة لاتينية دائمًا، بأرقام جدولية (قرار هوية في UXUI.md §1.3). */
 .wakil-ui .rebuild-season-pill,
 .wakil-ui .rebuild-save-chip,
@@ -82,5 +142,10 @@
 }
 .wakil-ui .rebuild-nav-link,
 .wakil-ui .rebuild-mobile-nav-link {
+  min-height: 48px;
+}
+/* المرحلة 3 (a11y): أزرار هيدر «اليوم» وتبويبات وكيل أهداف لمس 48px أيضًا. */
+.wakil-ui .dashboard-intro-actions button,
+.wakil-ui .wakil-tab-button {
   min-height: 48px;
 }

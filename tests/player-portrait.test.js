@@ -72,3 +72,37 @@ test("portrait profiles expose stable asset metadata without changing football a
   assert.equal(player.rating, 74);
   assert.equal(player.potential, 88);
 });
+
+test("portrait profile derives missing phase-3 features deterministically from the seed", () => {
+  const player = { id: "seed-derived-player", name: "لاعب بلا ملامح", age: 24, role: "وسط", country: "مصر" };
+  const first = getPortraitProfile(player);
+  const second = getPortraitProfile(player);
+  assert.deepEqual(first, second);
+  assert.ok(["small", "medium", "wide"].includes(first.nose));
+  assert.ok(["slight-smile", "neutral", "wide-smile", "serious"].includes(first.mouth));
+  assert.ok(["thin", "medium", "thick"].includes(first.eyebrows));
+  assert.ok(["normal", "narrow", "wide"].includes(first.eyeShape));
+  assert.ok(["none", "headband", "earring"].includes(first.accessory));
+  assert.ok(["round", "v", "polo"].includes(first.collar));
+  assert.equal(first.background, "midfield");
+});
+
+test("portrait background follows the player position", () => {
+  assert.equal(getPortraitProfile({ id: "gk-1", role: "حارس" }).background, "goalkeeper");
+  assert.equal(getPortraitProfile({ id: "df-1", role: "دفاع" }).background, "defence");
+  assert.equal(getPortraitProfile({ id: "fw-1", role: "مهاجم" }).background, "attack");
+  assert.equal(getPortraitProfile({ id: "fw-2", position: "جناح أيسر" }).background, "attack");
+  assert.equal(getPortraitProfile({ id: "xx-1" }).background, "midfield");
+});
+
+test("portrait profile sanitizes invalid phase-3 values instead of crashing", () => {
+  const profile = getPortraitProfile({
+    id: "bad-features",
+    appearance: { nose: "huge", mouth: "grin", eyebrows: "bushy", eyeShape: "tiny", accessory: "sunglasses", collar: "turtleneck", faceShape: "triangle", haircut: "mohawk" }
+  });
+  assert.ok(["small", "medium", "wide"].includes(profile.nose));
+  assert.ok(["slight-smile", "neutral", "wide-smile", "serious"].includes(profile.mouth));
+  assert.ok(["none", "headband", "earring"].includes(profile.accessory));
+  assert.ok(["oval", "round", "angular", "square", "long"].includes(profile.faceShape));
+  assert.ok(["curly", "fade", "wavy", "short", "buzz", "long", "bald", "flat-top"].includes(profile.hairStyle));
+});

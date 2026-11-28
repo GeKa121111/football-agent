@@ -11,7 +11,7 @@ import { mountApp } from "./app.js";
 import { mountBackup } from "./ui/backup.js";
 import { mountTutorial } from "./ui/tutorial.js";
 import { mountFeedback } from "./ui/feedback.js";
-import { mountWakil } from "./ui/wakil.js";
+import { mountWakil, watchSystemTheme } from "./ui/wakil.js";
 
 const root = document.querySelector("#app");
 
@@ -20,6 +20,8 @@ if (!root) {
 }
 
 mountWakil();
+// Dark Mode: حين الثيم "auto" يتبع تغير إعداد نظام التشغيل فورًا.
+watchSystemTheme();
 mountApp(root);
 mountBackup();
 mountFeedback();

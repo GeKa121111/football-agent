@@ -3,6 +3,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createInitialSave } from "../src/core/storage.js";
+import { WORLD_DATABASE } from "../src/data/world-database.js";
+import { createInitialPlayerDevelopmentState } from "../src/engines/player-development.js";
 import {
   starsForRating,
   getPotentialRange,
@@ -26,6 +28,22 @@ import {
   writeTransferRoomListings,
   createTransferRoomListing,
   resolveTransferRoomResponses,
+  migrateTransferRoomToSave,
+  getNextFixtureForPlayer,
+  getMediaPrediction,
+  getAgentMatchAdvice,
+  setMatchDecision,
+  getMatchDecision,
+  clearMatchDecisions,
+  getPreMatchBrief,
+  recommendTrainingFocus,
+  recommendLoanOrStay,
+  getDevelopmentHub,
+  applyTrainingPlan,
+  getStarPlanRewards,
+  getStarPlanSummary,
+  getCareerBoard,
+  getSeasonReview,
   TRANSFER_ROOM_KEY,
   WAKIL_NEGOTIATION_MAX_ROUNDS
 } from "../src/ui/wakil-screens.js";
@@ -222,4 +240,159 @@ test("transfer room listings persist in their own storage key and replies are de
   assert.equal(fresh.clubIds.length, 3);
   assert.equal(fresh.status, "pending");
   assert.equal(fresh.playerId, PLAYER.id);
+});
+
+test("pre-match hub finds the player's next fixture with opponent and media prediction", () => {
+  const clubA = WORLD_DATABASE.clubs[0].id;
+  const clubB = WORLD_DATABASE.clubs[1].id;
+  const player = { ...PLAYER, clubId: clubA };
+  const save = createInitialSave();
+  save.world.currentDate = "2026-07-01";
+  save.world.football.fixtures = [
+    { id: "fx-next", date: "2026-07-10", homeClubId: clubA, awayClubId: clubB, competitionName: "الدوري", round: 2, status: "scheduled" },
+    { id: "fx-past", date: "2026-06-28", homeClubId: clubB, awayClubId: clubA, competitionName: "الكأس", round: 1, status: "played" }
+  ];
+  const next = getNextFixtureForPlayer(player, save);
+  assert.equal(next.fixtureId, "fx-next");
+  assert.equal(next.opponentId, clubB);
+  assert.equal(next.isHome, true);
+  assert.equal(next.daysUntil, 9);
+  assert.equal(next.competitionName, "الدوري");
+  assert.ok(typeof getMediaPrediction(next) === "string" && getMediaPrediction(next).length > 0);
+  assert.ok(typeof getAgentMatchAdvice(player, next) === "string");
+  const brief = getPreMatchBrief(player, save);
+  assert.equal(brief.hasFixture, true);
+  assert.equal(brief.next.fixtureId, "fx-next");
+  assert.equal(brief.decision, null);
+  // بلا مباريات مجدولة → لا إحاطة.
+  save.world.football.fixtures = [];
+  assert.equal(getPreMatchBrief(player, save).hasFixture, false);
+  assert.equal(getNextFixtureForPlayer(player, save), null);
+});
+
+test("match decisions are session-only, validated, and never persisted", () => {
+  clearMatchDecisions();
+  assert.equal(getMatchDecision(PLAYER.id), null);
+  assert.equal(setMatchDecision(PLAYER.id, "confident"), true);
+  assert.equal(getMatchDecision(PLAYER.id), "confident");
+  assert.equal(setMatchDecision(PLAYER.id, "nonsense"), false);
+  assert.equal(getMatchDecision(PLAYER.id), "confident");
+  clearMatchDecisions();
+  assert.equal(getMatchDecision(PLAYER.id), null);
+});
+
+test("development hub recommends a focus from the weakest skill and a loan verdict by age and minutes", () => {
+  const player = { ...PLAYER, clubId: WORLD_DATABASE.clubs[0].id };
+  const devState = createInitialPlayerDevelopmentState([player]);
+  const record = devState.players[0];
+  record.skills.finishing = 40;
+  record.skills.passing = 80;
+  const save = createInitialSave();
+  save.world.football.playerDevelopment = devState;
+  const hub = getDevelopmentHub(player, save);
+  assert.equal(hub.hasRecord, true);
+  assert.equal(hub.currentFocus, "balanced");
+  assert.equal(recommendTrainingFocus(player, record), "attacking");
+  assert.equal(hub.recommendedFocus, "attacking");
+  assert.equal(hub.focusChanged, true);
+  // حارس المرمى دائمًا حراسة.
+  const keeper = { ...PLAYER, id: "keeper-1", role: "حارس" };
+  assert.equal(recommendTrainingFocus(keeper, record), "goalkeeping");
+  // إعارة للصغير قليل المشاركات، بقاء للأساسي.
+  assert.equal(recommendLoanOrStay({ age: 19, seasonPerformance: { appearances: 3 } }).verdict, "loan");
+  assert.equal(recommendLoanOrStay({ age: 24, seasonPerformance: { appearances: 25 } }).verdict, "stay");
+  assert.equal(recommendLoanOrStay({ age: 23, rating: 78, seasonPerformance: { appearances: 8 } }).verdict, "stay-ask");
+});
+
+test("applyTrainingPlan writes a new save through the engine and never mutates the original", () => {
+  const player = { ...PLAYER, clubId: WORLD_DATABASE.clubs[0].id };
+  const save = createInitialSave();
+  save.world.football.playerDevelopment = createInitialPlayerDevelopmentState([player]);
+  const result = applyTrainingPlan(save, player.id, "attacking", "intense");
+  assert.equal(result.changed, true);
+  assert.equal(result.save.world.football.playerDevelopment.players[0].trainingFocus, "attacking");
+  assert.equal(result.save.world.football.playerDevelopment.players[0].trainingIntensity, "intense");
+  assert.equal(save.world.football.playerDevelopment.players[0].trainingFocus, "balanced");
+  assert.equal(applyTrainingPlan(save, player.id, "not-a-focus").changed, false);
+  const noDev = createInitialSave();
+  delete noDev.world.football.playerDevelopment;
+  assert.equal(applyTrainingPlan(noDev, player.id, "attacking").changed, false);
+});
+
+test("star plan rewards appear only for completed goals", () => {
+  const scorer = { ...PLAYER, seasonPerformance: { appearances: 30, goals: 12, assists: 6 } };
+  const rewards = getStarPlanRewards(scorer);
+  assert.ok(rewards.every((goal) => goal.done));
+  assert.ok(rewards.every((goal) => typeof goal.reward === "string" && goal.reward.length > 0));
+  const summary = getStarPlanSummary(scorer);
+  assert.equal(summary.allDone, true);
+  assert.equal(summary.done, 3);
+  const rookie = { ...PLAYER, seasonPerformance: { appearances: 2, goals: 0, assists: 0 } };
+  assert.ok(getStarPlanRewards(rookie).every((goal) => goal.reward === null));
+  assert.equal(getStarPlanSummary(rookie).done, 0);
+});
+
+test("career board lists clients by potential with star plan and trust", () => {
+  const save = createInitialSave();
+  const second = { ...PLAYER, id: "demo-second", name: "لاعب ثانٍ", potential: 90, rating: 70 };
+  save.agency.clients = [PLAYER.id, second.id];
+  save.agency.representation = { contracts: [] };
+  const board = getCareerBoard(save, [PLAYER, second]);
+  assert.equal(board.length, 2);
+  assert.equal(board[0].playerId, second.id);
+  assert.equal(board[0].starPlanTotal, 3);
+  assert.ok(["منخفض", "متوسط", "عالي"].includes(board[0].departureRisk));
+});
+
+test("season review summarizes the previous season, or says it has not ended yet", () => {
+  const save = createInitialSave();
+  save.career.season = 1;
+  const first = getSeasonReview(save, [PLAYER]);
+  assert.equal(first.hasLastSeason, false);
+  save.career.season = 2;
+  save.world.football.archives = [
+    { season: 1, competitionName: "الدوري", championName: "النادي أ" },
+    { season: 2, competitionName: "الدوري", championName: "النادي ب" }
+  ];
+  save.agency.clients = [PLAYER.id];
+  const review = getSeasonReview(save, [PLAYER]);
+  assert.equal(review.hasLastSeason, true);
+  assert.equal(review.season, 1);
+  assert.equal(review.archives.length, 1);
+  assert.equal(review.archives[0].championName, "النادي أ");
+  assert.equal(review.bestClientName, PLAYER.name);
+  assert.equal(review.goalsTotal, 3);
+});
+
+test("transfer room migrates once from the legacy key into the save (v9 safe)", () => {
+  const storage = memStorage();
+  const listing = {
+    id: "transfer-room-1-demo-yassin-adel",
+    playerId: PLAYER.id,
+    clubIds: ["club-1"],
+    status: "pending",
+    createdDate: "2026-07-01",
+    responses: []
+  };
+  writeTransferRoomListings([listing], storage);
+  const save = createInitialSave();
+  assert.equal(save.world.transferRoom, undefined);
+  const result = migrateTransferRoomToSave(save, storage);
+  assert.equal(result.migrated, true);
+  assert.equal(result.count, 1);
+  assert.deepEqual(save.world.transferRoom, [listing]);
+  assert.equal(storage.getItem(TRANSFER_ROOM_KEY), null);
+  // القراءة الآن من الحفظ أولًا.
+  assert.deepEqual(readTransferRoomListings(save), [listing]);
+  // الترحيل مرة ثانية لا يكرر.
+  assert.equal(migrateTransferRoomToSave(save, storage).migrated, false);
+  // الكتابة في الحفظ تمسح المفتاح القديم.
+  const second = { ...listing, id: "transfer-room-2-demo-yassin-adel" };
+  assert.equal(writeTransferRoomListings([listing, second], save, storage), true);
+  assert.equal(save.world.transferRoom.length, 2);
+  assert.equal(storage.getItem(TRANSFER_ROOM_KEY), null);
+  // حفظ بلا قوائم قديمة: لا ترحيل ولا كسر.
+  const emptySave = createInitialSave();
+  assert.equal(migrateTransferRoomToSave(emptySave, memStorage()).migrated, false);
+  assert.equal(emptySave.world.transferRoom, undefined);
 });
