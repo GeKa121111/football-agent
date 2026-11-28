@@ -7,11 +7,11 @@ test("shows the first-run tour, completes all steps, and remembers completion", 
   await expect(dialog).toBeVisible();
 
   const headings = [
-    "أهلًا بك في Football Agent",
-    "اكتشف المواهب",
-    "وقّع واعرض",
-    "أدر الوكالة",
-    "احفظ تقدمك"
+    "دورك إيه في اللعبة؟",
+    "اكتشف موهبة",
+    "وقّع عقد تمثيل",
+    "سوّق للاعب",
+    "حرّك الوقت واحفظ"
   ];
 
   for (const heading of headings) {
