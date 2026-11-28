@@ -272,6 +272,11 @@ test("clubs independently monitor agency clients and raise enquiries during open
   assert.ok(firstInterest.clubBudgetEur > 0);
   assert.ok(firstInterest.estimatedFeeEur > 0);
   assert.ok(firstInterest.performanceBonus > 0);
+  assert.ok(firstInterest.needsSnapshot);
+  assert.ok(["critical","high","normal"].includes(firstInterest.needsSnapshot.level));
+  assert.ok(firstInterest.needsSnapshot.targetDepth >= firstInterest.needsSnapshot.availableDepth);
+  assert.equal(firstInterest.needsSnapshot.recentPointsAvailable,firstInterest.needsSnapshot.recentMatches * 3);
+  assert.ok(firstInterest.clubNeedBonus >= 0 && firstInterest.clubNeedBonus <= 11);
   assert.equal(firstInterest.averageMatchRating,7.8);
   assert.equal(firstInterest.seasonAppearances,12);
   assert.equal(firstInterest.seasonGoals,8);

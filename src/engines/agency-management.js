@@ -1,6 +1,13 @@
 import { WORLD_DATABASE } from "../data/world-database.js";
 import { getClubTransferFinancials, getTransferWindowForClub } from "./club-transfer-rules.js";
 import { getPlayerMediaProfile } from "./player-media.js";
+import {
+  evaluateRivalAgencyOffer,
+  getRivalAgencyCommissionRate,
+  getRivalAgencyStrategy,
+  scoreRivalAgencyTarget
+} from "./rival-agency-ai.js";
+import { getClubNeedFitBonus, getClubNeedSnapshot } from "./club-needs-ai.js";
 const MAX_LEDGER_ENTRIES = 1000;
 const MAX_MONEY_EGP = 2000000000;
 const MAX_ACTIVE_STAFF = 6;
@@ -60,15 +67,6 @@ function nextMondayAfter(value) {
     date = addDays(date, 1);
   }
   return date;
-}
-function stablePositionBonus(player, focusKey) {
-  const position = String(player?.position ?? "").toLocaleLowerCase("en");
-  const role = String(player?.role ?? "").toLocaleLowerCase("en");
-  const combined = position + " " + role;
-  if (focusKey === "attack") return /st|cf|fw|lw|rw|مهاجم|هجوم/.test(combined) ? 4 : 0;
-  if (focusKey === "youth-defense") return (Number(player?.age) <= 21 ? 4 : 0) + (/cb|lb|rb|def|مدافع|دفاع/.test(combined) ? 3 : 0);
-  if (focusKey === "elite") return Number(player?.rating) >= 78 ? 5 : 0;
-  return 0;
 }
 function sequenceOf(id, prefix) {
   const match = new RegExp("^" + prefix + "-(\\d+)$").exec(id);
@@ -158,6 +156,22 @@ export function isValidAgencyManagementState(state, currentDate) {
             !Number.isSafeInteger(interest.mediaSnapshot.internationalHonorsCount) || interest.mediaSnapshot.internationalHonorsCount < 0 ||
             !Number.isSafeInteger(interest.mediaSnapshot.internationalAppearances) || interest.mediaSnapshot.internationalAppearances < 0 ||
             interest.mediaSnapshot.clubInterestBonus !== (interest.mediaBonus ?? 0))) ||
+        (interest.needsSnapshot !== undefined &&
+          (!isRecord(interest.needsSnapshot) ||
+            !["goalkeeper","centreBack","fullBack","defensiveMidfield","centralMidfield","attackingMidfield","winger","striker","defense","midfield","attack","unknown"].includes(interest.needsSnapshot.positionKey) ||
+            typeof interest.needsSnapshot.positionLabel !== "string" || !interest.needsSnapshot.positionLabel.trim() ||
+            !["critical","high","normal"].includes(interest.needsSnapshot.level) ||
+            !Number.isSafeInteger(interest.needsSnapshot.needScore) || interest.needsSnapshot.needScore < 0 || interest.needsSnapshot.needScore > 100 ||
+            !Number.isSafeInteger(interest.needsSnapshot.availableDepth) || interest.needsSnapshot.availableDepth < 0 || interest.needsSnapshot.availableDepth > 100 ||
+            !Number.isSafeInteger(interest.needsSnapshot.targetDepth) || interest.needsSnapshot.targetDepth < 1 || interest.needsSnapshot.targetDepth > 100 ||
+            !Number.isSafeInteger(interest.needsSnapshot.injuredDepth) || interest.needsSnapshot.injuredDepth < 0 || interest.needsSnapshot.injuredDepth > 100 ||
+            (interest.needsSnapshot.averageRating !== null && (!Number.isFinite(interest.needsSnapshot.averageRating) || interest.needsSnapshot.averageRating < 1 || interest.needsSnapshot.averageRating > 99)) ||
+            !Number.isSafeInteger(interest.needsSnapshot.recentMatches) || interest.needsSnapshot.recentMatches < 0 || interest.needsSnapshot.recentMatches > 5 ||
+            !Number.isSafeInteger(interest.needsSnapshot.recentPoints) || interest.needsSnapshot.recentPoints < 0 || interest.needsSnapshot.recentPoints > 15 ||
+            !Number.isSafeInteger(interest.needsSnapshot.recentPointsAvailable) || interest.needsSnapshot.recentPointsAvailable !== interest.needsSnapshot.recentMatches * 3 ||
+            !Number.isSafeInteger(interest.needsSnapshot.formBonus) || interest.needsSnapshot.formBonus < 0 || interest.needsSnapshot.formBonus > 3 ||
+            typeof interest.needsSnapshot.summary !== "string" || !interest.needsSnapshot.summary.trim() ||
+            !Number.isSafeInteger(interest.clubNeedBonus) || interest.clubNeedBonus < 0 || interest.clubNeedBonus > 11)) ||
         (interest.averageMatchRating !== undefined && interest.averageMatchRating !== null &&
           (!Number.isFinite(interest.averageMatchRating) || interest.averageMatchRating < 4 || interest.averageMatchRating > 10)) ||
         (interest.seasonAppearances !== undefined && (!Number.isSafeInteger(interest.seasonAppearances) || interest.seasonAppearances < 0)) ||
@@ -551,7 +565,7 @@ function createPlayerPerformanceSnapshot(player) {
   };
 }
 
-function calculateClubInterestFit(player, club, financials) {
+function calculateClubInterestFit(player, club, financials, save) {
   const baseline = Number.isInteger(club?.simulationProfile) ? club.simulationProfile : 60;
   const rating = Number(player?.rating) || 50;
   const potential = Number(player?.potential) || rating;
@@ -572,8 +586,11 @@ function calculateClubInterestFit(player, club, financials) {
     internationalAppearances: mediaProfile.internationalAppearances
   };
   const mediaBonus = mediaSnapshot.clubInterestBonus;
+  const needsSnapshot = getClubNeedSnapshot(club.id,player,save,WORLD_DATABASE);
+  const clubNeedBonus = getClubNeedFitBonus(needsSnapshot);
   const score = Math.round((rating * 0.55) + (potential * 0.25) +
-    (baseline * 0.2) + ageBonus + youthBonus + budgetBonus + performanceBonus + mediaBonus);
+    (baseline * 0.2) + ageBonus + youthBonus + budgetBonus +
+    performanceBonus + mediaBonus + clubNeedBonus);
   return {
     fitScore:Math.max(0,Math.min(100,score)),
     estimatedFeeEur,
@@ -581,6 +598,8 @@ function calculateClubInterestFit(player, club, financials) {
     performanceBonus,
     mediaBonus,
     mediaSnapshot,
+    clubNeedBonus,
+    needsSnapshot,
     averageMatchRating:performanceSnapshot.averageMatchRating,
     seasonAppearances:performanceSnapshot.appearances,
     seasonGoals:performanceSnapshot.goals,
@@ -628,6 +647,26 @@ function advanceClubInterestAI(save,currentDate,players,state) {
     financials:getClubTransferFinancials(club.id,save.world.transfers,currentDate,WORLD_DATABASE),
     window:getTransferWindowForClub(currentDate,club.id,WORLD_DATABASE)
   }]));
+
+  // Refresh existing active interest snapshots once each Monday so injuries,
+  // transfers, budget changes and recent form can change club priorities.
+  const refreshedInterests = next.clubInterests.map((interest) => {
+    if (!["monitoring","enquiry"].includes(interest.status)) return interest;
+    const player = playerById.get(interest.playerId);
+    const club = clubs.find((item) => item.id === interest.clubId);
+    const clubContext = clubContextById.get(interest.clubId);
+    if (!player || !club || !clubContext) return interest;
+    const updatedFit = calculateClubInterestFit(player,club,clubContext.financials,save);
+    return {
+      ...interest,
+      ...updatedFit,
+      updatedDate:currentDate,
+      status:clubContext.window.active ? "enquiry" : "monitoring",
+      transferWindowEndDate:clubContext.window.window?.endDate ?? null
+    };
+  });
+  next = {...next,clubInterests:refreshedInterests};
+
   const reserved = new Set(next.clubInterests.filter((item) =>
     ["monitoring","enquiry"].includes(item.status)
   ).map((item) => item.playerId + "::" + item.clubId));
@@ -643,7 +682,7 @@ function advanceClubInterestAI(save,currentDate,players,state) {
       !reserved.has(player.id + "::" + club.id))
       .map((club) => {
         const clubContext = clubContextById.get(club.id);
-        const fit = calculateClubInterestFit(player,club,clubContext.financials);
+        const fit = calculateClubInterestFit(player,club,clubContext.financials,save);
         return {club,...fit,window:clubContext.window};
       })
       .filter((item) => item.fitScore >= 69 && item.clubBudgetEur > 0)
@@ -672,6 +711,8 @@ function advanceClubInterestAI(save,currentDate,players,state) {
       performanceSnapshot:selected.performanceSnapshot,
       mediaBonus:selected.mediaBonus,
       mediaSnapshot:selected.mediaSnapshot,
+      clubNeedBonus:selected.clubNeedBonus,
+      needsSnapshot:selected.needsSnapshot,
       status:selected.window.active ? "enquiry" : "monitoring",
       transferWindowEndDate:selected.window.window?.endDate ?? null
     };
@@ -689,12 +730,16 @@ function advanceClubInterestAI(save,currentDate,players,state) {
 export function getAgencyCompetitorSummary(save) {
   const state = save?.agency?.management ?? createInitialAgencyManagementState();
   const competitors = state.competitors ?? createInitialAgencyManagementState().competitors;
-  return competitors.map((agency) => ({
-    id:agency.id,name:agency.name,region:agency.region,focus:agency.focus,
-    reputation:agency.reputation,clients:agency.clients.length,
-    pendingOffers:agency.pendingOffers.filter((offer) => offer.status === "pending").length,
-    budgetEgp:agency.budgetEgp
-  }));
+  return competitors.map((agency) => {
+    const strategy = getRivalAgencyStrategy(agency);
+    return {
+      id:agency.id,name:agency.name,region:agency.region,focus:agency.focus,
+      strategyLabel:strategy.label,strategyDescription:strategy.description,
+      reputation:agency.reputation,clients:agency.clients.length,
+      pendingOffers:agency.pendingOffers.filter((offer) => offer.status === "pending").length,
+      budgetEgp:agency.budgetEgp
+    };
+  });
 }
 
 export function getRivalClientIds(save) {
@@ -772,15 +817,14 @@ function advanceCompetitorMarket(save, currentDate, players, state) {
     for (const offer of competitor.pendingOffers) {
       if (offer.status !== "pending" || currentDate < offer.dueDate) continue;
       const userHasTakenInterest = userClientIds.has(offer.playerId) || userOpenOfferIds.has(offer.playerId);
-      const score = competitor.reputation +
-        Math.round((offer.rating + offer.potential) / 2) - modifiers.legalProtectionBonus;
-      const canAfford = competitor.budgetEgp >= competitor.acquisitionCostEgp &&
-        competitor.clients.length < competitor.maxClients;
-      const accepted = !userHasTakenInterest && score >= 135 && canAfford &&
-        !rivalClientIds.has(offer.playerId);
-      offer.status = accepted ? "accepted" : "rejected";
+      const decision = evaluateRivalAgencyOffer(competitor,offer,{
+        legalProtectionBonus:modifiers.legalProtectionBonus,
+        userHasTakenInterest,
+        rivalAlreadyRepresents:rivalClientIds.has(offer.playerId)
+      });
+      offer.status = decision.accepted ? "accepted" : "rejected";
       offer.decisionDate = currentDate;
-      if (accepted) {
+      if (decision.accepted) {
         competitor.budgetEgp -= competitor.acquisitionCostEgp;
         competitor.clients.unshift({
           playerId:offer.playerId,playerName:offer.playerName,position:offer.position,
@@ -788,13 +832,9 @@ function advanceCompetitorMarket(save, currentDate, players, state) {
           signedDate:currentDate
         });
         rivalClientIds.add(offer.playerId);
-        next = appendCompetitiveHistory(next,competitor,offer,currentDate,"offer-accepted",
-          "نجحت الوكالة المنافسة في ضم اللاعب بعد تقييم العرض.");
+        next = appendCompetitiveHistory(next,competitor,offer,currentDate,"offer-accepted",decision.note);
       } else {
-        const reason = userHasTakenInterest ? "دخلت وكالتك في المنافسة على اللاعب." :
-          !canAfford ? "لم تسمح ميزانية الوكالة المنافسة بإتمام التعاقد." :
-          "رفض اللاعب العرض المنافس وفق تقييمه لشروط التمثيل.";
-        next = appendCompetitiveHistory(next,competitor,offer,currentDate,"offer-rejected",reason);
+        next = appendCompetitiveHistory(next,competitor,offer,currentDate,"offer-rejected",decision.note);
       }
     }
     competitor.pendingOffers = competitor.pendingOffers.slice(0,40);
@@ -813,30 +853,35 @@ function advanceCompetitorMarket(save, currentDate, players, state) {
         competitor.budgetEgp < competitor.acquisitionCostEgp) continue;
     const eligible = players.filter((player) =>
       player && typeof player.id === "string" && typeof player.name === "string" &&
-      !allReserved.has(player.id) && Number.isInteger(player.rating) &&
-      Number.isInteger(player.potential) && player.potential >= player.rating
+      !allReserved.has(player.id)
     ).map((player) => ({
       player,
-      score:player.rating * 0.6 + player.potential * 0.4 +
-        stablePositionBonus(player,competitor.focusKey)
-    })).filter((item) => item.score >= 61)
-      .sort((a,b) => b.score-a.score || a.player.id.localeCompare(b.player.id));
+      evaluation:scoreRivalAgencyTarget(competitor,player)
+    })).filter((item) => item.evaluation.eligible)
+      .sort((a,b) => b.evaluation.score-a.evaluation.score ||
+        a.player.id.localeCompare(b.player.id));
     competitor.lastActionDate = currentDate;
-    const selected = eligible[0]?.player;
-    if (!selected) continue;
-    const preferredCommission = selected.rating >= 80 ? 8 : selected.rating >= 72 ? 9 : 10;
-    const commissionRate = Math.max(5,preferredCommission-(competitor.reputation >= 80 ? 1 : 0));
+    const selectedCandidate = eligible[0];
+    if (!selectedCandidate) continue;
+    const selected = selectedCandidate.player;
+    const commissionRate = getRivalAgencyCommissionRate(competitor,selected);
     const offer = {
       id:"rival-offer-" + competitor.id + "-" + currentDate.replaceAll("-",""),
       playerId:selected.id,playerName:selected.name,position:selected.position ?? "غير محدد",
       rating:selected.rating,potential:selected.potential,commissionRate,
+      targetScore:selectedCandidate.evaluation.score,
+      strategyKey:selectedCandidate.evaluation.strategyKey,
       offeredDate:currentDate,dueDate:addDays(currentDate,3),
       status:"pending",decisionDate:null
     };
     competitor.pendingOffers = [offer,...competitor.pendingOffers].slice(0,100);
     allReserved.add(selected.id);
+    const strategy = getRivalAgencyStrategy(competitor);
     next = appendCompetitiveHistory(next,competitor,offer,currentDate,"offer-sent",
-      "أرسلت الوكالة المنافسة عرض تمثيل للاعب ضمن حملتها الأسبوعية.");
+      "اختير اللاعب وفق استراتيجية " + strategy.label + ": " +
+      selectedCandidate.evaluation.rationale + " (التقييم " +
+      selectedCandidate.evaluation.score + " من " +
+      selectedCandidate.evaluation.minimumTargetScore + ").");
   }
   return next;
 }
