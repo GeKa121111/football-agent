@@ -1731,6 +1731,34 @@ function renderScouting(context) {
   return page;
 }
 
+function renderFreeAgentsPanel(context) {
+  const panel = node("section", "panel free-agents-panel");
+  const records = context.transferState?.freeAgents ?? [];
+  panel.append(node("h2", "", "سوق اللاعبين الأحرار"));
+  if (!records.length) {
+    panel.append(node("p", "", "لا يوجد لاعبون أحرار حاليًا. تظهر هنا أسماء اللاعبين الذين انتهت عقودهم."));
+    return panel;
+  }
+  const byId = new Map(WORLD_PLAYERS.map((player) => [player.id, player]));
+  const list = node("div", "free-agents-list");
+  records
+    .map((record) => ({ record, player: byId.get(record.playerId) }))
+    .filter((item) => item.player)
+    .sort((a, b) => b.player.rating - a.player.rating)
+    .slice(0, 40)
+    .forEach(({ record, player }) => {
+      const row = node("div", "free-agent-row");
+      row.append(
+        node("strong", "", player.name),
+        node("span", "", player.position + " · " + player.age + " سنة · تقييم " + player.rating),
+        node("span", "", "حر منذ " + formatHomeDate(record.sinceDate) + " · القيمة " + formatEuroMoney(player.marketValueEur))
+      );
+      list.append(row);
+    });
+  panel.append(node("p", "", records.length + " لاعب حر (الأعلى تقييمًا أولًا)."), list);
+  return panel;
+}
+
 function renderMarket(context) {
   const page = node("div", "page-content rebuild-screen market-screen");
   const marketDraft = context.marketDraft ?? null;
@@ -2211,6 +2239,7 @@ function renderMarket(context) {
 
   page.append(windowCard, summary, proposalPanel, listPanel, movesPanel, financePanel,
     node("p", "transfer-market-disclaimer", "قواعد التسجيل والنوافذ والمال هنا نماذج محاكاة مبسطة، وليست نقلًا حرفيًا للوائح الاتحادات أو بيانات مالية رسمية."));
+  page.append(renderFreeAgentsPanel(context));
   return page;
 }
 
