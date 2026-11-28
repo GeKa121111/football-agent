@@ -443,7 +443,7 @@ function resolveStorage(storage) {
 }
 
 
-function migrateSave(value) {
+export function migrateSave(value) {
   if (!isRecord(value) || !isRecord(value.meta) || !isRecord(value.world)) return value;
   if (![1, 2, 3, 4, 5, 6, 7, 8].includes(value.meta.version)) return value;
 

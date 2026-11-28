@@ -1,6 +1,8 @@
 import {
-  SLOT_COUNT, exportSaveText, importSaveText, saveToSlot, loadFromSlot, describeSlot
+  SLOT_COUNT, exportSaveText, exportRawSaveText, importSaveText, saveToSlot,
+  loadFromSlot, describeSlot, restorePreImportSave, hasPreImportSave
 } from "../core/backup.js";
+import { attachDialogBehavior } from "./dialog.js";
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -21,10 +23,17 @@ export function mountBackup(doc = document) {
     box.setAttribute("role", "dialog");
     box.setAttribute("aria-modal", "true");
     box.setAttribute("aria-label", "الحفظ والنسخ الاحتياطي");
+    box.setAttribute("tabindex", "-1");
+    let restoreFocus = () => {};
+    const closeDialog = () => {
+      if (!overlay.isConnected) return;
+      overlay.remove();
+      restoreFocus();
+    };
     const msg = el("p", "backup-msg");
     const close = el("button", "backup-btn", "إغلاق");
     close.type = "button";
-    close.addEventListener("click", () => overlay.remove());
+    close.addEventListener("click", closeDialog);
 
     const act = (fn, done, reload) => () => {
       try {
@@ -79,11 +88,32 @@ export function mountBackup(doc = document) {
     });
     const imp = btn("استيراد حفظ من ملف", () => file.click());
 
+    const rawExp = btn("تصدير خام للتشخيص", () => {
+      try {
+        const blob = new Blob([exportRawSaveText()], { type: "application/json" });
+        const a = el("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "football-agent-save-raw.json";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        msg.textContent = "تم تصدير الملف الخام.";
+      } catch (e) {
+        msg.textContent = e.message || "تعذر تصدير الحفظ.";
+      }
+    });
+
     box.append(
       el("h2", "", "الحفظ والنسخ الاحتياطي"),
       el("p", "", "الحفظ يُخزَّن في متصفحك فقط. صدّر نسخة بانتظام حتى لا تضيع."),
-      exp, imp, file
+      exp, imp, rawExp, file
     );
+
+    if (hasPreImportSave()) {
+      box.append(btn("استعادة الحفظ السابق قبل الاستيراد", () => {
+        if (!confirm("سيتم استبدال الحفظ الحالي بنسخة الأمان السابقة. متابعة؟")) return;
+        act(() => restorePreImportSave(), "تمت الاستعادة.", true)();
+      }));
+    }
 
     for (let i = 1; i <= SLOT_COUNT; i++) {
       const info = describeSlot(i);
@@ -112,9 +142,10 @@ export function mountBackup(doc = document) {
     box.append(msg, close);
     overlay.append(box);
     overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) overlay.remove();
+      if (e.target === overlay) closeDialog();
     });
     doc.body.append(overlay);
+    restoreFocus = attachDialogBehavior(box, { onClose: closeDialog });
     close.focus();
   }
 }

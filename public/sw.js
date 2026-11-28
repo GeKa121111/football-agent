@@ -1,6 +1,10 @@
 const CACHE_PREFIX = "football-agent-";
-const CACHE = `${CACHE_PREFIX}v1`;
-const APP_SHELL = ["./", "./manifest.webmanifest", "./icon.svg"];
+const CACHE = `${CACHE_PREFIX}v2`;
+// ملاحظة: حزمة Vite المجمّعة لها أسماء فيها hash يتغير مع كل بناء، فلا يمكن
+// تثبيتها مسبقًا بقائمة ثابتة هنا. معالج fetch أدناه network-first ويخزّن
+// أي رد ناجح تلقائيًا بعد أول زيارة، فالأوفلاين يعمل من الزيارة الثانية.
+// التثبيت المسبق الصحيح للحزمة يحتاج Workbox / vite-plugin-pwa كخطوة لاحقة.
+const APP_SHELL = ["./", "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();

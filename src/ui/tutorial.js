@@ -1,3 +1,5 @@
+import { attachDialogBehavior } from "./dialog.js";
+
 const KEY = "football-agent.tutorial.done";
 const STEPS = [
   ["أهلًا بك في Football Agent", "أنت وكيل لاعبين. هدفك: اكتشاف المواهب، توقيع عقود التمثيل، وبيع اللاعبين للأندية، وتنمية وكالتك عبر المواسم."],
@@ -15,6 +17,7 @@ export function mountTutorial(doc = document, storage = globalThis.localStorage)
   }
 
   let i = 0;
+  let restoreFocus = () => {};
   const overlay = doc.createElement("div");
   overlay.className = "tutorial-overlay";
   const box = doc.createElement("div");
@@ -22,6 +25,7 @@ export function mountTutorial(doc = document, storage = globalThis.localStorage)
   box.setAttribute("role", "dialog");
   box.setAttribute("aria-modal", "true");
   box.setAttribute("aria-label", "شرح بداية اللعبة");
+  box.setAttribute("tabindex", "-1");
 
   const h = doc.createElement("h2");
   const p = doc.createElement("p");
@@ -33,6 +37,7 @@ export function mountTutorial(doc = document, storage = globalThis.localStorage)
 
   const done = () => {
     try { storage.setItem(KEY, "1"); } catch {}
+    restoreFocus();
     overlay.remove();
   };
   const draw = () => {
@@ -52,5 +57,6 @@ export function mountTutorial(doc = document, storage = globalThis.localStorage)
   box.append(h, p, next, skip);
   overlay.append(box);
   doc.body.append(overlay);
+  restoreFocus = attachDialogBehavior(box, { onClose: done });
   next.focus();
 }
