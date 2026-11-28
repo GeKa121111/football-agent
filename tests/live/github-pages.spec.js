@@ -4,6 +4,11 @@ test("published GitHub Pages app boots, navigates and preserves a saved career",
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
+  // The production smoke test validates the published app flow, not onboarding.
+  await page.addInitScript(() => {
+    try { localStorage.setItem("football-agent.tutorial.done", "1"); } catch {}
+  });
+
   // A relative path is important for project sites: "/" would reset to the
   // account root and silently test https://owner.github.io/ instead.
   const response = await page.goto("./", { waitUntil: "networkidle" });
