@@ -246,6 +246,15 @@ import { createAppShell } from "./ui/layout/app-shell.js";
 import { node, actionButton } from "./ui/dom.js";
 import { formatMoney, formatEuroMoney } from "./ui/format.js";
 import { attachDialogBehavior } from "./ui/dialog.js";
+import { isWakilEnabled } from "./ui/wakil.js";
+import {
+  renderWakilToday,
+  renderWakilMarket,
+  renderWakilCalendar,
+  renderWakilAgencyTabs,
+  buildPlayerStorySection,
+  openWakilNegotiation
+} from "./ui/wakil-screens.js";
 
 let modalSequence = 0;
 
@@ -2950,6 +2959,12 @@ function renderAgency(context) {
     node("p", "page-subtitle rebuild-page-subtitle", "ابنِ قائمة عملائك، تفاوض على شروط التمثيل، واهتم بالثقة والتواصل والمواعيد.")
   );
 
+  // المرحلة 2 من وكيل: تبويبات المالية/الموظفون/المكتب فوق صفحة الوكالة
+  // الحالية — باقي الصفحة (العقود والموظفين والإدارة) كما هي تحتها.
+  if (context.wakilEnabled) {
+    page.append(renderWakilAgencyTabs(context));
+  }
+
   const agency = context.save.agency;
   const representation = agency.representation;
   const activeContracts = representation.contracts.filter((contract) => contract.status === "active");
@@ -5160,7 +5175,33 @@ export function mountApp(root) {
     }
 
     const content = node("div", "player-profile-content");
-    content.append(hero, ratingCards, details, growth, performanceSection, mediaSection, internationalSection,
+    // المرحلة 2 من وكيل: ملف اللاعب قصة مش رقم — نطاق الإمكانات والثقة
+    // والمسيرة وStar Plan، خلف الـ Flag فقط؛ باقي الملف كما هو.
+    const wakilStory = isWakilEnabled() ? buildPlayerStorySection(player, state.save, {
+      onRenegotiate: (target) => {
+        root.querySelector(".modal-overlay .icon-button")?.click();
+        openRepresentationOffer(target);
+      },
+      onOfferToClubs: () => {
+        root.querySelector(".modal-overlay .icon-button")?.click();
+        navigate("market");
+      },
+      onNegotiate: (target) => {
+        root.querySelector(".modal-overlay .icon-button")?.click();
+        openRepresentationOffer(target);
+      },
+      onTalk: () => {
+        const activeContract = state.save.agency.representation.contracts.find(
+          (item) => item.playerId === player.id && item.status === "active"
+        );
+        root.querySelector(".modal-overlay .icon-button")?.click();
+        if (activeContract) openRepresentationClientDossier(activeContract.id);
+        else toast("مفيش عقد تمثيل نشط مع اللاعب ده.");
+      }
+    }) : null;
+    content.append(hero, ratingCards, details, growth,
+      ...(wakilStory ? [wakilStory] : []),
+      performanceSection, mediaSection, internationalSection,
       node("p", "player-profile-disclaimer", "هذا ملف لاعب خيالي من قاعدة العالم التجريبية. القيمة السوقية تقدير داخل اللعبة وليست عرض انتقال رسميًا.")
     );
 
@@ -5195,9 +5236,11 @@ export function mountApp(root) {
     const currentPlayers = getCurrentWorldPlayers(state.save);
     const context = {
       save: state.save,
+      wakilEnabled: isWakilEnabled(),
       navigate,
       openPlayer,
       openModal,
+      openWakilNegotiation: (offer) => openWakilNegotiation(context, offer),
       openInbox,
       openEventHistory,
       openTaskHistory,
@@ -5335,13 +5378,33 @@ export function mountApp(root) {
         else state.save = previousSave;
       }
     };
+    // المرحلة 2 من وكيل: الشاشات الست خلف الـ Flag — لو الـ Flag مطفي،
+    // الواجهة القديمة ترجع كما هي دون أي تغيير في الحفظ أو المحركات.
+    const wakilOn = isWakilEnabled();
     const views = {
-      dashboard: renderDashboard,
+      dashboard: (context) => {
+        if (!wakilOn) return renderDashboard(context);
+        // «اليوم» + قسم عمليات المسيرة القديم (مهام/وارد/تقويم/سجل) تحته،
+        // عشان خطافاته (.career-operations وغيرها) تفضل شغالة.
+        const page = renderWakilToday(context);
+        page.append(renderCareerOperations(context));
+        return page;
+      },
       players: renderPlayers,
       scouting: renderScouting,
-      market: renderMarket,
+      market: (context) => {
+        if (!wakilOn) return renderMarket(context);
+        // أقسام وكيل (تبويبات + TransferRoom) فوق، والأقسام القديمة الكاملة
+        // تحتها — من غير أول 3 عناصر (eyebrow/h1/subtitle) عشان العنوان
+        // ما يتكررش. ده بيحافظ على كل خطافات وسلوك السوق القديم.
+        const page = renderWakilMarket(context);
+        const legacy = renderMarket(context);
+        [...legacy.children].slice(3).forEach((child) => page.append(child));
+        return page;
+      },
       football: renderFootball,
-      agency: renderAgency
+      agency: renderAgency,
+      calendar: renderWakilCalendar
     };
     const page = views[state.view] ? views[state.view](context) : renderDashboard(context);
     const shell = createAppShell({

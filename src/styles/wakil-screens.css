@@ -1,0 +1,503 @@
+/* وَكِيل — WAKIL — المرحلة 2: ستايلات الشاشات الست (UXUI.md §1–§4).
+   مبنية على توكنز المرحلة 1 في wakil.css. القواعد: أهداف لمس 48px،
+   أقل نص 12px، ارتفاع سطر 1.6، زوايا 16px للبطاقات و12px للأزرار،
+   والأرقام لاتينية بـ tabular-nums. كل معلومة باللون معاها أيقونة + نص. */
+.wakil-today,
+.wakil-market,
+.wakil-calendar {
+  max-width: 480px;
+  margin-inline: auto;
+}
+
+.wakil-today h1,
+.wakil-market h1,
+.wakil-calendar h1 {
+  font-family: "Cairo", "Tajawal", Tahoma, Arial, sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.6;
+}
+
+.wakil-section-head h2 {
+  font-family: "Cairo", "Tajawal", Tahoma, Arial, sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.wakil-section-head p {
+  color: var(--wakil-ink-soft, #5c6b64);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 4px 0 0;
+}
+
+.wakil-decisions,
+.wakil-matches,
+.wakil-finance-summary,
+.wakil-star-client,
+.wakil-week-goal,
+.wakil-season-bar,
+.wakil-upcoming,
+.wakil-contracts-planner,
+.wakil-archive,
+.wakil-transfer-room {
+  background: var(--wakil-surface, #ffffff);
+  border: 1px solid var(--wakil-border, #dde3de);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(26, 36, 32, 0.08);
+  padding: 16px;
+  margin-top: 12px;
+}
+
+.wakil-decision-row,
+.wakil-match-row,
+.wakil-upcoming-row,
+.wakil-contract-row,
+.wakil-staff-row,
+.wakil-market-card,
+.wakil-offer-card,
+.wakil-transfer-room-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--wakil-border, #dde3de);
+}
+
+.wakil-decision-row:first-child,
+.wakil-match-row:first-child {
+  border-top: 0;
+}
+
+.wakil-decision-row.is-overdue,
+.wakil-contract-row.is-urgent {
+  border-inline-start: 4px solid var(--wakil-danger, #b91c1c);
+  padding-inline-start: 12px;
+}
+
+.wakil-decision-copy,
+.wakil-offer-copy,
+.wakil-market-copy,
+.wakil-star-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.wakil-decision-copy small,
+.wakil-offer-copy small,
+.wakil-market-copy span,
+.wakil-star-copy span {
+  color: var(--wakil-ink-soft, #5c6b64);
+  font-size: 13px;
+}
+
+.wakil-decision-action,
+.wakil-offer-actions .button-primary,
+.wakil-offer-actions .button-outline,
+.wakil-negotiation-actions .button-primary,
+.wakil-negotiation-actions .button-outline {
+  min-height: 48px;
+}
+
+.wakil-offer-actions,
+.wakil-negotiation-actions,
+.wakil-player-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wakil-danger-button {
+  color: var(--wakil-danger, #b91c1c);
+  border-color: var(--wakil-danger, #b91c1c);
+}
+
+.wakil-alert {
+  background: #fee2e2;
+  color: #7f1d1d;
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.wakil-note {
+  color: var(--wakil-ink-soft, #5c6b64);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.wakil-empty {
+  text-align: center;
+  padding: 24px 16px;
+}
+
+.wakil-empty h2 {
+  font-size: 17px;
+}
+
+.wakil-empty p {
+  color: var(--wakil-ink-soft, #5c6b64);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* النجوم 1–6: ذهبي للمستوى، ورمادي outline للباقي. */
+.wakil-stars {
+  display: inline-flex;
+  gap: 2px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.wakil-star.is-filled {
+  color: var(--wakil-gold, #c9972b);
+}
+
+.wakil-star:not(.is-filled) {
+  color: #b9c2bb;
+}
+
+/* أشرطة القياس: بتبدأ من اليمين في RTL. */
+.wakil-meter-track {
+  height: 8px;
+  background: var(--wakil-surface-muted, #eef0ec);
+  border-radius: 999px;
+  overflow: hidden;
+  direction: rtl;
+}
+
+.wakil-meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--wakil-green, #0e7a4d);
+  border-radius: 999px;
+}
+
+.wakil-meter-track.tone-success .wakil-meter-fill {
+  background: var(--wakil-success, #15803d);
+}
+
+.wakil-meter-track.tone-warning .wakil-meter-fill {
+  background: var(--wakil-warning, #b45309);
+}
+
+.wakil-meter-track.tone-danger .wakil-meter-fill {
+  background: var(--wakil-danger, #b91c1c);
+}
+
+/* الشارات: لون + نص دايمًا. */
+.wakil-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  min-height: 24px;
+}
+
+.wakil-chip.tone-success {
+  background: #dcfce7;
+  color: #14532d;
+}
+
+.wakil-chip.tone-warning {
+  background: #fef3c7;
+  color: #78350f;
+}
+
+.wakil-chip.tone-danger {
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
+.wakil-chip.tone-info {
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+/* التبويبات والفلاتر. */
+.wakil-tab-bar {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 0 12px;
+}
+
+.wakil-tab-button {
+  min-height: 40px;
+  border: 1px solid var(--wakil-border, #dde3de);
+  border-radius: 999px;
+  background: var(--wakil-surface, #ffffff);
+  color: var(--wakil-ink, #1a2420);
+  font-family: "Tajawal", "Cairo", Tahoma, Arial, sans-serif;
+  font-size: 14px;
+  padding: 8px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.wakil-tab-button.is-active {
+  background: var(--wakil-green, #0e7a4d);
+  border-color: var(--wakil-green, #0e7a4d);
+  color: #ffffff;
+}
+
+.wakil-filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.wakil-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.wakil-chip-filter {
+  min-height: 40px;
+  border: 1px solid var(--wakil-border, #dde3de);
+  border-radius: 999px;
+  background: var(--wakil-surface, #ffffff);
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.wakil-chip-filter.is-active {
+  background: var(--wakil-green, #0e7a4d);
+  border-color: var(--wakil-green, #0e7a4d);
+  color: #ffffff;
+}
+
+.wakil-market-card {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.wakil-market-art {
+  flex: 0 0 80px;
+  width: 80px;
+}
+
+.wakil-market-art .player-portrait {
+  width: 80px;
+  height: 100px;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.wakil-finance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.wakil-finance-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--wakil-surface-muted, #eef0ec);
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.wakil-finance-card strong {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ملف اللاعب: الثقة والمسيرة والخطة. */
+.wakil-player-story {
+  margin-top: 16px;
+}
+
+.wakil-trust-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.wakil-trust-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--wakil-surface-muted, #eef0ec);
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.wakil-range-block,
+.wakil-contract-block,
+.wakil-star-plan,
+.wakil-level-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.wakil-timeline {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  border-inline-start: 3px solid var(--wakil-green, #0e7a4d);
+}
+
+.wakil-timeline-item {
+  padding: 0 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.wakil-goal-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+/* المفاوضات: عناصر على جولات + مؤشر خطر مرئي دايمًا. */
+.wakil-negotiation {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.wakil-negotiation-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wakil-segmented {
+  display: flex;
+  gap: 8px;
+}
+
+.wakil-segment {
+  flex: 1;
+  min-height: 48px;
+  border: 1px solid var(--wakil-border, #dde3de);
+  border-radius: 12px;
+  background: var(--wakil-surface, #ffffff);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.wakil-segment.is-active {
+  background: var(--wakil-green-light, #e6f4ec);
+  border-color: var(--wakil-green, #0e7a4d);
+  color: var(--wakil-green-deep, #0a5c3a);
+  font-weight: 700;
+}
+
+.wakil-range {
+  width: 100%;
+  min-height: 48px;
+  accent-color: var(--wakil-green, #0e7a4d);
+}
+
+.wakil-range-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.wakil-risk-block {
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.wakil-risk-block.tone-low {
+  background: #dcfce7;
+}
+
+.wakil-risk-block.tone-medium {
+  background: #fef3c7;
+}
+
+.wakil-risk-block.tone-high {
+  background: #fee2e2;
+}
+
+.wakil-negotiation-log p {
+  margin: 4px 0;
+  font-size: 13px;
+  color: var(--wakil-ink-soft, #5c6b64);
+}
+
+.wakil-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.wakil-checkbox-label input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--wakil-green, #0e7a4d);
+}
+
+/* الوكالة: تبويبات فوق الصفحة الحالية. */
+.wakil-agency-tabs {
+  background: var(--wakil-surface, #ffffff);
+  border: 1px solid var(--wakil-border, #dde3de);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.wakil-candidate-card,
+.wakil-branch-card,
+.wakil-staff-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+  border-top: 1px solid var(--wakil-border, #dde3de);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.wakil-monogram {
+  background: var(--wakil-green, #0e7a4d);
+  color: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wakil-today *,
+  .wakil-market *,
+  .wakil-calendar * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

@@ -434,7 +434,7 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   .scout-counter { margin-inline-start: auto; }
   .mobile-nav {
     position: fixed; z-index: 15; right: 10px; left: 10px; bottom: max(9px, env(safe-area-inset-bottom));
-    display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 2px; padding: 7px 5px;
+    display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 2px; padding: 7px 5px;
     border: 1px solid rgba(175,145,241,.24); border-radius: 17px;
     background: rgba(13,18,36,.94); box-shadow: 0 12px 38px rgba(0,0,0,.46); backdrop-filter: blur(16px);
   }

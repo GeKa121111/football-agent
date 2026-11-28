@@ -1,5 +1,6 @@
 import "./styles/tokens.css";
 import "./styles/wakil.css";
+import "./styles/wakil-screens.css";
 import "./styles/base.css";
 import "./styles/rebuild-shell.css";
 import "./styles/rebuild-dashboard.css";

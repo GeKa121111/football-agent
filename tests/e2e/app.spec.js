@@ -80,7 +80,7 @@ test.describe("Desktop experience", () => {
     await hasNoHorizontalOverflow(page);
   });
   
-  test("keeps all six workspaces within every supported viewport width", async ({ page }) => {
+  test("keeps all seven workspaces within every supported viewport width", async ({ page }) => {
     await page.goto("/");
     const viewports = [
       { width: 320, height: 800 },
@@ -88,7 +88,7 @@ test.describe("Desktop experience", () => {
       { width: 768, height: 900 },
       { width: 1440, height: 960 }
     ];
-    const screens = ["اللاعبون", "الكشافون", "المباريات", "الانتقالات", "الوكالة", "الرئيسية"];
+    const screens = ["اللاعبون", "الكشافون", "المباريات", "الانتقالات", "الوكالة", "التقويم", "اليوم"];
 
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
@@ -123,7 +123,7 @@ test.describe("Desktop experience", () => {
     await hasNoHorizontalOverflow(page);
   });
 
-  test("navigates through all six primary screens", async ({ page }) => {
+  test("navigates through all seven primary screens", async ({ page }) => {
     await page.goto("/");
     const screens = [
       ["اللاعبون", "قاعدة اللاعبين"],
@@ -131,12 +131,13 @@ test.describe("Desktop experience", () => {
       ["المباريات", "المباريات وتطور اللاعبين"],
       ["الانتقالات", "سوق الانتقالات"],
       ["الوكالة", "الوكالة"],
-      ["الرئيسية", "وكالتك الجديدة"]
+      ["التقويم", "التقويم والمواسم"],
+      ["اليوم", "وكالتك الجديدة"]
     ];
 
     for (const [navLabel, heading] of screens) {
       await navigateTo(page, navLabel);
-      if (navLabel === "الرئيسية") {
+      if (navLabel === "اليوم") {
         await expect(page.locator(".agent-name")).toHaveText(heading);
       } else {
         await expect(page.locator(".main-stage h1.page-title")).toHaveText(heading);
@@ -172,7 +173,7 @@ test.describe("Desktop experience", () => {
     expect(yassin.trainingFocus).toBe("attacking");
     expect(yassin.trainingIntensity).toBe("intense");
 
-    await navigateTo(page, "الرئيسية");
+    await navigateTo(page, "اليوم");
     for (let day = 0; day < 3; day += 1) {
       await page.locator(".day-advance-button").click();
     }
@@ -191,7 +192,7 @@ test.describe("Desktop experience", () => {
     }, matchdaySave);
     await page.reload();
 
-    await navigateTo(page, "الرئيسية");
+    await navigateTo(page, "اليوم");
     for (let day = 0; day < 2; day += 1) {
       await page.locator(".day-advance-button").click();
     }
@@ -937,6 +938,11 @@ test.describe("Mobile experience", () => {
   });
 
   test("runs a paid scouting mission and persists its completed report", async ({ page }) => {
+    // أطول تدفق في المجموعة (بعثة + تقدم أسبوع + تقرير + صندوق مواهب +
+    // تواصلان + عرض تمثيل + توقيع + إعادة تحميل مرتين): بياخد ~38 ثانية
+    // لوحده على الجهاز ده، وبيتخطى مهلة الـ 60 ثانية الافتراضية تحت
+    // التشغيل المتوازي. المهلة الأطول هنا للتدفق ده بس، مش لكل المجموعة.
+    test.setTimeout(120_000);
     await page.goto("/");
     await navigateTo(page, "الكشافون");
     await page.getByRole("button", { name: /إطلاق بعثة كشف/ }).click();
@@ -957,7 +963,7 @@ test.describe("Mobile experience", () => {
     expect(started.world.scouting.activeMissions[0].targetCount).toBe(1);
     expect(started.world.scouting.reports).toHaveLength(0);
 
-    await navigateTo(page, "الرئيسية");
+    await navigateTo(page, "اليوم");
     await page.locator(".week-advance-button").click();
 
     const completed = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
@@ -1573,7 +1579,7 @@ test.describe("Inbox archive", () => {
     expect(started.world.scouting.activeMissions[0].scoutId).toBe("scout-north-africa");
     expect(started.world.scouting.activeMissions[0].accuracy).toBeGreaterThan(0.62);
 
-    await navigateTo(page, "الرئيسية");
+    await navigateTo(page, "اليوم");
     await page.locator(".week-advance-button").click();
 
     const completed = await page.evaluate(() => JSON.parse(localStorage.getItem("football-agent.save")));
@@ -1611,7 +1617,7 @@ test.describe("Scouting discovery channels and observation history", () => {
     };
 
     const advanceSevenDays = async () => {
-      await navigateTo(page, "الرئيسية");
+      await navigateTo(page, "اليوم");
       await page.locator(".week-advance-button").click();
       await navigateTo(page, "الكشافون");
     };
