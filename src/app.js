@@ -770,6 +770,7 @@ function renderDashboard(context) {
   page.append(
     intro,
     overview,
+    journey,
     quickSection,
     prospectSection,
     renderCareerOperations(context)
