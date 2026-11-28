@@ -74,12 +74,23 @@ test.describe("Desktop experience", () => {
     await expect(page.locator(".dashboard-agency-card")).toBeVisible();
     await expect(page.locator(".dashboard-day-card")).toBeVisible();
     await expect(page.locator(".dashboard-quick-action")).toHaveCount(3);
+    await expect(page.locator(".dashboard-journey-card")).toBeVisible();
+    await expect(page.locator(".dashboard-journey-card")).toContainText("أنت وكيل لاعبين، مش مدير فني");
+    await expect(page.locator(".dashboard-journey-card")).toContainText("اكتشف موهبة");
     await expect(page.locator(".home-menu-grid .home-tile")).toHaveCount(0);
     await expect(page.locator(".sidebar")).toBeVisible();
     await expect(page.locator(".mobile-nav")).toBeHidden();
     await hasNoHorizontalOverflow(page);
   });
   
+  test("guides a new agent to scouting as the first gameplay action", async ({ page }) => {
+    await page.goto("/");
+    const firstAction = page.getByRole("button", { name: "ابدأ بعثة كشف" });
+    await expect(firstAction).toBeVisible();
+    await firstAction.click();
+    await expect(page.locator(".main-stage h1.page-title")).toHaveText("الكشافون");
+  });
+
   test("keeps all six workspaces within every supported viewport width", async ({ page }) => {
     await page.goto("/");
     const viewports = [
