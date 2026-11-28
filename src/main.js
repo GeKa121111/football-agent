@@ -1,4 +1,5 @@
 import "./styles/tokens.css";
+import "./styles/wakil.css";
 import "./styles/base.css";
 import "./styles/rebuild-shell.css";
 import "./styles/rebuild-dashboard.css";
@@ -9,6 +10,7 @@ import { mountApp } from "./app.js";
 import { mountBackup } from "./ui/backup.js";
 import { mountTutorial } from "./ui/tutorial.js";
 import { mountFeedback } from "./ui/feedback.js";
+import { mountWakil } from "./ui/wakil.js";
 
 const root = document.querySelector("#app");
 
@@ -16,6 +18,7 @@ if (!root) {
   throw new Error('لم يتم العثور على عنصر التطبيق الرئيسي "#app".');
 }
 
+mountWakil();
 mountApp(root);
 mountBackup();
 mountFeedback();

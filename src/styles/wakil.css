@@ -1,0 +1,86 @@
+/* وَكِيل — WAKIL — هوية إعادة البناء (المرحلة 1: توكنز وخطوط وRTL).
+   المرحلة 1 أساس فقط: التوكنز والخطوط والـ Feature Flag. الشاشات الست
+   الجديدة (اليوم، ملف اللاعب، السوق، المفاوضات، التقويم، الوكالة)
+   تُبنى على هذه التوكنز في المرحلة 2، خلف نفس الـ Flag.
+   القاعدة الذهبية: حفظ v9 لا يتكسر، والمحركات لا تتغير هنا. */
+:root {
+  --wakil-green: #0e7a4d;
+  --wakil-green-deep: #0a5c3a;
+  --wakil-green-light: #e6f4ec;
+  --wakil-gold: #c9972b;
+  --wakil-gold-light: #fdf3d7;
+  --wakil-paper: #f7f8f5;
+  --wakil-surface: #ffffff;
+  --wakil-surface-muted: #eef0ec;
+  --wakil-ink: #1a2420;
+  --wakil-ink-soft: #5c6b64;
+  --wakil-border: #dde3de;
+  --wakil-success: #15803d;
+  --wakil-warning: #b45309;
+  --wakil-danger: #b91c1c;
+  --wakil-info: #1d4ed8;
+  --wakil-position-goalkeeper: #b45309;
+  --wakil-position-defence: #1d4ed8;
+  --wakil-position-midfield: #0e7a4d;
+  --wakil-position-attack: #b91c1c;
+  --wakil-font-headings: "Cairo", "Tajawal", Tahoma, Arial, sans-serif;
+  --wakil-font-body: "Tajawal", "Cairo", Tahoma, Arial, sans-serif;
+  --wakil-radius-card: 16px;
+  --wakil-radius-button: 12px;
+  --wakil-touch-target: 48px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --wakil-paper-dark: #0f1713;
+    --wakil-surface-dark: #182420;
+    --wakil-ink-dark: #edf2ee;
+  }
+}
+
+/* عند تفعيل واجهة وكيل، تُعاد صياغة متغيرات الواجهة الحالية (--fa-*)
+   بألوان وكيل، فتتلون الواجهة القائمة دون إعادة كتابة كل شاشة دفعة واحدة.
+   الأرقام تبقى لاتينية دائمًا وبأرقام جدولية ثابتة العرض. */
+.wakil-ui {
+  --fa-bg: #f7f8f5;
+  --fa-bg-soft: #eef0ec;
+  --fa-surface: #ffffff;
+  --fa-surface-raised: #ffffff;
+  --fa-surface-hover: #e6f4ec;
+  --fa-border: #dde3de;
+  --fa-border-strong: #c9d4cc;
+  --fa-text: #1a2420;
+  --fa-text-soft: #5c6b64;
+  --fa-muted: #5c6b64;
+  --fa-accent: #0e7a4d;
+  --fa-accent-strong: #0a5c3a;
+  --fa-accent-ink: #ffffff;
+  --fa-gold: #c9972b;
+  --fa-danger: #b91c1c;
+  color-scheme: light;
+  font-family: "Tajawal", "Cairo", Tahoma, Arial, sans-serif;
+}
+
+.wakil-ui h1,
+.wakil-ui h2,
+.wakil-ui h3,
+.wakil-ui .brand-name,
+.wakil-ui .rebuild-brand-subtitle {
+  font-family: "Cairo", "Tajawal", Tahoma, Arial, sans-serif;
+}
+
+/* الأرقام والعملة لاتينية دائمًا، بأرقام جدولية (قرار هوية في UXUI.md §1.3). */
+.wakil-ui .rebuild-season-pill,
+.wakil-ui .rebuild-save-chip,
+.wakil-ui .player-profile-stats {
+  font-variant-numeric: tabular-nums;
+}
+
+/* حد أدنى للنص المقروء 12px، وهدف لمس 48px للأزرار الرئيسية. */
+.wakil-ui .button-primary {
+  min-height: 48px;
+}
+.wakil-ui .rebuild-nav-link,
+.wakil-ui .rebuild-mobile-nav-link {
+  min-height: 48px;
+}

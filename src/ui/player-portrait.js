@@ -22,6 +22,19 @@ const HAIR_PATHS = {
 
 let portraitSequence = 0;
 
+// FNV-1a hash — حتمي، من غير Math.random، حتى يبقى وجه اللاعب ثابتًا
+// عبر الجلسات والأجهزة حتى لو لم يُحفظ portraitSeed مع اللاعب.
+// نفس اللاعب = نفس الـ seed = نفس البورتريه دائمًا (قاعدة UXUI.md §3.4).
+export function derivePortraitSeed(value) {
+  const text = String(value ?? "");
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash;
+}
+
 function safeHex(value, fallback) {
   return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
 }
@@ -63,7 +76,9 @@ export function getPortraitProfile(player = {}) {
       ? player.portraitVersion
       : 1,
     portraitStyle: typeof player.portraitStyle === "string" ? player.portraitStyle : "illustrated-pro",
-    portraitSeed: Number.isInteger(player.portraitSeed) ? player.portraitSeed : null
+    portraitSeed: Number.isInteger(player.portraitSeed)
+      ? player.portraitSeed
+      : (typeof player.id === "string" ? derivePortraitSeed(player.id) : null)
   });
 }
 
@@ -221,6 +236,8 @@ export function createPlayerPortrait(player, { featured = false } = {}) {
   wrapper.dataset.portraitAssetId = profile.portraitAssetId || "portrait-unassigned";
   wrapper.dataset.portraitVersion = String(profile.portraitVersion);
   wrapper.dataset.portraitStyle = profile.portraitStyle;
+  wrapper.dataset.portraitSeed = profile.portraitSeed === null ? "" : String(profile.portraitSeed);
+  wrapper.dataset.role = typeof player?.role === "string" ? player.role : "";
   wrapper.dataset.hairStyle = profile.hairStyle;
   wrapper.dataset.faceShape = profile.faceShape;
   wrapper.dataset.facialHair = profile.facialHair;
