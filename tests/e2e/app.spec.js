@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 import { isValidSave } from "../../src/core/storage.js";
 import { advanceCareerDays } from "../../src/engines/career-calendar.js";
 import { advanceRepresentationState } from "../../src/engines/representation.js";
