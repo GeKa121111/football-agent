@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createInitialSave, writeSave, STORAGE_KEY } from "../src/core/storage.js";
 import {
   exportSaveText, importSaveText, saveToSlot, loadFromSlot, parseBackupText,
-  describeSlot, slotKey
+  describeSlot
 } from "../src/core/backup.js";
 
 function mem() {
@@ -45,7 +45,10 @@ test("slots save, describe, and load valid saves", () => {
 });
 
 test("rejects invalid slot numbers", () => {
-  assert.throws(() => slotKey(0));
-  assert.throws(() => slotKey(4));
-  assert.throws(() => saveToSlot(1.5, mem()));
+  const storage = mem();
+  writeSave(createInitialSave(), storage);
+  assert.throws(() => saveToSlot(0, storage));
+  assert.throws(() => saveToSlot(4, storage));
+  assert.throws(() => saveToSlot(1.5, storage));
+  assert.throws(() => loadFromSlot(0, storage));
 });
