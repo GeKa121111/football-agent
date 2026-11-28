@@ -5,6 +5,7 @@ import "./styles/rebuild-dashboard.css";
 import "./styles/rebuild-screens.css";
 import "./styles/rebuild-components.css";
 import "./styles/backup.css";
+import "./styles/ux-refresh.css";
 import { mountApp } from "./app.js";
 import { mountBackup } from "./ui/backup.js";
 import { mountTutorial } from "./ui/tutorial.js";

@@ -663,6 +663,55 @@ function renderDashboard(context) {
   );
   overview.append(agencyCard, dayCard);
 
+  const journey = node("section", "dashboard-journey-card");
+  const journeyCopy = node("div", "dashboard-journey-copy");
+  journeyCopy.append(
+    node("span", "dashboard-journey-eyebrow", "دليلك السريع"),
+    node("h2", "", "أنت وكيل لاعبين، مش مدير فني"),
+    node("p", "", "مش هتختار التشكيلة أو تدير المباراة. شغلك تكتشف لاعب موهوب، تكسب ثقته، تمثّله، وتدور له على فرصة انتقال مناسبة.")
+  );
+
+  const journeySteps = node("div", "dashboard-journey-steps");
+  [
+    ["01", "اكتشف موهبة", "ابدأ بعثة كشف، وبعد اكتمالها راجع تقرير اللاعب."],
+    ["02", "وقّع عقد تمثيل", "افتح ملف اللاعب وقدّم عرض تمثيل، وتابع رده من الوكالة."],
+    ["03", "ابحث عن انتقال", "بعد ما يبقى عميل عندك، تابع اهتمام الأندية وتفاوض من سوق الانتقالات."]
+  ].forEach(([number, title, description]) => {
+    const step = node("article", "dashboard-journey-step");
+    step.append(
+      node("span", "dashboard-journey-number", number),
+      node("div", "dashboard-journey-step-copy")
+    );
+    step.children[1].append(
+      node("strong", "", title),
+      node("p", "", description)
+    );
+    journeySteps.append(step);
+  });
+
+  const journeyNext = node("div", "dashboard-journey-next");
+  const journeyNextCopy = node("div", "dashboard-journey-next-copy");
+  if (clients === 0) {
+    journeyNextCopy.append(
+      node("strong", "", "مهمتك الأولى: اكتشاف أول لاعب"),
+      node("p", "", "ابدأ من الكشافين. اختر بعثة مناسبة لميزانية وكالتك، ثم ارجع للتقرير لما يكتمل.")
+    );
+    journeyNext.append(
+      journeyNextCopy,
+      actionButton("ابدأ بعثة كشف", "dashboard-journey-cta", () => context.navigate("scouting"))
+    );
+  } else {
+    journeyNextCopy.append(
+      node("strong", "", "الخطوة التالية: افتح فرصة انتقال"),
+      node("p", "", "عندك " + formatHomeNumber(clients) + " عميل في وكالتك. راجع اهتمام الأندية ومواعيد نوافذ الانتقالات.")
+    );
+    journeyNext.append(
+      journeyNextCopy,
+      actionButton("افتح سوق الانتقالات", "dashboard-journey-cta", () => context.navigate("market"))
+    );
+  }
+  journey.append(journeyCopy, journeySteps, journeyNext);
+
   const quickSection = node("section", "dashboard-section");
   const quickHeading = node("div", "dashboard-section-head");
   quickHeading.append(
@@ -721,6 +770,7 @@ function renderDashboard(context) {
   page.append(
     intro,
     overview,
+    journey,
     quickSection,
     prospectSection,
     renderCareerOperations(context)

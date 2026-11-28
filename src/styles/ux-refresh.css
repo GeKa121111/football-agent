@@ -1,0 +1,292 @@
+/* Football Agent — first-run clarity and readability refresh */
+:root {
+  --fa-muted: #a3b0c3;
+  --fa-border: rgba(170, 190, 215, .16);
+  --fa-border-strong: rgba(170, 190, 215, .28);
+}
+
+body {
+  background:
+    radial-gradient(ellipse at 82% -12%, rgba(169,243,107,.09), transparent 36rem),
+    radial-gradient(ellipse at 8% 55%, rgba(67,116,139,.10), transparent 31rem),
+    linear-gradient(155deg, #0d1520 0%, #080d14 72%);
+}
+
+.rebuild-shell {
+  width: min(calc(100% - 32px), 1600px);
+  padding-bottom: 34px;
+}
+.rebuild-shell .rebuild-topbar {
+  min-height: 82px;
+  padding: 15px 22px;
+  border-color: rgba(170,190,215,.18);
+  border-radius: 20px;
+  background: rgba(14,22,32,.94);
+}
+.rebuild-shell .brand-name { font-size: 14px; letter-spacing: .1em; }
+.rebuild-brand-subtitle { font-size: 11px; }
+.rebuild-date-label { font-size: 13px; }
+.rebuild-shell .rebuild-season-pill,
+.rebuild-shell .rebuild-save-chip { font-size: 12px; }
+.rebuild-layout { grid-template-columns: 246px minmax(0,1fr); gap: 26px; }
+.rebuild-sidebar {
+  padding: 18px 13px;
+  border-color: rgba(170,190,215,.16);
+  border-radius: 20px;
+  background: rgba(13,21,31,.92);
+}
+.rebuild-sidebar-title { font-size: 15px; }
+.rebuild-nav-link { min-height: 58px; padding: 10px 12px; }
+.rebuild-nav-link .nav-label { font-size: 14px; }
+.rebuild-nav-hint { font-size: 12px; }
+.rebuild-sidebar-footer { font-size: 12px; }
+.rebuild-footer-copy small { font-size: 11px; }
+.rebuild-main .page-title,
+.rebuild-main .rebuild-page-title {
+  font-size: clamp(28px, 2.7vw, 36px);
+  line-height: 1.25;
+}
+.rebuild-main .page-subtitle,
+.rebuild-main .rebuild-page-subtitle {
+  max-width: 850px;
+  font-size: 14px;
+  line-height: 1.85;
+}
+.rebuild-main .eyebrow,
+.rebuild-main .rebuild-page-kicker { font-size: 12px; }
+
+.dashboard-intro { align-items: center; gap: 22px; padding: 10px 2px 5px; }
+.dashboard-eyebrow { font-size: 11px; }
+.dashboard-heading {
+  font-size: clamp(29px, 3vw, 39px);
+  line-height: 1.22;
+}
+.dashboard-subtitle { max-width: 690px; font-size: 14px; line-height: 1.8; }
+.rebuild-dashboard .day-advance-button,
+.rebuild-dashboard .week-advance-button {
+  min-height: 48px;
+  padding-inline: 18px;
+  font-size: 13px;
+}
+.dashboard-overview { gap: 18px; }
+.dashboard-agency-card,
+.dashboard-day-card {
+  padding: 24px;
+  border-color: rgba(170,190,215,.18);
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgba(25,39,54,.98), rgba(13,22,33,.98));
+}
+.dashboard-agency-monogram { width: 58px; height: 58px; font-size: 16px; }
+.dashboard-agency-identity small { font-size: 12px; }
+.dashboard-agency-identity strong { font-size: 20px; }
+.dashboard-agency-status { font-size: 12px; }
+.dashboard-stat { padding: 13px; }
+.dashboard-stat span { font-size: 12px; }
+.dashboard-stat strong { font-size: 20px; }
+.dashboard-reputation { font-size: 12px; }
+.dashboard-reputation strong { font-size: 13px; }
+.dashboard-day-head span,
+.dashboard-day-head strong { font-size: 13px; }
+.dashboard-day-metric { padding: 12px 7px; }
+.dashboard-day-metric small { font-size: 12px; }
+.dashboard-day-metric strong { font-size: 19px; }
+.dashboard-day-note { font-size: 13px; line-height: 1.8; }
+
+.dashboard-journey-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px;
+  border: 1px solid rgba(169,243,107,.24);
+  border-radius: 22px;
+  background:
+    radial-gradient(ellipse at 100% 0%, rgba(169,243,107,.10), transparent 42%),
+    linear-gradient(145deg, #162536, #101a27 74%);
+  box-shadow: 0 18px 42px rgba(0,0,0,.18);
+}
+.dashboard-journey-copy { max-width: 800px; }
+.dashboard-journey-eyebrow {
+  display: inline-block;
+  margin-bottom: 7px;
+  color: var(--fa-accent);
+  font-size: 12px;
+  font-weight: 900;
+}
+.dashboard-journey-copy h2 {
+  margin: 0;
+  color: var(--fa-text);
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.4;
+}
+.dashboard-journey-copy p {
+  margin: 7px 0 0;
+  color: var(--fa-text-soft);
+  font-size: 14px;
+  line-height: 1.9;
+}
+.dashboard-journey-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 11px;
+}
+.dashboard-journey-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid rgba(170,190,215,.15);
+  border-radius: 15px;
+  background: rgba(5,12,20,.32);
+}
+.dashboard-journey-number {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(169,243,107,.28);
+  border-radius: 10px;
+  color: var(--fa-accent);
+  background: rgba(169,243,107,.08);
+  font-size: 12px;
+  font-weight: 900;
+}
+.dashboard-journey-step-copy { min-width: 0; }
+.dashboard-journey-step-copy strong {
+  display: block;
+  color: var(--fa-text);
+  font-size: 14px;
+  font-weight: 900;
+}
+.dashboard-journey-step-copy p {
+  margin: 5px 0 0;
+  color: var(--fa-muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.dashboard-journey-next {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(170,190,215,.15);
+}
+.dashboard-journey-next-copy { min-width: 0; }
+.dashboard-journey-next-copy strong {
+  display: block;
+  color: var(--fa-text);
+  font-size: 15px;
+}
+.dashboard-journey-next-copy p {
+  margin: 4px 0 0;
+  color: var(--fa-text-soft);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.dashboard-journey-cta {
+  min-height: 46px;
+  flex: 0 0 auto;
+  padding: 0 19px;
+  border: 1px solid rgba(169,243,107,.42);
+  border-radius: 12px;
+  color: var(--fa-accent-ink);
+  background: var(--fa-accent);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+  transition: transform 160ms ease, background 160ms ease;
+}
+.dashboard-journey-cta:hover { transform: translateY(-1px); background: #b9fb83; }
+
+.dashboard-section-head h2 { font-size: 18px; }
+.dashboard-section-head p { font-size: 13px; }
+.dashboard-section-head button { font-size: 12px; }
+.dashboard-quick-actions { gap: 12px; }
+.dashboard-quick-action { min-height: 76px; padding: 15px 16px; border-radius: 16px; }
+.dashboard-quick-icon { width: 44px; height: 44px; font-size: 19px; }
+.dashboard-quick-copy strong { font-size: 14px; }
+.dashboard-quick-copy small { font-size: 12px; }
+.dashboard-prospect { padding: 12px; border-radius: 16px; }
+.dashboard-prospect-copy small { font-size: 12px; }
+.dashboard-prospect-copy strong { font-size: 14px; }
+.dashboard-prospect-copy span { font-size: 12px; }
+.dashboard-prospect-copy button { font-size: 12px; }
+.rebuild-dashboard .career-operations-heading h2 { font-size: 17px; }
+.rebuild-dashboard .career-activity-copy strong { font-size: 14px; }
+.rebuild-dashboard .career-activity-copy span,
+.rebuild-dashboard .career-activity-copy small { font-size: 12px; }
+
+.rebuild-main .rebuild-screen > .eyebrow { font-size: 12px; }
+.rebuild-main .rebuild-screen > .page-title { font-size: clamp(28px, 2.7vw, 36px); }
+.rebuild-main .rebuild-screen > .page-subtitle { font-size: 14px; }
+.rebuild-main .rebuild-screen .metric-label,
+.rebuild-main .rebuild-screen .metric-footnote { font-size: 12px; }
+.rebuild-main .rebuild-screen .metric-value { font-size: 21px; }
+.rebuild-main .rebuild-screen .search-input,
+.rebuild-main .rebuild-screen .filter-select { min-height: 46px; font-size: 13px; }
+.rebuild-main .rebuild-screen .result-count { font-size: 12px; }
+.rebuild-main .rebuild-screen .player-country,
+.rebuild-main .rebuild-screen .player-club { font-size: 12px; }
+.rebuild-main .rebuild-screen .player-name { font-size: 15px; }
+.rebuild-main .rebuild-screen .mini-stat span,
+.rebuild-main .rebuild-screen .mini-stat strong { font-size: 12px; }
+
+.modal-copy,
+.modal-note,
+.modal-dialog .scout-form-field,
+.modal-dialog .representation-form-note { font-size: 13px; }
+.modal-dialog .filter-select,
+.modal-dialog input,
+.modal-dialog textarea { font-size: 13px; }
+.modal-dialog .button-primary,
+.modal-dialog .button-outline,
+.modal-dialog .scout-confirm-button { min-height: 44px; font-size: 13px; }
+.modal-heading h2 { font-size: 18px; }
+.toast-message { font-size: 13px; }
+.tutorial-box h2 { font-size: 21px; }
+.tutorial-box p { font-size: 15px; line-height: 1.9; }
+.tutorial-box button { min-height: 44px; font-size: 13px; }
+
+@media (max-width: 1080px) {
+  .rebuild-layout { grid-template-columns: 218px minmax(0,1fr); gap: 18px; }
+  .dashboard-journey-steps { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width: 760px) {
+  .rebuild-shell { width: min(calc(100% - 24px), 1600px); padding-top: 10px; padding-bottom: 112px; }
+  .rebuild-shell .rebuild-topbar { min-height: 68px; padding: 10px 13px; gap: 10px; }
+  .rebuild-shell .brand-name { font-size: 12px; }
+  .rebuild-brand-subtitle { font-size: 9px; }
+  .rebuild-date-label { font-size: 11px; }
+  .rebuild-shell .rebuild-season-pill { padding: 6px 8px; font-size: 10px; }
+  .rebuild-shell .rebuild-save-chip { padding: 8px 10px; font-size: 11px; }
+  .dashboard-intro { gap: 12px; }
+  .dashboard-heading { font-size: 29px; }
+  .dashboard-subtitle { font-size: 13px; }
+  .dashboard-agency-card,
+  .dashboard-day-card,
+  .dashboard-journey-card { padding: 17px; }
+  .dashboard-journey-copy h2 { font-size: 19px; }
+  .dashboard-journey-copy p { font-size: 13px; }
+  .dashboard-journey-steps { gap: 8px; }
+  .dashboard-journey-step { padding: 12px; }
+  .dashboard-journey-step-copy strong { font-size: 13px; }
+  .dashboard-journey-step-copy p { font-size: 12px; }
+  .dashboard-journey-next { align-items: stretch; flex-direction: column; gap: 12px; }
+  .dashboard-journey-cta { width: 100%; }
+  .dashboard-agency-identity strong { font-size: 16px; }
+  .dashboard-stat strong { font-size: 16px; }
+  .dashboard-section-head h2 { font-size: 16px; }
+  .dashboard-quick-action { min-height: 68px; }
+  .rebuild-main .rebuild-screen > .page-title { font-size: 27px; }
+  .rebuild-main .rebuild-screen > .page-subtitle { font-size: 13px; }
+}
+@media (max-width: 390px) {
+  .rebuild-shell .rebuild-header-meta { gap: 5px; }
+  .rebuild-shell .rebuild-date-label { max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-journey-cta { transition: none; }
+}
