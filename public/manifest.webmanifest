@@ -1,0 +1,15 @@
+{
+  "name": "Football Agent - وكيل لاعبين",
+  "short_name": "Football Agent",
+  "description": "ابنِ وكالة لاعبي كرة القدم الخاصة بك.",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#080b13",
+  "theme_color": "#080b13",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
