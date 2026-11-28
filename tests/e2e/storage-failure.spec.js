@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 
 test("keeps the previous career when LocalStorage rejects a save", async ({ page }) => {
   await page.goto("/");
